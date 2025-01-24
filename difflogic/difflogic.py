@@ -109,6 +109,15 @@ class LogicLayer(torch.nn.Module):
             x = bin_op_s(a, b, weights)
         return x
 
+    def apply_binary_tree(self, tree_depth):
+        """
+        Create a binary tree structure for the logic gate network.
+        """
+        raise NotImplementedError
+
+    def forward_python_convolution(self, x):
+        raise NotImplementedError
+
     def forward_cuda(self, x):
         if self.training:
             assert x.device.type == 'cuda', x.device
@@ -170,6 +179,44 @@ class LogicLayer(torch.nn.Module):
         else:
             raise ValueError(connections)
 
+    # create function that selects indicies of a convolutional kernel
+    def get_kernel_indices(self, receptive_field_size, stride, padding, tree_depth, device='cuda'):
+        sample_size = 2**tree_depth
+        C, H, W = self.in_dim
+        h_k, w_k = receptive_field_size  # Receptive field size in (height, width)
+        h_stride, w_stride = stride  # Strides for height and width
+
+        # Ensure the receptive field fits in the spatial dimensions
+        assert h_k <= H and w_k <= W, \
+            f"Receptive field size ({h_k}, {w_k}) must fit within input dimensions ({H}, {W})."
+
+        # Compute starting points for the receptive fields
+        h_start_points = torch.arange(0, H - h_k + 1, h_stride, device=device)
+        w_start_points = torch.arange(0, W - w_k + 1, w_stride, device=device)
+
+        # Generate grid of all starting points for receptive fields
+        h_grid, w_grid = torch.meshgrid(h_start_points, w_start_points, indexing='ij')
+
+        # Generate indices for the receptive fields
+        stacked_as = []
+        stacked_bs = []
+        for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
+            # Create indices for the current receptive field
+            indices = torch.arange(h_start, h_start + h_k, device=device).unsqueeze(1) * W + \
+                      torch.arange(w_start, w_start + w_k, device=device)
+            flat_indices = indices.flatten()  # Flatten into a single list of indices
+
+            # Randomly select n indices
+            selected_indices = flat_indices[torch.randperm(flat_indices.numel())[:sample_size]]
+            a, b = selected_indices[:sample_size/2].to(torch.int64), selected_indices[sample_size/2:].to(torch.int64)
+            stacked_as.append(a.to(torch.int64).to(device))
+            stacked_bs.append(b.to(torch.int64).to(device))
+
+
+            #random_field_indices.append(selected_indices)
+
+        # Stack all random indices for the receptive fields
+        return stacked_as, stacked_bs
 
 ########################################################################################################################
 

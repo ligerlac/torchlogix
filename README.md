@@ -68,6 +68,7 @@ At this point, it is important to discuss the options for `device` and the provi
 * **`python`** the Python implementation is a substantially slower implementation that is easy to understand as it is implemented directly in Python with PyTorch and does not require any C++ / CUDA extensions. It is compatible with `device='cpu'` and `device='cuda'`.
 * **`cuda`** is a well-optimized implementation that runs natively on CUDA via custom extensions. This implementation is around 50 to 100 times faster than the python implementation (for large models). It only supports `device='cuda'`. 
 
+To choose cpu, add ```--implementation=python``` to the command line arguments. The default is cuda. 
 To aggregate output neurons into a lower dimensional output space, we can use `GroupSum`, which aggregates a number of output neurons into 
 a `k` dimensional output, e.g., `k=10` for a 10-dimensional classification setting. 
 It is important to set the parameter `tau`, which the sum of neurons is divided by to keep the range reasonable.
