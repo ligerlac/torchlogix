@@ -24,6 +24,10 @@ class LogicLayer(torch.nn.Module):
             grad_factor: float = 1.,
             implementation: str = None,
             connections: str = 'random',
+            tree_depth: int = None,
+            receptive_field_size: tuple = None,
+            stride: tuple = None,
+            padding: tuple = None
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -39,6 +43,10 @@ class LogicLayer(torch.nn.Module):
         self.out_dim = out_dim
         self.device = device
         self.grad_factor = grad_factor
+        self.tree_depth = tree_depth
+        if self.tree_depth is not None:
+            num_nodes = 2**self.tree_depth - 1
+            self.tree_weights = self.weights_binary_tree = torch.nn.parameter.Parameter(torch.randn(num_nodes, 16, device=device))
 
         """
         The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only 
@@ -55,8 +63,18 @@ class LogicLayer(torch.nn.Module):
 
         self.connections = connections
         assert self.connections in ['random', 'unique'], self.connections
-        self.indices = self.get_connections(self.connections, device)
-
+        #self.indices = self.get_connections(self.connections, device)
+        if self.tree_depth is not None:
+            self.indices = [self.get_kernel_indices(receptive_field_size, stride, padding, self.tree_depth, device)]
+            # Compute the remaining indices for the binary tree
+            current_level_nodes = len(self.indices[0])
+            for _ in range(self.tree_depth - 1):
+                left_indices = torch.arange(0, current_level_nodes, 2, device=device)
+                right_indices = torch.arange(1, current_level_nodes, 2, device=device)
+                self.indices.append((left_indices, right_indices))
+                current_level_nodes = len(left_indices)  # Number of nodes halves at each level
+        for i in range(len(self.indices)):
+            print("at level i", i, self.indices[i])
         if self.implementation == 'cuda':
             """
             Defining additional indices for improving the efficiency of the backward of the CUDA implementation.
@@ -91,13 +109,13 @@ class LogicLayer(torch.nn.Module):
                 return self.forward_cuda_eval(x)
             return self.forward_cuda(x)
         elif self.implementation == 'python':
-            return self.forward_python(x)
+            #return self.forward_python(x)
+            return self.forward_binary_tree(x)
         else:
             raise ValueError(self.implementation)
 
     def forward_python(self, x):
         assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
-
         if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
             self.indices = self.indices[0].long(), self.indices[1].long()
 
@@ -109,11 +127,25 @@ class LogicLayer(torch.nn.Module):
             x = bin_op_s(a, b, weights)
         return x
 
-    def apply_binary_tree(self, tree_depth):
+    def forward_binary_tree(self, x):
         """
         Create a binary tree structure for the logic gate network.
         """
-        raise NotImplementedError
+        current_level = x
+        print("xshape", x.shape)
+        #print(self.indices)
+        for level in range(self.tree_depth):
+            print("level is", level, "will use indices", self.indices[level])
+            left_indices, right_indices = self.indices[level]
+            #print(left_indices, right_indices)
+            a = current_level[..., left_indices]
+            b = current_level[..., right_indices]
+
+            current_level = bin_op_s(a, b, torch.nn.functional.softmax(self.tree_weights[level], dim=-1))
+            print("current level is ", current_level.shape)
+        print("returning")
+        return current_level
+
 
     def forward_python_convolution(self, x):
         raise NotImplementedError
@@ -182,7 +214,7 @@ class LogicLayer(torch.nn.Module):
     # create function that selects indicies of a convolutional kernel
     def get_kernel_indices(self, receptive_field_size, stride, padding, tree_depth, device='cuda'):
         sample_size = 2**tree_depth
-        C, H, W = self.in_dim
+        C, H, W = 1, 20, 20
         h_k, w_k = receptive_field_size  # Receptive field size in (height, width)
         h_stride, w_stride = stride  # Strides for height and width
 
@@ -208,7 +240,7 @@ class LogicLayer(torch.nn.Module):
 
             # Randomly select n indices
             selected_indices = flat_indices[torch.randperm(flat_indices.numel())[:sample_size]]
-            a, b = selected_indices[:sample_size/2].to(torch.int64), selected_indices[sample_size/2:].to(torch.int64)
+            a, b = selected_indices[:sample_size//2].to(torch.int64), selected_indices[sample_size//2:].to(torch.int64)
             stacked_as.append(a.to(torch.int64).to(device))
             stacked_bs.append(b.to(torch.int64).to(device))
 
@@ -216,7 +248,7 @@ class LogicLayer(torch.nn.Module):
             #random_field_indices.append(selected_indices)
 
         # Stack all random indices for the receptive fields
-        return stacked_as, stacked_bs
+        return torch.stack(stacked_as), torch.stack(stacked_bs)
 
 ########################################################################################################################
 

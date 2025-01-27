@@ -29,7 +29,7 @@ for num_bits in [
     for (data, labels) in test_loader:
         data = torch.nn.Flatten()(data).bool().numpy()
 
-        output = compiled_model.forward(data)
+        output = compiled_model.forward_binary_tree(data)
 
         correct += (output.argmax(-1) == labels).float().sum()
         total += output.shape[0]
