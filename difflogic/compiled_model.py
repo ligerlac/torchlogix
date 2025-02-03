@@ -368,4 +368,3 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
             print('out.shape', out.shape)
 
         return out
-
