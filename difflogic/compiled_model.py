@@ -224,8 +224,7 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
                     res <<= 1;
                     res += !!(out_temp_o[d] & bit_mask);
                 }}
-                // out[(i * {self.num_bits} + b) * {self.num_classes} + c] = res;
-                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = ({BITS_TO_DTYPE[32]})(res * 2);
+                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = res;
             }}
         }}
     }}
