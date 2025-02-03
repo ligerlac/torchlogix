@@ -127,7 +127,12 @@ def get_model(args):
         'grad_factor': args.grad_factor,
         'connections': args.connections,
         'implementation': args.implementation,
-        'device': IMPL_TO_DEVICE[args.implementation]
+        'device': IMPL_TO_DEVICE[args.implementation],
+        'tree_depth': 3,
+        'receptive_field_size': (5,5),
+        'stride': (5,5),
+        'padding': 0
+
     }
 
     in_dim = input_dim_of_dataset(args.dataset)
