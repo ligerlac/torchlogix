@@ -12,7 +12,8 @@ from results_json import ResultsJSON
 
 import mnist_dataset
 import uci_datasets
-from difflogic import LogicLayer, GroupSum, PackBitsTensor, CompiledLogicNet
+from difflogic import (LogicLayer, LogicCNNLayer, OrPoolingLayer,
+                       GroupSum, PackBitsTensor, CompiledLogicNet)
 
 torch.set_num_threads(1)
 
@@ -56,7 +57,7 @@ def load_dataset(args):
 
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, pin_memory=True, drop_last=True, num_workers=4)
         validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=args.batch_size, shuffle=False, pin_memory=True, drop_last=True)
-        test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, pin_memory=True, drop_last=True)
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size//5, shuffle=False, pin_memory=True, drop_last=True)
     elif 'cifar-10' in args.dataset:
         transform = {
             'cifar-10-3-thresholds': lambda x: torch.cat([(x > (i + 1) / 4).float() for i in range(3)], dim=0),
@@ -128,10 +129,6 @@ def get_model(args):
         'connections': args.connections,
         'implementation': args.implementation,
         'device': IMPL_TO_DEVICE[args.implementation],
-        'tree_depth': 3,
-        'receptive_field_size': (5,5),
-        'stride': (5,5),
-        'padding': 0
 
     }
 
@@ -157,6 +154,33 @@ def get_model(args):
             GroupSum(class_count, args.tau)
         )
 
+    elif arch == 'cnn':
+        #logic_layers.append(torch.nn.Flatten())
+        # specifically written for mnist
+        k_num = 16
+        logic_layers.append(LogicCNNLayer(in_dim=28, num_kernels=k_num, channels=1, **llkw, tree_depth=3,
+                                          receptive_field_size=5, padding=0))
+        logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=0))
+
+        logic_layers.append(LogicCNNLayer(in_dim=12, channels=k_num, num_kernels = 3*k_num, **llkw, tree_depth=3,
+                                          receptive_field_size=3, padding=0))
+        logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=1))
+
+        logic_layers.append(LogicCNNLayer(in_dim=6, channels=3*k_num, num_kernels = 9*k_num, **llkw, tree_depth=3,
+                                          receptive_field_size=3, padding=0))
+        logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=1))
+
+
+        logic_layers.append(torch.nn.Flatten())
+
+        logic_layers.append(LogicLayer(in_dim=81*k_num, out_dim=1280*k_num, **llkw))
+        logic_layers.append(LogicLayer(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
+        logic_layers.append(LogicLayer(in_dim=640*k_num, out_dim=320*k_num, **llkw))
+
+        model = torch.nn.Sequential(
+            *logic_layers,
+            GroupSum(class_count, args.tau)
+        )
     ####################################################################################################################
 
     else:
@@ -164,19 +188,25 @@ def get_model(args):
 
     ####################################################################################################################
 
-    total_num_neurons = sum(map(lambda x: x.num_neurons, logic_layers[1:-1]))
-    print(f'total_num_neurons={total_num_neurons}')
-    total_num_weights = sum(map(lambda x: x.num_weights, logic_layers[1:-1]))
-    print(f'total_num_weights={total_num_weights}')
-    if args.experiment_id is not None:
-        results.store_results({
-            'total_num_neurons': total_num_neurons,
-            'total_num_weights': total_num_weights,
-        })
+    # not implemented for cnn
+    # total_num_neurons = sum(map(lambda x: x.num_neurons, logic_layers[1:-1]))
+    # print(f'total_num_neurons={total_num_neurons}')
+    # total_num_weights = sum(map(lambda x: x.num_weights, logic_layers[1:-1]))
+    # print(f'total_num_weights={total_num_weights}')
+    # if args.experiment_id is not None:
+    #     results.store_results({
+    #         'total_num_neurons': total_num_neurons,
+    #         'total_num_weights': total_num_weights,
+    #     })
 
     model = model.to(llkw['device'])
 
     print(model)
+    for name, param in model.named_parameters():
+        if "tree_weights" in name:
+            print(
+                f"{name}: Mean {param.mean().item()}, Grad mean"
+                f" {param.grad.mean().item() if param.grad is not None else 'None'}")
     if args.experiment_id is not None:
         results.store_results({'model_str': str(model)})
 
