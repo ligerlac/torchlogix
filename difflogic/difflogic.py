@@ -240,6 +240,8 @@ class LogicCNNLayer(torch.nn.Module):
             num_kernels: int = 16,
             tree_depth: int = None,
             receptive_field_size: int = None,
+            implementation: str = None,
+            connections: str = 'random',
             stride: int = None,
             padding: int = None
     ):
