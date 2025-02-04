@@ -56,6 +56,7 @@ class LogicLayer(torch.nn.Module):
         self.connections = connections
         assert self.connections in ['random', 'unique'], self.connections
         self.indices = self.get_connections(self.connections, device)
+
         if self.implementation == 'cuda':
             """
             Defining additional indices for improving the efficiency of the backward of the CUDA implementation.
@@ -91,7 +92,7 @@ class LogicLayer(torch.nn.Module):
             return self.forward_cuda(x)
         elif self.implementation == 'python':
             return self.forward_python(x)
-            #return self.forward_binary_tree(x)
+
         else:
             raise ValueError(self.implementation)
 
@@ -107,9 +108,6 @@ class LogicLayer(torch.nn.Module):
             weights = torch.nn.functional.one_hot(self.weights.argmax(-1), 16).to(torch.float32)
             x = bin_op_s(a, b, weights)
         return x
-
-    def forward_python_convolution(self, x):
-        raise NotImplementedError
 
     def forward_cuda(self, x):
         if self.training:
@@ -171,7 +169,6 @@ class LogicLayer(torch.nn.Module):
             return get_unique_connections(self.in_dim, self.out_dim, device)
         else:
             raise ValueError(connections)
-
 
 
 ########################################################################################################################
