@@ -1,0 +1,29 @@
+on: [push]
+jobs:
+    Unit-Tests:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Print job info
+              run: echo "This job was automatically triggered by a ${{ github.event_name }} event. It is now running on a ${{ runner.os }} server hosted by GitHub! The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+              
+            - name: Setup python
+              uses: actions/setup-python@v4
+              with:
+                python-version: '3.12'
+
+            - name: Check out the commit that triggered this job
+              uses: actions/checkout@v3
+              with:
+                path: ${{ github.event.repository.name }}
+                lfs: 'true'
+                  
+            - name: Install dependencies
+              run: |
+                  pip install --upgrade pip
+                  pip install -r requirements.txt
+                  
+            - name: Install this package
+              run: pip install .
+
+            - name: Run the unit tests
+              run: pytest -s
