@@ -3,6 +3,9 @@ jobs:
     Unit-Tests:
         runs-on: ubuntu-latest
 
+        env:
+          DIFFLOGIC_BUILD_CUDA_EXT: false
+
         steps:
             - name: Print job info
               run: echo "This job was automatically triggered by a ${{ github.event_name }} event. It is now running on a ${{ runner.os }} server hosted by GitHub! The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
@@ -21,7 +24,7 @@ jobs:
                   pip install -r requirements.txt
                   
             - name: Install this package
-              run: pip install .
+              run: pip install -e .
 
             - name: Run the unit tests
               run: pytest -s
