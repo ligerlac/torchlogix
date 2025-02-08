@@ -35,5 +35,6 @@ def test_index_dimensions(tree_depth):
     )
     assert m.indices[-1][0].shape == (1,)
     assert m.indices[-1][1].shape == (1,)
-    for level in range(tree_depth, 0):
-        assert m.indices[level][0].shape == (level**2,)
+    for level in range(1, tree_depth):
+        assert m.indices[level][0].shape == (2**(tree_depth - level),)
+        assert m.indices[level][1].shape == (2**(tree_depth - level),)
