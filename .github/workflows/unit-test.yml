@@ -2,10 +2,6 @@ on: [push]
 jobs:
     Unit-Tests:
         runs-on: ubuntu-latest
-        
-        defaults:
-          run:
-            working-directory: ${{ github.event.repository.name }}
 
         steps:
             - name: Print job info
@@ -18,8 +14,6 @@ jobs:
 
             - name: Check out the commit that triggered this job
               uses: actions/checkout@v3
-              with:
-                path: ${{ github.event.repository.name }}
                   
             - name: Install dependencies
               run: |
