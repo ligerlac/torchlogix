@@ -262,11 +262,12 @@ class LogicCNNLayer(torch.nn.Module):
         # Compute the remaining indices for the binary tree
         current_level_nodes = (self.tree_depth + 1)*2
         #assuming from the paper that it isn't randomly connected?
-        for _ in range(self.tree_depth):
-            left_indices = torch.arange(0, current_level_nodes, 2, device=device)
-            right_indices = torch.arange(1, current_level_nodes, 2, device=device)
+        for level in range(self.tree_depth):
+            size = 2 ** (self.tree_depth - level)
+            left_indices = torch.arange(0, size, 2, device=device)
+            right_indices = torch.arange(1, size, 2, device=device)
             self.indices.append((left_indices, right_indices))
-            current_level_nodes = len(left_indices)  # Number of nodes halves at each level
+
 
     def forward(self, x):
         current_level = x

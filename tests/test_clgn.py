@@ -12,7 +12,8 @@ llkw = {
 }
 
 @pytest.mark.parametrize("tree_depth", [1,2,3,4,5])
-def test_index_dimensions(tree_depth):
+@pytest.mark.parametrize("num_kernels", [1,2,3,4,5])
+def test_index_dimensions(tree_depth, num_kernels):
     """
     A layer's indices are of the shape [level_N, level_N-1, ..., level_0], where N is the tree depth.
     Each level is of shape (left_indices, right_indices), defining the inputs for the binary logic gates.
@@ -25,7 +26,7 @@ def test_index_dimensions(tree_depth):
         in_dim=2,
         device='cpu',
         channels=1,
-        num_kernels=1,
+        num_kernels=num_kernels,
         tree_depth=tree_depth,
         receptive_field_size=2,
         implementation='python',
@@ -38,3 +39,4 @@ def test_index_dimensions(tree_depth):
     for level in range(1, tree_depth):
         assert m.indices[level][0].shape == (2**(tree_depth - level),)
         assert m.indices[level][1].shape == (2**(tree_depth - level),)
+    assert m.indices[0][0].shape == (num_kernels, 1, 2**tree_depth, 3)
