@@ -8,13 +8,10 @@ jobs:
 
         steps:
             - name: Print job info
-              run: echo "This job was automatically triggered by a ${{ github.event_name }} event. It is now running on a ${{ runner.os }} server hosted by GitHub! The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+              run: |
+                echo "This job was automatically triggered by a ${{ github.event_name }} event. It is now running on a ${{ runner.os }} server hosted by GitHub! The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+                echo Running python version `python -V`
               
-            - name: Setup python
-              uses: actions/setup-python@v4
-              with:
-                python-version: '3.12'
-
             - name: Check out the commit that triggered this job
               uses: actions/checkout@v3
                   
