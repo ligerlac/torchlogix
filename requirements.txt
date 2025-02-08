@@ -1,5 +1,6 @@
+numpy==1.26
 tqdm
 scikit-learn
 torch
 torchvision
-difflogic
+pytest
