@@ -245,6 +245,10 @@ class LogicCNNLayer(torch.nn.Module):
         super().__init__()
         # residual weights
         # self.tree_weights = []
+        assert stride <= receptive_field_size, (
+            f"Stride ({stride}) cannot be larger than receptive field size ({receptive_field_size})."
+        )
+
         self.tree_weights = torch.nn.ModuleList()
         for i in reversed(range(tree_depth + 1)):  # Clearer reverse iteration
             level_weights = torch.nn.ParameterList([
@@ -258,7 +262,10 @@ class LogicCNNLayer(torch.nn.Module):
         self.tree_depth = tree_depth
         num_nodes = 2 ** self.tree_depth - 1
         self.channels = channels
-        self.indices = [self.get_kernel_indices(self.num_kernels, receptive_field_size, padding, device)]
+        self.receptive_field_size = receptive_field_size
+        self.stride = stride
+        self.padding = padding
+        self.indices = [self.get_kernel_indices(self.num_kernels, receptive_field_size, padding, stride, device)]
         # Compute the remaining indices for the binary tree
         current_level_nodes = (self.tree_depth + 1)*2
         #assuming from the paper that it isn't randomly connected?
@@ -296,7 +303,7 @@ class LogicCNNLayer(torch.nn.Module):
         return current_level
 
 
-    def get_kernel_indices(self, num_kernels, receptive_field_size, padding, device='cuda'):
+    def get_kernel_indices(self, num_kernels, receptive_field_size, padding, stride, device='cuda'):
         sample_size = 2 ** self.tree_depth  # Number of random connections per kernel (binary tree depth)
         c, h, w = self.channels, self.in_dim, self.in_dim  # Number of channels (C), and image dimensions (H, W)
         h_k, w_k = receptive_field_size, receptive_field_size  # Kernel height and width
@@ -311,8 +318,8 @@ class LogicCNNLayer(torch.nn.Module):
         )
 
         # Generate all possible positions the kernel can slide to (with padding)
-        h_starts = torch.arange(0, h_padded - h_k + 1, 1, device=device)  # Slide in height (stride=1)
-        w_starts = torch.arange(0, w_padded - w_k + 1, 1, device=device)  # Slide in width (stride=1)
+        h_starts = torch.arange(0, h_padded - h_k + 1, stride, device=device)  # Slide in height (stride=1)
+        w_starts = torch.arange(0, w_padded - w_k + 1, stride, device=device)  # Slide in width (stride=1)
 
         # Generate meshgrid for all possible starting points of the receptive field
         h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing='ij')
