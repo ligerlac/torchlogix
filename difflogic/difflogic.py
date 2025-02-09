@@ -3,6 +3,8 @@ import torch
 import numpy as np
 from .functional import bin_op_s, bin_op_cnn, get_unique_connections, GradFactor
 from .packbitstensor import PackBitsTensor
+from torch.nn.common_types import _size_2_t
+from torch.nn.modules.utils import _pair
 from rich import print
 try:
     import difflogic_cuda
@@ -230,7 +232,7 @@ class LogicLayerCudaFunction(torch.autograd.Function):
 class LogicCNNLayer(torch.nn.Module):
     def __init__(
             self,
-            in_dim: int,
+            in_dim: _size_2_t,
             device: str = 'cuda',
             grad_factor: float = 1.,
             channels: int = 1,
@@ -255,7 +257,7 @@ class LogicCNNLayer(torch.nn.Module):
                 torch.nn.Parameter(torch.randn(num_kernels, 16, device=device)) for _ in range(2 ** i)
             ])
             self.tree_weights.append(level_weights)
-        self.in_dim = in_dim
+        self.in_dim = _pair(in_dim)
         self.device = device
         self.grad_factor = grad_factor
         self.num_kernels = num_kernels
@@ -305,7 +307,7 @@ class LogicCNNLayer(torch.nn.Module):
 
     def get_kernel_indices(self, num_kernels, receptive_field_size, padding, stride, device='cuda'):
         sample_size = 2 ** self.tree_depth  # Number of random connections per kernel (binary tree depth)
-        c, h, w = self.channels, self.in_dim, self.in_dim  # Number of channels (C), and image dimensions (H, W)
+        c, h, w = self.channels, self.in_dim[0], self.in_dim[1]  # Number of channels (C), and image dimensions (H, W)
         h_k, w_k = receptive_field_size, receptive_field_size  # Kernel height and width
 
         # Account for padding: increase the dimensions of the input image based on padding

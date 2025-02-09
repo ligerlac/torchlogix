@@ -20,7 +20,8 @@ def layer(in_dim, channels, num_kernels, tree_depth, receptive_field_size, strid
         'stride': stride,
         'padding': padding
     }
-    if receptive_field_size > in_dim:
+    # in_dim can be an integer or a tuple of integers. be m either the int itself or the min of the tuple
+    if receptive_field_size > (min(in_dim) if isinstance(in_dim, tuple) else in_dim):
         with pytest.raises(AssertionError):
             LogicCNNLayer(**params)
         pytest.skip("Receptive field size should be smaller than input dimension")
@@ -31,7 +32,7 @@ def layer(in_dim, channels, num_kernels, tree_depth, receptive_field_size, strid
     return LogicCNNLayer(**params)
 
 
-@pytest.mark.parametrize("in_dim", [2, 4, 7])
+@pytest.mark.parametrize("in_dim", [2, 7, (18, 14)])
 @pytest.mark.parametrize("channels", [1, 2])
 @pytest.mark.parametrize("num_kernels", [1, 5])
 @pytest.mark.parametrize("tree_depth", [1, 3])
@@ -50,8 +51,8 @@ class TestIndeces:
         It should be of shape (num_kernels, num_positions, 2**tree_depth, 3) [3 because of (w, h, c) notation]
         Also, 
         """
-        horizontal_positions = int((layer.in_dim + 2*layer.padding - layer.receptive_field_size) / layer.stride) + 1
-        vertical_positions = int((layer.in_dim + 2*layer.padding - layer.receptive_field_size) / layer.stride) + 1
+        vertical_positions = int((layer.in_dim[0] + 2*layer.padding - layer.receptive_field_size) / layer.stride) + 1
+        horizontal_positions = int((layer.in_dim[1] + 2*layer.padding - layer.receptive_field_size) / layer.stride) + 1
         num_positions = horizontal_positions * vertical_positions
         indices = layer.indices[0][side]
         assert indices.shape == (layer.num_kernels, num_positions, 2**layer.tree_depth, 3)
@@ -73,6 +74,17 @@ class TestIndeces:
         width, height and channel indices should be within specified input dimensions
         """
         indices = layer.indices[0][side]
-        assert torch.all(indices[..., 0] < layer.in_dim)
-        assert torch.all(indices[..., 1] < layer.in_dim)
+        assert torch.all(indices[..., 0] < layer.in_dim[0])
+        assert torch.all(indices[..., 1] < layer.in_dim[1])
         assert torch.all(indices[..., 2] < layer.channels)
+
+
+    def test_other_tree_levels_range(self, layer, side):
+        """
+        Each following level should have indices within the range of the previous level
+        """
+        for level in range(1, layer.tree_depth):
+            indices = layer.indices[level][side]
+            n_gates_prev = 2**(layer.tree_depth - level + 1)
+            assert torch.all(indices < n_gates_prev)
+
