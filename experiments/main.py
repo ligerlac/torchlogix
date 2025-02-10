@@ -57,7 +57,7 @@ def load_dataset(args):
 
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, pin_memory=True, drop_last=True, num_workers=4)
         validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=args.batch_size, shuffle=False, pin_memory=True, drop_last=True)
-        test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size//5, shuffle=False, pin_memory=True, drop_last=True)
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size//10, shuffle=False, pin_memory=True, drop_last=True)
     elif 'cifar-10' in args.dataset:
         transform = {
             'cifar-10-3-thresholds': lambda x: torch.cat([(x > (i + 1) / 4).float() for i in range(3)], dim=0),
@@ -103,6 +103,7 @@ def input_dim_of_dataset(dataset):
         'monk3': 17,
         'mnist': 784,
         'mnist20x20': 400,
+        'cicada': 720,
         'cifar-10-3-thresholds': 3 * 32 * 32 * 3,
         'cifar-10-31-thresholds': 3 * 32 * 32 * 31,
     }[dataset]
@@ -117,6 +118,7 @@ def num_classes_of_dataset(dataset):
         'monk3': 2,
         'mnist': 10,
         'mnist20x20': 10,
+        'cicada': 1,
         'cifar-10-3-thresholds': 10,
         'cifar-10-31-thresholds': 10,
     }[dataset]
