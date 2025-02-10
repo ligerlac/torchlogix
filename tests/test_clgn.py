@@ -1,8 +1,6 @@
 import pytest
 import torch
-import os
-import numpy as np
-from difflogic import LogicLayer, GroupSum, PackBitsTensor, CompiledLogicNet, LogicCNNLayer
+from difflogic import LogicCNNLayer
 
 
 @pytest.fixture
@@ -88,3 +86,63 @@ class TestIndeces:
             n_gates_prev = 2**(layer.tree_depth - level + 1)
             assert torch.all(indices < n_gates_prev)
 
+
+def test_and_model():
+    """
+    AND is the 1-st gate
+     - set the weights to 0, except for the 1-st element (set to some high value)
+     - test the 4 possible inputs
+    """
+    layer = LogicCNNLayer(
+        in_dim=2,
+        device='cpu',
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        implementation='python',
+        connections='random',
+        stride=1,
+        padding=0
+    )
+
+    # Set indices to select pairs of positions row-wise
+    layer.indices = [
+        (
+            torch.tensor([[[[0, 0, 0], [1, 0, 0]]]]),
+            torch.tensor([[[[0, 1, 0], [1, 1, 0]]]])
+        ),
+        (
+            torch.tensor([0]),
+            torch.tensor([1])
+        )
+    ]
+
+    # Set weights to select AND operation
+    with torch.no_grad():
+        and_weights = torch.zeros(1, 16)
+        and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
+        layer.tree_weights[0][0].data = and_weights
+        layer.tree_weights[0][1].data = and_weights
+        layer.tree_weights[1][0].data = and_weights
+
+    test_cases = [
+        ((0,0), 0),
+        ((0,1), 0),
+        ((1,0), 0),
+        ((1,1), 1)
+    ]
+
+    # only all 1s should produce 1
+    test_cases = [
+        ([[[[0, 0], [0, 0]]]], 0),
+        ([[[[0, 0], [0, 1]]]], 0),
+        ([[[[0, 0], [1, 1]]]], 0),
+        ([[[[0, 1], [1, 1]]]], 0),
+        ([[[[1, 1], [1, 1]]]], 1),
+    ]
+    
+    for x, expected in test_cases:
+        x = torch.tensor(x, dtype=torch.float32)
+        output = layer(x)
+        assert torch.isclose(output, torch.tensor([[[[expected]]]], dtype=torch.float32))
