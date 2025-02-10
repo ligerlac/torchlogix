@@ -298,10 +298,9 @@ class LogicCNNLayer(torch.nn.Module):
             b = current_level[..., right_indices]
             level_weights = torch.stack(
                 [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[level]], dim=0
-            )  # Shape: [8, 16, 16]
+            #)  # Shape: [8, 16, 16]
 
             current_level = bin_op_cnn(a, b, level_weights)
-
         return current_level
 
 
