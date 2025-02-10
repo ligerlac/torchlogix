@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from .functional import bin_op_s, bin_op_cnn, get_unique_connections, GradFactor
 from .packbitstensor import PackBitsTensor
-from rich import print
+#from rich import print
 try:
     import difflogic_cuda
 except ImportError:
@@ -89,7 +89,7 @@ class LogicLayer(torch.nn.Module):
         if self.implementation == 'cuda':
             if isinstance(x, PackBitsTensor):
                 return self.forward_cuda_eval(x)
-            return self.forward_cuda(x)
+            return self.forward_python(x)
         elif self.implementation == 'python':
             return self.forward_python(x)
 
@@ -244,12 +244,13 @@ class LogicCNNLayer(torch.nn.Module):
     ):
         super().__init__()
         # residual weights
-        # self.tree_weights = []
         self.tree_weights = torch.nn.ModuleList()
-        for i in reversed(range(tree_depth + 1)):  # Clearer reverse iteration
-            level_weights = torch.nn.ParameterList([
-                torch.nn.Parameter(torch.randn(num_kernels, 16, device=device)) for _ in range(2 ** i)
-            ])
+        for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
+            level_weights = torch.nn.ParameterList()
+            for _ in range(2 ** i):  # Iterate over nodes at this level
+                weights = torch.zeros(num_kernels, 16, device=device)  # Initialize with zeros
+                weights[:, 3] = 5  # Set the fourth element (index 3) to 5
+                level_weights.append(torch.nn.Parameter(weights))  # Wrap as a trainable parameter
             self.tree_weights.append(level_weights)
         self.in_dim = in_dim
         self.device = device
