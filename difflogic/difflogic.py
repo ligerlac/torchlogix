@@ -92,7 +92,7 @@ class LogicLayer(torch.nn.Module):
         if self.implementation == 'cuda':
             if isinstance(x, PackBitsTensor):
                 return self.forward_cuda_eval(x)
-            return self.forward_python(x)
+            return self.forward_cuda(x)
         elif self.implementation == 'python':
             return self.forward_python(x)
 
