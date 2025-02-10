@@ -3,7 +3,10 @@ import torch
 import numpy as np
 from .functional import bin_op_s, bin_op_cnn, get_unique_connections, GradFactor
 from .packbitstensor import PackBitsTensor
-#from rich import print
+
+from torch.nn.common_types import _size_2_t
+from torch.nn.modules.utils import _pair
+from rich import print
 try:
     import difflogic_cuda
 except ImportError:
@@ -230,7 +233,7 @@ class LogicLayerCudaFunction(torch.autograd.Function):
 class LogicCNNLayer(torch.nn.Module):
     def __init__(
             self,
-            in_dim: int,
+            in_dim: _size_2_t,
             device: str = 'cuda',
             grad_factor: float = 1.,
             channels: int = 1,
@@ -244,6 +247,11 @@ class LogicCNNLayer(torch.nn.Module):
     ):
         super().__init__()
         # residual weights
+
+        # self.tree_weights = []
+        assert stride <= receptive_field_size, (
+            f"Stride ({stride}) cannot be larger than receptive field size ({receptive_field_size})."
+        )
         self.tree_weights = torch.nn.ModuleList()
         for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
@@ -252,22 +260,26 @@ class LogicCNNLayer(torch.nn.Module):
                 weights[:, 3] = 5  # Set the fourth element (index 3) to 5
                 level_weights.append(torch.nn.Parameter(weights))  # Wrap as a trainable parameter
             self.tree_weights.append(level_weights)
-        self.in_dim = in_dim
+        self.in_dim = _pair(in_dim)
         self.device = device
         self.grad_factor = grad_factor
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
         num_nodes = 2 ** self.tree_depth - 1
         self.channels = channels
-        self.indices = [self.get_kernel_indices(self.num_kernels, receptive_field_size, padding, device)]
+        self.receptive_field_size = receptive_field_size
+        self.stride = stride
+        self.padding = padding
+        self.indices = [self.get_kernel_indices(self.num_kernels, receptive_field_size, padding, stride, device)]
         # Compute the remaining indices for the binary tree
         current_level_nodes = (self.tree_depth + 1)*2
         #assuming from the paper that it isn't randomly connected?
-        for _ in range(self.tree_depth):
-            left_indices = torch.arange(0, current_level_nodes, 2, device=device)
-            right_indices = torch.arange(1, current_level_nodes, 2, device=device)
+        for level in range(self.tree_depth):
+            size = 2 ** (self.tree_depth - level)
+            left_indices = torch.arange(0, size, 2, device=device)
+            right_indices = torch.arange(1, size, 2, device=device)
             self.indices.append((left_indices, right_indices))
-            current_level_nodes = len(left_indices)  # Number of nodes halves at each level
+
 
     def forward(self, x):
         current_level = x
@@ -289,16 +301,15 @@ class LogicCNNLayer(torch.nn.Module):
             b = current_level[..., right_indices]
             level_weights = torch.stack(
                 [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[level]], dim=0
-            )  # Shape: [8, 16, 16]
+            #)  # Shape: [8, 16, 16]
 
             current_level = bin_op_cnn(a, b, level_weights)
-
         return current_level
 
 
-    def get_kernel_indices(self, num_kernels, receptive_field_size, padding, device='cuda'):
+    def get_kernel_indices(self, num_kernels, receptive_field_size, padding, stride, device='cuda'):
         sample_size = 2 ** self.tree_depth  # Number of random connections per kernel (binary tree depth)
-        c, h, w = self.channels, self.in_dim, self.in_dim  # Number of channels (C), and image dimensions (H, W)
+        c, h, w = self.channels, self.in_dim[0], self.in_dim[1]  # Number of channels (C), and image dimensions (H, W)
         h_k, w_k = receptive_field_size, receptive_field_size  # Kernel height and width
 
         # Account for padding: increase the dimensions of the input image based on padding
@@ -311,8 +322,8 @@ class LogicCNNLayer(torch.nn.Module):
         )
 
         # Generate all possible positions the kernel can slide to (with padding)
-        h_starts = torch.arange(0, h_padded - h_k + 1, 1, device=device)  # Slide in height (stride=1)
-        w_starts = torch.arange(0, w_padded - w_k + 1, 1, device=device)  # Slide in width (stride=1)
+        h_starts = torch.arange(0, h_padded - h_k + 1, stride, device=device)  # Slide in height (stride=1)
+        w_starts = torch.arange(0, w_padded - w_k + 1, stride, device=device)  # Slide in width (stride=1)
 
         # Generate meshgrid for all possible starting points of the receptive field
         h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing='ij')
