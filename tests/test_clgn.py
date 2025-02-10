@@ -91,7 +91,7 @@ def test_and_model():
     """
     AND is the 1-st gate
      - set the weights to 0, except for the 1-st element (set to some high value)
-     - test the 4 possible inputs
+     - test some possible inputs
     """
     layer = LogicCNNLayer(
         in_dim=2,
@@ -125,13 +125,6 @@ def test_and_model():
         layer.tree_weights[0][0].data = and_weights
         layer.tree_weights[0][1].data = and_weights
         layer.tree_weights[1][0].data = and_weights
-
-    test_cases = [
-        ((0,0), 0),
-        ((0,1), 0),
-        ((1,0), 0),
-        ((1,1), 1)
-    ]
 
     # only all 1s should produce 1
     test_cases = [
