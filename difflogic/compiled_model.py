@@ -1,6 +1,6 @@
 import torch
 import math
-from .difflogic import LogicLayer, GroupSum
+from models.difflog_layers.linear import LogicLayer, GroupSum
 import tempfile
 import subprocess
 import shutil

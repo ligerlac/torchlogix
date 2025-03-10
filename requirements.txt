@@ -5,3 +5,4 @@ torch
 torchvision
 pytest
 rich
+torch-geometric
