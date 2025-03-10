@@ -1,7 +1,9 @@
 import pytest
 import torch
 import numpy as np
-from difflogic import LogicLayer, GroupSum, PackBitsTensor, CompiledLogicNet
+from models.difflog_layers.linear import LogicLayer, GroupSum
+from difflogic.packbitstensor import PackBitsTensor
+from difflogic.compiled_model import CompiledLogicNet
 
 
 llkw = {
