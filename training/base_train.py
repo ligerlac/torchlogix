@@ -1,8 +1,9 @@
 import torch
 import numpy as np
-
+from models.difflog_layers.linear import PackBitsTensor
 
 def train(model, x, y, loss_fn, optimizer):
+    model.train()
     x = model(x)
     loss = loss_fn(x, y)
     optimizer.zero_grad()

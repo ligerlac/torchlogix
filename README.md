@@ -144,7 +144,7 @@ implementations over publishing a plethora of different competing implementation
 ## 🧪 Experiments
 
 In the following, we present a few example experiments which are contained in the `experiments` directory.
-`main.py` executes the experiments for difflogic and `main_baseline.py` contains regular neural network baselines.
+`main.py` executes the experiments for difflogic or baselines. 
 
 ### ☄️ Adult / Breast Cancer
 
@@ -159,8 +159,8 @@ python experiments/main.py  -eid 526020 -lr 0.001 -bs 100 -t 20 --dataset breast
 python experiments/main.py  -bs 100 -t  10 --dataset mnist20x20 -ni 200_000 -ef 1_000 -k  8_000 -l 6 --compile_model
 python experiments/main.py  -bs 100 -t  30 --dataset mnist      -ni 200_000 -ef 1_000 -k 64_000 -l 6 --compile_model
 # Baselines:
-python experiments/main_baseline.py  -bs 100 --dataset mnist    -ni 200_000 -ef 1_000 -k  128 -l 3
-python experiments/main_baseline.py  -bs 100 --dataset mnist    -ni 200_000 -ef 1_000 -k 2048 -l 7
+python experiments/main.py  -bs 100 --dataset mnist    -ni 200_000 -ef 1_000 -k  128 -l 3 --arch=fully_connected
+python experiments/main.py  -bs 100 --dataset mnist    -ni 200_000 -ef 1_000 -k 2048 -l 7 --arch=fully_connected
 ```
 
 ### 🐶 CIFAR-10

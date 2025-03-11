@@ -1,9 +1,9 @@
 from models.difflog_layers.conv import LogicConv3d, OrPoolingLayer
-from models.difflog_layers.linear import GroupSum
+from models.difflog_layers.linear import LogicLayer, GroupSum
 import torch
 
 class CNN(torch.nn.Module):
-    def __init__(self, class_count, args, **llkw):
+    def __init__(self, class_count, tau, **llkw):
         super(CNN, self).__init__()
         logic_layers = []
         # specifically written for mnist
@@ -22,13 +22,13 @@ class CNN(torch.nn.Module):
 
         logic_layers.append(torch.nn.Flatten())
 
-        logic_layers.append(LogicConv3d(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
-        logic_layers.append(LogicConv3d(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw))
-        logic_layers.append(LogicConv3d(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
+        logic_layers.append(LogicLayer(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
+        logic_layers.append(LogicLayer(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw))
+        logic_layers.append(LogicLayer(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
 
         self.model = torch.nn.Sequential(
             *logic_layers,
-            GroupSum(class_count, args.tau)
+            GroupSum(class_count, tau)
         )
 
     def forward(self, x):

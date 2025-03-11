@@ -1,9 +1,9 @@
 import torch
 from models.difflog_layers.linear import LogicLayer, GroupSum
 
-class BaseModel(torch.nn.Module):
-    def __init__(self, in_dim, k, l, class_count, args, **llkw):
-        super(BaseModel, self).__init__()
+class RandomlyConnectedNN(torch.nn.Module):
+    def __init__(self, in_dim, k, l, class_count, tau, **llkw):
+        super(RandomlyConnectedNN, self).__init__()
         logic_layers = []
         logic_layers.append(torch.nn.Flatten())
         logic_layers.append(LogicLayer(in_dim=in_dim, out_dim=k, **llkw))
@@ -12,7 +12,7 @@ class BaseModel(torch.nn.Module):
 
         self.model = torch.nn.Sequential(
             *logic_layers,
-            GroupSum(class_count, args.tau)
+            GroupSum(class_count, tau)
         )
 
     def forward(self, x):
