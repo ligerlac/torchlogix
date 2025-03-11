@@ -37,7 +37,7 @@ class LogicLayer(torch.nn.Module):
         :param connections: method for initializing the connectivity of the logic gate net
         """
         super().__init__()
-        self.weights = torch.nn.parameter.Parameter(torch.randn(out_dim, 16, device=device))
+        self.weight = torch.nn.parameter.Parameter(torch.randn(out_dim, 16, device=device))
 
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -106,9 +106,9 @@ class LogicLayer(torch.nn.Module):
             self.indices = self.indices[0].long(), self.indices[1].long()
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
         if self.training:
-            x = bin_op_s(a, b, torch.nn.functional.softmax(self.weights, dim=-1))
+            x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
         else:
-            weights = torch.nn.functional.one_hot(self.weights.argmax(-1), 16).to(torch.float32)
+            weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(torch.float32)
             x = bin_op_s(a, b, weights)
         return x
 
@@ -125,12 +125,12 @@ class LogicLayer(torch.nn.Module):
         a, b = self.indices
 
         if self.training:
-            w = torch.nn.functional.softmax(self.weights, dim=-1).to(x.dtype)
+            w = torch.nn.functional.softmax(self.weight, dim=-1).to(x.dtype)
             return LogicLayerCudaFunction.apply(
                 x, a, b, w, self.given_x_indices_of_y_start, self.given_x_indices_of_y
             ).transpose(0, 1)
         else:
-            w = torch.nn.functional.one_hot(self.weights.argmax(-1), 16).to(x.dtype)
+            w = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(x.dtype)
             with torch.no_grad():
                 return LogicLayerCudaFunction.apply(
                     x, a, b, w, self.given_x_indices_of_y_start, self.given_x_indices_of_y
@@ -148,7 +148,7 @@ class LogicLayer(torch.nn.Module):
         assert x.t.shape[0] == self.in_dim, (x.t.shape, self.in_dim)
 
         a, b = self.indices
-        w = self.weights.argmax(-1).to(torch.uint8)
+        w = self.weight.argmax(-1).to(torch.uint8)
         x.t = difflogic_cuda.eval(x.t, a, b, w)
 
         return x

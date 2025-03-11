@@ -20,7 +20,7 @@ def test_trivial_layer():
     """
     layer = LogicLayer(in_dim=2, out_dim=1, **llkw)
     assert layer.indices == (0,1) or layer.indices == (1,0)
-    assert layer.weights.shape == (1, 16)
+    assert layer.weight.shape == (1, 16)
     with pytest.raises(AssertionError):
         LogicLayer(in_dim=2, out_dim=2, **llkw)
 
@@ -32,8 +32,8 @@ def test_xor_model():
      - test the 4 possible inputs
     """
     layer = LogicLayer(in_dim=2, out_dim=1, **llkw)
-    layer.weights.data = torch.zeros(16)
-    layer.weights.data[6] = 100
+    layer.weight.data = torch.zeros(16)
+    layer.weight.data[6] = 100
     model = torch.nn.Sequential(layer)
     test_cases = [
         ((0,0), 0),

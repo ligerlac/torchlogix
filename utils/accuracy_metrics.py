@@ -15,7 +15,7 @@ def evaluate_model(model, data, mask, num_classes):
     Returns:
         metrics: Dictionary containing various performance metrics
     """
-    #model.eval()
+    model.eval() # turns off dropout and batch normalization
     with torch.no_grad():
         # Get predictions
         out = model(data)

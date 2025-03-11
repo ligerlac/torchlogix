@@ -127,6 +127,7 @@ if __name__ == '__main__':
                 print(epoch, loss.item())
                 val_metrics = evaluate_model(model, data, data.test_mask, 7)
                 print(val_metrics["accuracy"], val_metrics['confusion_matrix'])
+                model.train()
     ####################################################################################################################
 
     if args.compile_model:

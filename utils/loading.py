@@ -69,7 +69,7 @@ def load_dataset(args):
     elif 'cora' in args.dataset:
         dataset = Planetoid(root='./data-cora', name=args.dataset, split='public')
         data = dataset[0]
-        data.x = F.normalize(data.x, p=1, dim=1)
+        #data.x = F.normalize(data.x, p=1, dim=1)
         return data, None, None
     else:
         raise NotImplementedError(f'The data set {args.dataset} is not supported!')

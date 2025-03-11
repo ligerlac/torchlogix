@@ -74,7 +74,7 @@ class CompiledLogicNet(torch.nn.Module):
                         self.num_inputs = layer.in_dim
                         first = False
                     self.num_out_per_class = layer.out_dim // self.num_classes
-                    layers.append((layer.indices[0], layer.indices[1], layer.weights.argmax(1)))
+                    layers.append((layer.indices[0], layer.indices[1], layer.weight.argmax(1)))
                 elif isinstance(layer, torch.nn.Flatten):
                     if verbose:
                         print('Skipping torch.nn.Flatten layer ({}).'.format(type(layer)))
