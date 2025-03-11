@@ -1,6 +1,6 @@
 import pytest
 import torch
-from difflogic import LogicCNNLayer
+from models.difflog_layers.conv import LogicConv3d
 
 
 @pytest.fixture
@@ -21,13 +21,13 @@ def layer(in_dim, channels, num_kernels, tree_depth, receptive_field_size, strid
     # in_dim can be an integer or a tuple of integers. be m either the int itself or the min of the tuple
     if receptive_field_size > (min(in_dim) if isinstance(in_dim, tuple) else in_dim):
         with pytest.raises(AssertionError):
-            LogicCNNLayer(**params)
+            LogicConv3d(**params)
         pytest.skip("Receptive field size should be smaller than input dimension")
     if stride > receptive_field_size:
         with pytest.raises(AssertionError):
-            LogicCNNLayer(**params)
+            LogicConv3d(**params)
         pytest.skip("Stride should be smaller than receptive field size")
-    return LogicCNNLayer(**params)
+    return LogicConv3d(**params)
 
 
 @pytest.mark.parametrize("in_dim", [2, 7, (18, 14)])
@@ -93,7 +93,7 @@ def test_and_model():
      - set the weights to 0, except for the 1-st element (set to some high value)
      - test some possible inputs
     """
-    layer = LogicCNNLayer(
+    layer = LogicConv3d(
         in_dim=2,
         device='cpu',
         channels=1,
