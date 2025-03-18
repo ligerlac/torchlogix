@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
     if args.experiment_id is not None:
         assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
-        results = ResultsJSON(eid=args.experiment_id, path='./results/')
+        results = ResultsJSON(eid=args.expriment_id, path='./results/')
         results.store_args(args)
 
     device = IMPL_TO_DEVICE[args.implementation]
@@ -59,6 +59,7 @@ if __name__ == '__main__':
                 total=args.num_iterations,
         ):
             x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to(device)
+            print(x[0])
             y = y.to(device)
 
             loss = train(model, x, y, loss_fn, optim)
@@ -106,14 +107,15 @@ if __name__ == '__main__':
                     results.save()
     else:
         model.train()
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=5e-4)
         data = train_loader.to(device)
+        print(data.x.shape)
         #data.x = data.x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to(device)
 
-        for epoch in range(10000):
+        for epoch in range(100000):
             optimizer.zero_grad()
             out = model(data)
-            if args.architecture == 'gcn_cora_baseline':
+            if args.architecture in ['gcn_cora_baseline']:
                 loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
             else:
                 loss = loss_fn(out[data.train_mask], data.y[data.train_mask])
@@ -121,11 +123,12 @@ if __name__ == '__main__':
             loss.backward()
             for name, param in model.named_parameters():
                 if param.grad is None:
-                    print(f"Gradient for {name} is None")()
+                    print(f"Gradient for {name} is None")
+
             optimizer.step()
             if epoch % 100 == 0:
                 print(epoch, loss.item())
-                val_metrics = evaluate_model(model, data, data.test_mask, 7)
+                val_metrics = evaluate_model(model, data, data.test_mask, int(max(data.y)+1))
                 print(val_metrics["accuracy"], val_metrics['confusion_matrix'])
                 model.train()
     ####################################################################################################################

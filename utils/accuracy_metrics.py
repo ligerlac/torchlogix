@@ -22,8 +22,8 @@ def evaluate_model(model, data, mask, num_classes):
         pred = out.argmax(dim=1)
 
         # Extract true labels and predictions for masked nodes
-        y_true = data.y[mask].numpy()
-        y_pred = pred[mask].numpy()
+        y_true = data.y[mask].cpu().numpy()
+        y_pred = pred[mask].cpu().numpy()
 
         # Calculate metrics
         metrics = {

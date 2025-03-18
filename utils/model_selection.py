@@ -5,7 +5,7 @@ from utils.loading import input_dim_of_dataset, num_classes_of_dataset
 from models.nn import RandomlyConnectedNN
 from models.conv import CNN
 from models.gcn_conv import GCN, GCNCoraBaseline
-
+from models.gat_conv import GATDifflog, GATBaseline
 IMPL_TO_DEVICE = {
     'cuda': 'cuda',
     'python': 'cpu'
@@ -43,6 +43,10 @@ def get_model(args):
         model = GCN(num_node_features=in_dim, num_classes=class_count)
     elif arch == 'gcn_cora_baseline':
         model = GCNCoraBaseline(num_node_features=in_dim, num_classes=class_count).to(device)
+    elif arch == 'gat_cora_baseline':
+        model = GATBaseline(in_channels=in_dim, hidden_channels=16, out_channels=class_count).to(device)
+    elif arch == 'gat':
+        model = GATDifflog(in_channels=in_dim, hidden_channels=16, out_channels=class_count).to(device)
     else:
         raise NotImplementedError(arch)
 

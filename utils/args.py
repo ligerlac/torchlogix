@@ -12,6 +12,9 @@ def get_parser():
         'cifar-10-3-thresholds',
         'cifar-10-31-thresholds',
         'cora',
+        'pubmed',
+        'citeseer',
+        'nell'
     ], required=True, help='the dataset to use')
     parser.add_argument('--tau', '-t', type=float, default=10, help='the softmax temperature tau')
     parser.add_argument('--seed', '-s', type=int, default=0, help='seed (default: 0)')

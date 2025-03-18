@@ -1,11 +1,21 @@
 
-from torch_geometric.datasets import Planetoid
+from torch_geometric.datasets import Planetoid, NELL
 import mnist_dataset
 import uci_datasets
 import torchvision
 import torch
 import math
 import torch.nn.functional as F
+from torch_geometric.transforms import NormalizeFeatures
+from torch_geometric.transforms import BaseTransform
+
+class MinMaxNormalize(BaseTransform):
+    def __call__(self, data):
+        x = data.x  # Node features
+        min_vals = x.min(dim=0, keepdim=True)[0]  # Min for each feature
+        max_vals = x.max(dim=0, keepdim=True)[0]  # Max for each feature
+        data.x = (x - min_vals) / (max_vals - min_vals + 1e-10)  # Avoid division by zero
+        return data
 
 BITS_TO_TORCH_FLOATING_POINT_TYPE = {
     16: torch.float16,
@@ -66,10 +76,17 @@ def load_dataset(args):
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True, pin_memory=True, drop_last=True, num_workers=4)
         validation_loader = torch.utils.data.DataLoader(validation_set, batch_size=args.batch_size, shuffle=False, pin_memory=True, drop_last=True)
         test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, pin_memory=True, drop_last=True)
-    elif 'cora' in args.dataset:
-        dataset = Planetoid(root='./data-cora', name=args.dataset, split='public')
+    elif args.dataset in ['cora', 'citeseer', 'pubmed']:
+        print("ARGS.DATASET", args.dataset)
+        dataset = Planetoid(root=f'./data-{args.dataset}', name=args.dataset, split='public', transform=MinMaxNormalize())
         data = dataset[0]
         #data.x = F.normalize(data.x, p=1, dim=1)
+        return data, None, None
+    elif 'nell' in args.dataset:
+        dataset = NELL(root="data/nell")
+        data = dataset[0]  # Get the first (and only) graph object
+        # needs to be dense for indexing in logic layer
+        data.x = data.x.to_dense()
         return data, None, None
     else:
         raise NotImplementedError(f'The data set {args.dataset} is not supported!')
@@ -98,6 +115,9 @@ def input_dim_of_dataset(dataset):
         'cifar-10-3-thresholds': 3 * 32 * 32 * 3,
         'cifar-10-31-thresholds': 3 * 32 * 32 * 31,
         'cora': 1433,
+        'pubmed': 500,
+        'citeseer': 3703,
+        'nell': 5414
     }[dataset]
 
 
@@ -114,5 +134,8 @@ def num_classes_of_dataset(dataset):
         'cifar-10-3-thresholds': 10,
         'cifar-10-31-thresholds': 10,
         'cora': 7,
+        'pubmed': 3,
+        'citeseer': 6,
+        'nell': 210
     }[dataset]
 
