@@ -11,15 +11,15 @@ jobs:
               run: |
                 echo "This job was automatically triggered by a ${{ github.event_name }} event. It is now running on a ${{ runner.os }} server hosted by GitHub! The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
                 echo Running python version `python -V`
-              
+
             - name: Check out the commit that triggered this job
               uses: actions/checkout@v3
-                  
+
             - name: Install dependencies
               run: |
                   pip install --upgrade pip
                   pip install -r requirements.txt
-                  
+
             - name: Install this package
               run: pip install -e .
 
