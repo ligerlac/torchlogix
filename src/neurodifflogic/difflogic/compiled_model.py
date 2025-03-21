@@ -190,8 +190,13 @@ class CompiledLogicNet(torch.nn.Module):
             "#include <stdlib.h>",
             "#include <stdbool.h>",
             "",
-            f"void logic_gate_net({BITS_TO_DTYPE[self.num_bits]} const *inp, "
-            f"{BITS_TO_DTYPE[self.num_bits]} *out)",
+            f"void logic_gate_net("
+            f"{BITS_TO_DTYPE[self.num_bits]} const *inp, "
+            f"{BITS_TO_DTYPE[self.num_bits]} *out);",
+            "",
+            f"void logic_gate_net("
+            f"{BITS_TO_DTYPE[self.num_bits]} const *inp, "
+            f"{BITS_TO_DTYPE[self.num_bits]} *out) {{",
         ]
 
         for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers):
@@ -208,7 +213,7 @@ class CompiledLogicNet(torch.nn.Module):
 
         code.append(
             rf"""
-void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
+void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
     {BITS_TO_DTYPE[self.num_bits]} *inp_temp = malloc({self.num_inputs}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
     {BITS_TO_DTYPE[self.num_bits]} *out_temp = malloc({num_neurons_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
     {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
