@@ -1,0 +1,22 @@
+name: difflog
+channels:
+  - pytorch
+  - nvidia
+  - pyg
+  - ostrokach-forge
+  - conda-forge
+  - scikit-learn
+dependencies:
+  - python>=3.10
+  - pytorch-cuda >= 11.8
+  - pyg >= 2.3.0
+  - tqdm
+  - scikit-learn
+  - pytorch > =2
+  - torchvision
+  - pip
+  - pandas
+  - numpy
+  - jupyter
+  - wandb
+  - gxx=13

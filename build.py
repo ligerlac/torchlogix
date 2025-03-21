@@ -1,25 +1,21 @@
-"""Setup configuration for the neurodifflogic package."""
-
 import os
 
-from setuptools import find_packages, setup
+from setuptools import setup
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
-
 
 # decide from env variable if cuda extension should be built (default is 'true')
 build_cuda_ext = os.getenv("DIFFLOGIC_BUILD_CUDA_EXT", "true").lower()
 
 if build_cuda_ext == "true":
-    from torch.utils.cpp_extension import BuildExtension, CUDAExtension
-
     ext_modules = [
         CUDAExtension(
-            "neurodifflogic.difflogic_cuda",
+            "difflogic_cuda",
             [
-                "src/neurodifflogic/difflogic/cuda/difflogic.cpp",
-                "src/neurodifflogic/difflogic/cuda/difflogic_kernel.cu",
+                "difflogic/cuda/difflogic.cpp",
+                "difflogic/cuda/difflogic_kernel.cu",
             ],
             extra_compile_args={"nvcc": ["-lineinfo"]},
         )
@@ -27,9 +23,8 @@ if build_cuda_ext == "true":
 else:
     ext_modules = []
 
-
 setup(
-    name="neurodifflogic",
+    name="difflogic",
     version="0.1.0",
     author="Felix Petersen",
     author_email="ads0600@felix-petersen.de",
@@ -47,12 +42,11 @@ setup(
         "Topic :: Software Development :: Libraries",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    package_dir={"": "src"},
-    packages=find_packages(where="src"),
+    package_dir={"difflogic": "difflogic"},
+    packages=["difflogic"],
     ext_modules=ext_modules,
-    cmdclass={"build_ext": BuildExtension}
-    if ext_modules
-    else {},  # Only if building extensions
+    cmdclass={"build_ext": BuildExtension} if ext_modules else {},
+    # Only if building extensions
     python_requires=">=3.6",
     install_requires=[
         "torch>=1.6.0",

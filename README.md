@@ -6,8 +6,8 @@ This repository includes the official implementation of our NeurIPS 2022 Paper "
 (Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)).
 
 The goal behind differentiable logic gate networks is to solve machine learning tasks by learning combinations of logic
-gates, i.e., so-called logic gate networks. As logic gate networks are conventionally non-differentiable, they can 
-conventionally not be trained with methods such as gradient descent. Thus, differentiable logic gate networks are a 
+gates, i.e., so-called logic gate networks. As logic gate networks are conventionally non-differentiable, they can
+conventionally not be trained with methods such as gradient descent. Thus, differentiable logic gate networks are a
 differentiable relaxation of logic gate networks which allows efficiently learning of logic gate networks with gradient
 descent. Specifically, `difflogic` combines real-valued logics and a continuously parameterized relaxation of
 the network. This allows learning which logic gate (out of 16 possible) is optimal for each neuron.
@@ -46,7 +46,7 @@ model = torch.nn.Sequential(
 This model receives a `784` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
 The model may be trained, e.g., with a `torch.nn.CrossEntropyLoss` similar to how other neural networks models are trained in PyTorch.
 Notably, the Adam optimizer (`torch.optim.Adam`) should be used for training and the recommended default learning rate is `0.01` instead of `0.001`.
-Finally, it is also important to note that the number of neurons in each layer is much higher for logic gate networks compared to 
+Finally, it is also important to note that the number of neurons in each layer is much higher for logic gate networks compared to
 conventional MLP neural networks because logic gate networks are very sparse.
 
 To go into details, for each of these modules, in the following we provide more in-depth examples:
@@ -66,11 +66,11 @@ At this point, it is important to discuss the options for `device` and the provi
 `difflogic` provides two implementations (both of which work with PyTorch):
 
 * **`python`** the Python implementation is a substantially slower implementation that is easy to understand as it is implemented directly in Python with PyTorch and does not require any C++ / CUDA extensions. It is compatible with `device='cpu'` and `device='cuda'`.
-* **`cuda`** is a well-optimized implementation that runs natively on CUDA via custom extensions. This implementation is around 50 to 100 times faster than the python implementation (for large models). It only supports `device='cuda'`. 
+* **`cuda`** is a well-optimized implementation that runs natively on CUDA via custom extensions. This implementation is around 50 to 100 times faster than the python implementation (for large models). It only supports `device='cuda'`.
 
-To choose cpu, add ```--implementation=python``` to the command line arguments. The default is cuda. 
-To aggregate output neurons into a lower dimensional output space, we can use `GroupSum`, which aggregates a number of output neurons into 
-a `k` dimensional output, e.g., `k=10` for a 10-dimensional classification setting. 
+To choose cpu, add ```--implementation=python``` to the command line arguments. The default is cuda.
+To aggregate output neurons into a lower dimensional output space, we can use `GroupSum`, which aggregates a number of output neurons into
+a `k` dimensional output, e.g., `k=10` for a 10-dimensional classification setting.
 It is important to set the parameter `tau`, which the sum of neurons is divided by to keep the range reasonable.
 As each neuron has a value between 0 and 1 (or in inference a value of 0 or 1), assuming `n` output neurons of the last `LogicLayer`,
 the range of outputs is `[0, n / k / tau]`.
@@ -85,12 +85,12 @@ However, there are two modes that allow for fast inference:
 
 ### `PackBitsTensor`
 
-The first option is to use a `PackBitsTensor`. 
+The first option is to use a `PackBitsTensor`.
 `PackBitsTensor`s allow efficient dynamic execution of trained logic gate networks on GPU.
 
-A `PackBitsTensor` can package a tensor (of shape `b x n`) with boolean 
+A `PackBitsTensor` can package a tensor (of shape `b x n`) with boolean
 data type in a way such that each boolean entry requires only a single bit (in contrast to the full byte typically
-required by a bool) by packing the bits along the batch dimension. If we choose to pack the bits into the `int32` data 
+required by a bool) by packing the bits along the batch dimension. If we choose to pack the bits into the `int32` data
 type (the options are 8, 16, 32, and 64 bits), we would receive a tensor of shape `ceil(b/32) x n` of dtype `int32`.
 To create a `PackBitsTensor` from a boolean tensor `data`, simply call:
 ```python
@@ -100,10 +100,10 @@ To apply a model to the `PackBitsTensor`, simply call:
 ```python
 output = model(data_bits)
 ```
-This requires that the `model` is in `.eval()` mode, and if supplied with a `PackBitsTensor`, will automatically use 
+This requires that the `model` is in `.eval()` mode, and if supplied with a `PackBitsTensor`, will automatically use
 a logic gate-based inference on the tensor. This also requires that `model.implementation = 'cuda'` as the mode is only
 implemented in CUDA.
-It is notable that, while the model is in `.eval()` mode, we can still also feed float tensors through the model, in 
+It is notable that, while the model is in `.eval()` mode, we can still also feed float tensors through the model, in
 which case it will simply use a hard variant of the real-valued logics.
 
 ### `CompiledLogicNet`
@@ -119,7 +119,7 @@ compiled_model = difflogic.CompiledLogicNet(
     model=model,            # the trained model (should be a `torch.nn.Sequential` with `LogicLayer`s)
     num_bits=64,            # the number of bits of the datatype used for inference (typically 64 is fastest, should not be larger than batch size)
     cpu_compiler='gcc',     # the compiler to use for the c code (alternative: clang)
-    verbose=True            
+    verbose=True
 )
 compiled_model.compile(
     save_lib_path='my_model_binary.so',  # the (optional) location for storing the binary such that it can be reused
@@ -131,20 +131,20 @@ output = compiled_model(data)
 ```
 
 This will compile a model into a shared object binary, which is then automatically imported.
-To export this to other applications, one may either call the shared object binary from another program or export 
+To export this to other applications, one may either call the shared object binary from another program or export
 the model into C code via `compiled_model.get_c_code()`.
 A limitation of the current `CompiledLogicNet` is that the compilation time can become long for large models.
 
 We note that between publishing the paper and the publication of `difflogic`, we have substantially improved the implementations.
-Thus, the model inference modes have some deviation from the implementations for the original paper as we have 
+Thus, the model inference modes have some deviation from the implementations for the original paper as we have
 focussed on making it more scalable, efficient, and easier to apply in applications.
-We have especially focussed on modularity and efficiency for larger models and have opted to polish the presented 
+We have especially focussed on modularity and efficiency for larger models and have opted to polish the presented
 implementations over publishing a plethora of different competing implementations.
 
 ## 🧪 Experiments
 
 In the following, we present a few example experiments which are contained in the `experiments` directory.
-`main.py` executes the experiments for difflogic or baselines. 
+`main.py` executes the experiments for difflogic or baselines.
 
 ### ☄️ Adult / Breast Cancer
 
@@ -186,6 +186,6 @@ python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 
 
 ## 📜 License
 
-`difflogic` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it. 
+`difflogic` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it.
 
 Patent pending.

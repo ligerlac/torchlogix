@@ -11,7 +11,7 @@ pip install difflogic
 
 You can check your CUDA version by running `nvidia-smi`.
 
-You can install PyTorch and torchvision of a specific version, e.g., via 
+You can install PyTorch and torchvision of a specific version, e.g., via
 
 ```shell
 pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111  -f https://download.pytorch.org/whl/torch_stable.html  # CUDA version 11.1
@@ -23,7 +23,7 @@ If you get the following error message:
 
 ```
 Failed to build difflogic
- 
+
 ...
 
 RuntimeError:
@@ -42,4 +42,3 @@ versions, so in case it should match but doesn't, a quick fix can be to try some
 ---
 
 For the experiments, please make sure all dependencies in `experiments/requirements.txt` are installed in the Python environment.
-
