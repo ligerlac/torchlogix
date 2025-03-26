@@ -15,7 +15,7 @@ from neurodifflogic.difflogic.functional import (
 from neurodifflogic.difflogic.packbitstensor import PackBitsTensor
 
 try:
-    import difflogic_cuda
+    from neurodifflogic import difflogic_cuda
 except ImportError:
     warnings.warn(
         "failed to import difflogic_cuda. no cuda features will be available",
@@ -130,7 +130,6 @@ class LogicLayer(torch.nn.Module):
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
         if self.training:
             x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
-            print("mnist", x.shape, "weight shape", self.weight.shape)
         else:
             weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
                 torch.float32

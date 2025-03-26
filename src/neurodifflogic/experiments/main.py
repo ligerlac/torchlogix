@@ -61,7 +61,6 @@ if __name__ == "__main__":
             x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to(
                 device
             )
-            print(x[0])
             y = y.to(device)
 
             loss = train(model, x, y, loss_fn, optim)
@@ -113,8 +112,6 @@ if __name__ == "__main__":
 
                 if args.experiment_id is not None:
                     results.store_results(r)
-                else:
-                    print(r)
 
                 if valid_accuracy_eval_mode > best_acc:
                     best_acc = valid_accuracy_eval_mode
@@ -131,7 +128,6 @@ if __name__ == "__main__":
             model.parameters(), lr=args.learning_rate, weight_decay=5e-4
         )
         data = train_loader.to(device)
-        print(data.x.shape)
         # data.x = data.x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE
         # [args.training_bit_count]).to(device)
 
