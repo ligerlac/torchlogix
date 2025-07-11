@@ -76,18 +76,34 @@ class LogicConv3d(nn.Module):
         self.receptive_field_size = receptive_field_size
         self.stride = stride
         self.padding = padding
-        if connections == "random":
-            self.indices = [
-                self.get_random_kernel_indices(
-                    self.num_kernels, receptive_field_size, padding, stride, device
-                )
-            ]
-        elif connections == "random-unique":
-            self.indices = [
-                self.get_random_unique_kernel_indices(
-                    self.num_kernels, receptive_field_size, padding, stride, device
-                )
-            ]
+        self.connections = connections
+        indeces_generator = KernelIndicesGenerator(
+            channels=self.channels,
+            in_dim=self.in_dim,
+            tree_depth=self.tree_depth,
+        )
+        self.indices = [
+            indeces_generator.get_kernel_indices(
+                num_kernels=self.num_kernels,
+                receptive_field_size=self.receptive_field_size,
+                padding=self.padding,
+                stride=self.stride,
+                pair_strategy=connections,  # Use the connections strategy
+                device=self.device,
+            )
+        ]
+        # if connections == "random":
+        #     self.indices = [
+        #         self.get_random_kernel_indices(
+        #             self.num_kernels, receptive_field_size, padding, stride, device
+        #         )
+        #     ]
+        # elif connections == "random-unique":
+        #     self.indices = [
+        #         self.get_random_unique_kernel_indices(
+        #             self.num_kernels, receptive_field_size, padding, stride, device
+        #         )
+        #     ]
         for level in range(self.tree_depth):
             size = 2 ** (self.tree_depth - level)
             left_indices = torch.arange(0, size, 2, device=device)
@@ -130,158 +146,6 @@ class LogicConv3d(nn.Module):
             current_level = bin_op_cnn(a, b, level_weights)
         return current_level
 
-    def get_random_kernel_indices(
-        self, num_kernels, receptive_field_size, padding, stride, device="cuda"
-    ):
-        """Get the indices of the kernels for the binary tree.
-        this may contain self connections and duplicate connections.
-        """
-        # Number of random connections per kernel (binary tree depth)
-        sample_size = 2**self.tree_depth
-        # Number of channels (C), and image dimensions (H, W)
-        c, h, w = self.channels, self.in_dim[0], self.in_dim[1]
-        h_k, w_k = receptive_field_size, receptive_field_size  # Kernel height and width
-
-        # Account for padding: increase the dimensions of the input image based on
-        # padding
-        h_padded = h + 2 * padding
-        w_padded = w + 2 * padding
-
-        assert h_k <= h_padded and w_k <= w_padded, (
-            f"Receptive field size ({h_k}, {w_k}) must fit within input dimensions "
-            f"({h_padded}, {w_padded}) after padding."
-        )
-
-        # Generate all possible positions the kernel can slide to (with padding)
-        h_starts = torch.arange(
-            0, h_padded - h_k + 1, stride, device=device
-        )  # Slide in height (stride=1)
-        w_starts = torch.arange(
-            0, w_padded - w_k + 1, stride, device=device
-        )  # Slide in width (stride=1)
-
-        # Generate meshgrid for all possible starting points of the receptive field
-        h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing="ij")
-
-        # Lists to hold the final stacked results for all kernels
-        all_stacked_as = []
-        all_stacked_bs = []
-
-        # Process for each kernel
-        for kernel_idx in range(num_kernels):
-            # Randomly select `sample_size` positions within the receptive field for
-            # this kernel
-            h_indices = torch.randint(0, h_k, (2 * sample_size,), device=device)
-            w_indices = torch.randint(0, w_k, (2 * sample_size,), device=device)
-            # Random channel indices as well
-            c_indices = torch.randint(0, c, (2 * sample_size,), device=device)
-
-            stacked_as = []
-            stacked_bs = []
-
-            # Now slide this kernel over the image (across all positions)
-            for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
-                # Get the receptive field indices
-                h_grid_indices = h_indices + h_start  # Offsets for sliding the kernel
-                w_grid_indices = w_indices + w_start  # Offsets for sliding the kernel
-                c_grid_indices = c_indices  # No offset for channel,
-                # just use the random channel indices
-
-                # Stack the indices for this position and this kernel
-                indices = torch.stack(
-                    [h_grid_indices, w_grid_indices, c_grid_indices], dim=-1
-                )
-                # Split the permuted indices for the binary tree (split the random
-                # connections)
-                a, b = indices[:sample_size], indices[sample_size:]
-                stacked_as.append(a)
-                stacked_bs.append(b)
-
-            # After sliding over the whole image, store the result for this kernel
-            all_stacked_as.append(torch.stack(stacked_as, dim=0))
-            all_stacked_bs.append(torch.stack(stacked_bs, dim=0))
-
-        # Stack the results for all kernels
-        return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
-
-
-    def get_random_unique_kernel_indices(
-            self, num_kernels, receptive_field_size, padding, stride, device="cuda"
-        ):
-        """Random connections within the receptive field, but unique pairs and no self-connections."""
-        sample_size = 2**self.tree_depth
-        c, h, w = self.channels, self.in_dim[0], self.in_dim[1]
-        h_k, w_k = receptive_field_size, receptive_field_size
-        
-        h_padded = h + 2 * padding
-        w_padded = w + 2 * padding
-        assert h_k <= h_padded and w_k <= w_padded
-        
-        num_positions = h_k * w_k * c
-        max_unique_pairs = num_positions * (num_positions - 1) // 2
-        
-        if sample_size > max_unique_pairs:
-            raise ValueError(f"Not enough unique pairs: need {sample_size}, have {max_unique_pairs}")
-        
-        # Generate sliding positions
-        h_starts = torch.arange(0, h_padded - h_k + 1, stride, device=device)
-        w_starts = torch.arange(0, w_padded - w_k + 1, stride, device=device)
-        h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing="ij")
-        
-        # Pre-compute all RF positions
-        h_rf = torch.arange(0, h_k, device=device)
-        w_rf = torch.arange(0, w_k, device=device)
-        c_rf = torch.arange(0, c, device=device)
-        
-        h_rf_grid, w_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, c_rf, indexing="ij")
-        all_positions = torch.stack([
-            h_rf_grid.flatten(),
-            w_rf_grid.flatten(),
-            c_rf_grid.flatten()
-        ], dim=1)
-        
-        all_stacked_as = []
-        all_stacked_bs = []
-        
-        for kernel_idx in range(num_kernels):
-            # Use torch.randperm for efficient unique sampling
-            # Create all possible pair indices
-            triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=device)
-            total_pairs = triu_indices.shape[1]
-            
-            # Randomly select sample_size pairs
-            selected_pair_indices = torch.randperm(total_pairs, device=device)[:sample_size]
-            selected_i = triu_indices[0, selected_pair_indices]
-            selected_j = triu_indices[1, selected_pair_indices]
-            
-            pairs_a = all_positions[selected_i]
-            pairs_b = all_positions[selected_j]
-            
-            stacked_as = []
-            stacked_bs = []
-            
-            for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
-                # Apply sliding window offset
-                indices_a = torch.stack([
-                    pairs_a[:, 0] + h_start,
-                    pairs_a[:, 1] + w_start,
-                    pairs_a[:, 2]
-                ], dim=-1)
-                
-                indices_b = torch.stack([
-                    pairs_b[:, 0] + h_start,
-                    pairs_b[:, 1] + w_start,
-                    pairs_b[:, 2]
-                ], dim=-1)
-                
-                stacked_as.append(indices_a)
-                stacked_bs.append(indices_b)
-            
-            all_stacked_as.append(torch.stack(stacked_as, dim=0))
-            all_stacked_bs.append(torch.stack(stacked_bs, dim=0))
-        
-        return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
-
 
 class OrPoolingLayer(torch.nn.Module):
     """Logic gate based pooling layer."""
@@ -311,3 +175,149 @@ class OrPoolingLayer(torch.nn.Module):
             padding=self.padding,
         )
         return x
+
+
+class KernelIndicesGenerator:
+    def __init__(self, channels, in_dim, tree_depth):
+        self.channels = channels
+        self.in_dim = in_dim
+        self.tree_depth = tree_depth
+    
+    def _setup_sliding_window(self, receptive_field_size, padding, stride, device):
+        """Common setup for sliding window calculations."""
+        c, h, w = self.channels, self.in_dim[0], self.in_dim[1]
+        h_k, w_k = receptive_field_size, receptive_field_size
+        
+        # Account for padding
+        h_padded = h + 2 * padding
+        w_padded = w + 2 * padding
+        
+        assert h_k <= h_padded and w_k <= w_padded, (
+            f"Receptive field size ({h_k}, {w_k}) must fit within input dimensions "
+            f"({h_padded}, {w_padded}) after padding."
+        )
+        
+        # Generate all possible positions the kernel can slide to
+        h_starts = torch.arange(0, h_padded - h_k + 1, stride, device=device)
+        w_starts = torch.arange(0, w_padded - w_k + 1, stride, device=device)
+        h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing="ij")
+        
+        return h_k, w_k, h_grid, w_grid
+    
+    def _generate_receptive_field_positions(self, h_k, w_k, device):
+        """Generate all possible positions within the receptive field."""
+        h_rf = torch.arange(0, h_k, device=device)
+        w_rf = torch.arange(0, w_k, device=device)
+        c_rf = torch.arange(0, self.channels, device=device)
+        
+        h_rf_grid, w_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, c_rf, indexing="ij")
+        all_positions = torch.stack([
+            h_rf_grid.flatten(),
+            w_rf_grid.flatten(),
+            c_rf_grid.flatten()
+        ], dim=1)
+        
+        return all_positions
+    
+    def _apply_sliding_window(self, pairs_a, pairs_b, h_grid, w_grid):
+        """Apply sliding window to pairs and return stacked results."""
+        stacked_as = []
+        stacked_bs = []
+        
+        for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
+            # Apply sliding window offset
+            indices_a = torch.stack([
+                pairs_a[:, 0] + h_start,
+                pairs_a[:, 1] + w_start,
+                pairs_a[:, 2]
+            ], dim=-1)
+            
+            indices_b = torch.stack([
+                pairs_b[:, 0] + h_start,
+                pairs_b[:, 1] + w_start,
+                pairs_b[:, 2]
+            ], dim=-1)
+            
+            stacked_as.append(indices_a)
+            stacked_bs.append(indices_b)
+        
+        return torch.stack(stacked_as, dim=0), torch.stack(stacked_bs, dim=0)
+    
+    def _generate_random_pairs(self, all_positions, sample_size, device):
+        """Generate random pairs (may include duplicates and self-connections)."""
+        num_positions = all_positions.shape[0]
+        
+        # Generate random indices for pairs
+        indices_flat = torch.randint(0, num_positions, (2 * sample_size,), device=device)
+        
+        # Split into two groups
+        pairs_a = all_positions[indices_flat[:sample_size]]
+        pairs_b = all_positions[indices_flat[sample_size:]]
+        
+        return pairs_a, pairs_b
+    
+    def _generate_unique_random_pairs(self, all_positions, sample_size, device):
+        """Generate unique random pairs (no duplicates, no self-connections)."""
+        num_positions = all_positions.shape[0]
+        max_unique_pairs = num_positions * (num_positions - 1) // 2
+        
+        if sample_size > max_unique_pairs:
+            raise ValueError(f"Not enough unique pairs: need {sample_size}, have {max_unique_pairs}")
+        
+        # Use torch.triu_indices for efficient unique pair generation
+        triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=device)
+        total_pairs = triu_indices.shape[1]
+        
+        # Randomly select sample_size pairs
+        selected_pair_indices = torch.randperm(total_pairs, device=device)[:sample_size]
+        selected_i = triu_indices[0, selected_pair_indices]
+        selected_j = triu_indices[1, selected_pair_indices]
+        
+        pairs_a = all_positions[selected_i]
+        pairs_b = all_positions[selected_j]
+        
+        return pairs_a, pairs_b
+    
+    def get_kernel_indices(
+            self, num_kernels, receptive_field_size, padding, stride, pair_strategy="random", device="cuda"
+        ):
+        """
+        Unified method that takes a strategy for pair generation.
+        
+        Args:
+            pair_strategy: "random" or "random-unique"
+        """
+        sample_size = 2**self.tree_depth
+        
+        # Common setup
+        h_k, w_k, h_grid, w_grid = self._setup_sliding_window(
+            receptive_field_size, padding, stride, device
+        )
+        all_positions = self._generate_receptive_field_positions(h_k, w_k, device)
+        
+        # Select pair generation strategy
+        if pair_strategy == "random":
+            pair_generator = self._generate_random_pairs
+        elif pair_strategy == "random-unique":
+            pair_generator = self._generate_unique_random_pairs
+            # Validate for unique pairs
+            kernel_volume = receptive_field_size ** 2 * self.channels
+            assert kernel_volume * (kernel_volume - 1) / 2 >= sample_size, \
+                f"Kernel volume is too small for unique pairs with tree depth {self.tree_depth}."
+        else:
+            raise ValueError(f"Unknown pair strategy: {pair_strategy}")
+        
+        all_stacked_as = []
+        all_stacked_bs = []
+        
+        for kernel_idx in range(num_kernels):
+            # Generate pairs using selected strategy
+            pairs_a, pairs_b = pair_generator(all_positions, sample_size, device)
+            
+            # Apply sliding window (common for all strategies)
+            stacked_a, stacked_b = self._apply_sliding_window(pairs_a, pairs_b, h_grid, w_grid)
+            
+            all_stacked_as.append(stacked_a)
+            all_stacked_bs.append(stacked_b)
+        
+        return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
