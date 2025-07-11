@@ -6,3 +6,4 @@ torchvision
 pytest
 rich
 torch-geometric
+wheel
