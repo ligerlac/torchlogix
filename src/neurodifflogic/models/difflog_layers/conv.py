@@ -83,14 +83,7 @@ class LogicConv3d(nn.Module):
             self.kernel_pairs = self.get_random_unique_receptive_field_pairs()
         else:
             raise ValueError(f"Unknown connections type: {connections}")
-        self.indices = [
-            self.apply_sliding_window(self.kernel_pairs)
-        ]
-        for level in range(self.tree_depth):
-            size = 2 ** (self.tree_depth - level)
-            left_indices = torch.arange(0, size, 2, device=device)
-            right_indices = torch.arange(1, size, 2, device=device)
-            self.indices.append((left_indices, right_indices))
+        self.indices = self.get_indices_from_kernel_pairs(self.kernel_pairs)
 
 
     def forward(self, x):
@@ -246,6 +239,18 @@ class LogicConv3d(nn.Module):
         
         # Stack the results for all kernels
         return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
+    
+
+    def get_indices_from_kernel_pairs(self, pairs_tuple):
+        indices = [
+            self.apply_sliding_window(pairs_tuple)
+        ]
+        for level in range(self.tree_depth):
+            size = 2 ** (self.tree_depth - level)
+            left_indices = torch.arange(0, size, 2, device=self.device)
+            right_indices = torch.arange(1, size, 2, device=self.device)
+            indices.append((left_indices, right_indices))
+        return indices
 
 
 class OrPoolingLayer(torch.nn.Module):

@@ -175,7 +175,7 @@ def test_and_model():
     - test some possible inputs
     """
     layer = LogicConv3d(
-        in_dim=2,
+        in_dim=3,
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -187,14 +187,11 @@ def test_and_model():
         padding=0,
     )
 
-    # Set indices to select pairs of positions row-wise
-    layer.indices = [
-        (
-            torch.tensor([[[[0, 0, 0], [1, 0, 0]]]]),
-            torch.tensor([[[[0, 1, 0], [1, 1, 0]]]]),
-        ),
-        (torch.tensor([0]), torch.tensor([1])),
-    ]
+    kernel_pairs = (
+        torch.tensor([[0, 0, 0], [1, 0, 0]]),
+        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+    )
+    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -206,16 +203,29 @@ def test_and_model():
 
     # only all 1s should produce 1
     test_cases = [
-        ([[[[0, 0], [0, 0]]]], 0),
-        ([[[[0, 0], [0, 1]]]], 0),
-        ([[[[0, 0], [1, 1]]]], 0),
-        ([[[[0, 1], [1, 1]]]], 0),
-        ([[[[1, 1], [1, 1]]]], 1),
+        ([[0, 0, 0], 
+          [0, 0, 0], 
+          [0, 0, 0]
+        ], [0, 0, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 0], 
+          [0, 0, 1]]
+        , [1, 0, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 1], 
+          [0, 0, 1]]
+        , [1, 1, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 1], 
+          [1, 1, 1]]
+        , [1, 1, 1, 1]),
     ]
 
-    for x, expected in test_cases:
-        x = torch.tensor(x, dtype=torch.float32)
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
         output = layer(x)
-        assert torch.isclose(
-            output, torch.tensor([[[[expected]]]], dtype=torch.float32)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
+        assert torch.allclose(
+            output, 
+            expected
         )
