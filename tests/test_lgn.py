@@ -43,7 +43,7 @@ def test_xor_model():
         assert np.isclose(model(torch.tensor([x, y])).item(), expected)
 
 
-def test_compile_model():
+def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
         LogicLayer(

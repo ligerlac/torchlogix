@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from neurodifflogic.models.difflog_layers.conv import LogicConv2d
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet, CompiledCombinedLogicNet
 from neurodifflogic.models.difflog_layers.linear import GroupSum
 
 
@@ -365,7 +365,7 @@ def test_compiled_model():
     )
 
     model.train(False)  # Switch model to eval mode
-    compiled_model = CompiledConvLogicNet(
+    compiled_model = CompiledCombinedLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
@@ -383,6 +383,9 @@ def test_compiled_model():
     print(f"{preds.shape=}, {preds_compiled.shape=}")
 
     preds = preds.reshape(preds_compiled.shape)  # Reshape to match compiled output shape
+
+    print(f"{preds=}")
+    print(f"{preds_compiled=}")
 
     assert np.allclose(preds, preds_compiled)
 
