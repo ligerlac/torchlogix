@@ -6,6 +6,7 @@ from neurodifflogic.models.difflog_layers.gat import LogicGATConv
 from neurodifflogic.models.difflog_layers.gcn import CustomMessagePassing, LogicGCNConv
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 from neurodifflogic.models.gcn_conv import GCN
+from neurodifflogic.models.conv import CNN
 from neurodifflogic.models.nn import RandomlyConnectedNN
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "GroupSum",
     "GATDifflog",
     "GCN",
+    "CNN",
     "RandomlyConnectedNN",
 ]
