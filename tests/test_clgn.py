@@ -229,3 +229,53 @@ def test_and_model():
             output, 
             expected
         )
+
+
+def test_binary_model():
+    layer = LogicConv2d(
+        in_dim=2,
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        implementation="python",
+        connections="random-unique",
+        stride=1,
+        padding=0,
+    )
+
+    kernel_pairs = (
+        torch.tensor([[0, 0, 0], [1, 0, 0]]),
+        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+    )
+    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+
+    # Set weights to BARELY select AND operation
+    with torch.no_grad():
+        and_weights = torch.zeros(1, 16)
+        and_weights[0, 1] = 1.0  # Pick 1 instead of 100 here
+        layer.tree_weights[0][0].data = and_weights
+        layer.tree_weights[0][1].data = and_weights
+        layer.tree_weights[1][0].data = and_weights
+
+    layer.train(False)  # Switch model to eval mode
+    
+    test_cases = [
+        ([[0, 0], 
+          [0, 0], 
+        ], [0]),
+        ([[1, 1], 
+          [1, 1], 
+        ], [1]),
+    ]
+
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
+        output = layer(x)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
+        print(f"Input: {x}, Output: {output}, Expected: {expected}")
+        assert torch.allclose(
+            output, 
+            expected
+        )
