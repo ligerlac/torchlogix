@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledCombinedLogicNet
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 llkw = {"connections": "unique", "implementation": "python", "device": "cpu"}
@@ -62,7 +62,8 @@ def test_compiled_model():
         ),
         GroupSum(1),
     )
-    compiled_model = CompiledLogicNet(
+    # compiled_model = CompiledLogicNet(
+    compiled_model = CompiledCombinedLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
@@ -71,6 +72,30 @@ def test_compiled_model():
     model.train(False)
 
     X = torch.randint(0, 2, (8, 42)).int()
+    preds = model(X)
+    preds_compiled = compiled_model(X.bool().numpy())
+    assert np.allclose(preds, preds_compiled)
+
+
+def test_large_compiled_model():
+    """Test model compilation and inference."""
+    k_num = 16
+    model = torch.nn.Sequential(
+        LogicLayer(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu", implementation="python"),
+        LogicLayer(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu", implementation="python"),
+        LogicLayer(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu", implementation="python"),
+        GroupSum(8),
+    )
+    # compiled_model = CompiledLogicNet(
+    compiled_model = CompiledCombinedLogicNet(
+        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+    )
+    compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
+
+    # switch model to eval mode
+    model.train(False)
+
+    X = torch.randint(0, 2, (8, 81 * k_num)).int()
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
     assert np.allclose(preds, preds_compiled)

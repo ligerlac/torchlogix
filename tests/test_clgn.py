@@ -451,7 +451,7 @@ def test_compiled_pooling_model():
             stride=1,
             padding=0,
         ),
-        OrPoolingLayer(kernel_size=2, stride=1, padding=0),
+        OrPoolingLayer(kernel_size=2, stride=2, padding=0),
         torch.nn.Flatten(),
         GroupSum(1),
     )

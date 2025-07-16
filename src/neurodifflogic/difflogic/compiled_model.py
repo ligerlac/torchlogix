@@ -954,7 +954,6 @@ void apply_logic_conv_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
         
 
 
-
 import ctypes
 import math
 import shutil
@@ -967,7 +966,7 @@ import numpy as np
 import numpy.typing
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 ALL_OPERATIONS = [
@@ -996,7 +995,7 @@ import numpy as np
 import numpy.typing
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 ALL_OPERATIONS = [
@@ -1015,7 +1014,7 @@ BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
 class CompiledCombinedLogicNet(torch.nn.Module):
     """
-    Unified compiled logic network that handles both convolutional and linear layers.
+    Unified compiled logic network that handles convolutional, pooling, and linear layers.
     """
 
     def __init__(
@@ -1037,35 +1036,45 @@ class CompiledCombinedLogicNet(torch.nn.Module):
 
         # Initialize layer storage
         self.conv_layers = []
+        self.pooling_layers = []
         self.linear_layers = []
         self.num_classes = None
         self.input_shape = None
+        self.layer_order = []
         self.lib_fn = None
 
         if model is not None:
             self._parse_model(verbose)
 
     def _parse_model(self, verbose: bool):
-        """Parse the model structure, handling both conv and linear layers."""
+        """Parse the model structure, handling conv, pooling, and linear layers."""
         # Find GroupSum layer for num_classes
         for layer in self.model:
             if isinstance(layer, GroupSum):
                 self.num_classes = layer.k
                 break
 
-        # Parse all layers
+        # Parse all layers and track execution order
         for layer in self.model:
             if isinstance(layer, LogicConv2d):
-                self.conv_layers.append(self._extract_conv_layer_info(layer))
+                conv_info = self._extract_conv_layer_info(layer)
+                self.conv_layers.append(conv_info)
+                self.layer_order.append(('conv', len(self.conv_layers) - 1))
                 if self.input_shape is None:
                     self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1])
+            elif isinstance(layer, OrPoolingLayer):
+                pool_info = self._extract_pooling_layer_info(layer)
+                self.pooling_layers.append(pool_info)
+                self.layer_order.append(('pool', len(self.pooling_layers) - 1))
             elif isinstance(layer, LogicLayer):
                 self.linear_layers.append(
                     (layer.indices[0], layer.indices[1], layer.weight.argmax(1))
                 )
+                self.layer_order.append(('linear', len(self.linear_layers) - 1))
             elif isinstance(layer, torch.nn.Flatten):
+                self.layer_order.append(('flatten', 0))
                 if verbose:
-                    print(f"Skipping torch.nn.Flatten layer ({type(layer)})")
+                    print(f"Found Flatten layer")
             elif isinstance(layer, GroupSum):
                 if verbose:
                     print(f"Found GroupSum layer with {layer.k} classes")
@@ -1074,22 +1083,22 @@ class CompiledCombinedLogicNet(torch.nn.Module):
                     print(f"Warning: Unknown layer type: {type(layer)}")
 
         if verbose:
-            print(f"Parsed {len(self.conv_layers)} conv layers and {len(self.linear_layers)} linear layers")
+            print(f"Parsed {len(self.conv_layers)} conv, {len(self.pooling_layers)} pooling, {len(self.linear_layers)} linear layers")
+            print(f"Layer execution order: {self.layer_order}")
 
         # Validate model structure
         if not self.conv_layers and not self.linear_layers:
             raise ValueError("Model must contain at least one LogicConv2d or LogicLayer")
-        
+
         # Set input shape for linear-only models
         if not self.conv_layers and self.linear_layers:
-            # For linear-only models, assume flattened input
             first_linear = None
             for layer in self.model:
                 if isinstance(layer, LogicLayer):
                     first_linear = layer
                     break
             if first_linear:
-                self.input_shape = (first_linear.in_dim,)  # Flattened input
+                self.input_shape = (first_linear.in_dim,)
 
     def _extract_conv_layer_info(self, layer: LogicConv2d) -> Dict[str, Any]:
         """Extract information from a LogicConv2d layer for compilation."""
@@ -1111,6 +1120,14 @@ class CompiledCombinedLogicNet(torch.nn.Module):
             'stride': layer.stride,
             'padding': layer.padding,
             'channels': layer.channels,
+        }
+
+    def _extract_pooling_layer_info(self, layer: OrPoolingLayer) -> Dict[str, Any]:
+        """Extract information from an OrPoolingLayer for compilation."""
+        return {
+            'kernel_size': layer.kernel_size,
+            'stride': layer.stride,
+            'padding': layer.padding,
         }
 
     def get_gate_code(self, var1: str, var2: str, gate_op: int) -> str:
@@ -1159,7 +1176,57 @@ class CompiledCombinedLogicNet(torch.nn.Module):
 
         return res
 
-    def _get_conv_layer_code(self, conv_info: Dict[str, Any], layer_id: int) -> List[str]:
+    def _calculate_layer_output_sizes_and_shapes(self) -> List[tuple]:
+        """Calculate output sizes and shapes for all layers in execution order."""
+        layer_info = []
+        current_shape = self.input_shape
+
+        for layer_type, layer_idx in self.layer_order:
+            if layer_type == 'conv':
+                conv_info = self.conv_layers[layer_idx]
+                if len(current_shape) == 3:  # (C, H, W)
+                    c, h, w = current_shape
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
+                             // conv_info['stride']) + 1
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
+                             // conv_info['stride']) + 1
+                    output_shape = (conv_info['num_kernels'], h_out, w_out)
+                    output_size = conv_info['num_kernels'] * h_out * w_out
+                else:
+                    raise ValueError(f"Conv layer expects 3D input, got {len(current_shape)}D")
+
+            elif layer_type == 'pool':
+                pool_info = self.pooling_layers[layer_idx]
+                if len(current_shape) == 3:  # (C, H, W)
+                    c, h, w = current_shape
+                    h_out = ((h + 2 * pool_info['padding'] - pool_info['kernel_size']) 
+                             // pool_info['stride']) + 1
+                    w_out = ((w + 2 * pool_info['padding'] - pool_info['kernel_size']) 
+                             // pool_info['stride']) + 1
+                    output_shape = (c, h_out, w_out)
+                    output_size = c * h_out * w_out
+                else:
+                    raise ValueError(f"Pool layer expects 3D input, got {len(current_shape)}D")
+
+            elif layer_type == 'flatten':
+                if len(current_shape) == 3:
+                    output_size = np.prod(current_shape)
+                    output_shape = (output_size,)
+                else:
+                    output_size = current_shape[0]
+                    output_shape = current_shape
+
+            elif layer_type == 'linear':
+                layer_a, layer_b, layer_op = self.linear_layers[layer_idx]
+                output_size = len(layer_a)
+                output_shape = (output_size,)
+
+            layer_info.append((layer_type, layer_idx, output_shape, output_size))
+            current_shape = output_shape
+
+        return layer_info
+
+    def _get_conv_layer_code(self, conv_info: Dict[str, Any], layer_name: str) -> List[str]:
         """Generate C code for a convolutional layer."""
         code = []
         indices = conv_info['indices']
@@ -1170,7 +1237,7 @@ class CompiledCombinedLogicNet(torch.nn.Module):
         w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
                  // conv_info['stride']) + 1
 
-        code.append(f"\t// Convolutional layer {layer_id}")
+        code.append(f"\t// Convolutional layer {layer_name}")
 
         for kernel_idx in range(conv_info['num_kernels']):
             for pos_idx in range(h_out * w_out):
@@ -1186,14 +1253,16 @@ class CompiledCombinedLogicNet(torch.nn.Module):
 
                     gate_op = tree_ops[0][gate_idx][kernel_idx]
 
-                    if layer_id == 0:
+                    # Determine input source
+                    prev_layer_name = self._get_previous_layer_name(layer_name)
+                    if prev_layer_name == "inp":
                         left_var = f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {left_h} * {conv_info['in_dim'][1]} + {left_w}]"
                         right_var = f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {right_h} * {conv_info['in_dim'][1]} + {right_w}]"
                     else:
-                        left_var = f"conv_layer_{layer_id-1}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {left_h} * {conv_info['in_dim'][1]} + {left_w}]"
-                        right_var = f"conv_layer_{layer_id-1}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+                        left_var = f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {left_h} * {conv_info['in_dim'][1]} + {left_w}]"
+                        right_var = f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {right_h} * {conv_info['in_dim'][1]} + {right_w}]"
 
-                    var_name = f"conv_{layer_id}_k{kernel_idx}_p{pos_idx}_l0_g{gate_idx}"
+                    var_name = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l0_g{gate_idx}"
                     code.append(
                         f"\tconst {BITS_TO_DTYPE[self.num_bits]} {var_name} = "
                         f"{self.get_gate_code(left_var, right_var, gate_op)};"
@@ -1212,17 +1281,17 @@ class CompiledCombinedLogicNet(torch.nn.Module):
 
                         gate_op = tree_ops[level][gate_idx][kernel_idx]
 
-                        left_var = f"conv_{layer_id}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{left_idx}"
-                        right_var = f"conv_{layer_id}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{right_idx}"
+                        left_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{left_idx}"
+                        right_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{right_idx}"
 
                         if level == conv_info['tree_depth']:
                             output_idx = (kernel_idx * h_out * w_out + pos_idx)
                             code.append(
-                                f"\tconv_layer_{layer_id}_out[{output_idx}] = "
+                                f"\tlayer_{layer_name}_out[{output_idx}] = "
                                 f"{self.get_gate_code(left_var, right_var, gate_op)};"
                             )
                         else:
-                            var_name = f"conv_{layer_id}_k{kernel_idx}_p{pos_idx}_l{level}_g{gate_idx}"
+                            var_name = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level}_g{gate_idx}"
                             code.append(
                                 f"\tconst {BITS_TO_DTYPE[self.num_bits]} {var_name} = "
                                 f"{self.get_gate_code(left_var, right_var, gate_op)};"
@@ -1230,14 +1299,104 @@ class CompiledCombinedLogicNet(torch.nn.Module):
 
         return code
 
-    def _get_linear_layer_code(self, layer_a, layer_b, layer_op, layer_id: int, is_final: bool, has_conv_layers: bool) -> List[str]:
+    def _get_pooling_layer_code(self, pool_info: Dict[str, Any], layer_name: str, input_shape: tuple) -> List[str]:
+        """Generate C code for an OrPooling (max pooling) layer."""
+        code = []
+
+        channels, in_h, in_w = input_shape
+        kernel_size = pool_info['kernel_size']
+        stride = pool_info['stride']
+        padding = pool_info['padding']
+
+        # Calculate output dimensions
+        out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
+        out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
+
+        code.append(f"\t// Max pooling layer {layer_name}")
+        code.append(f"\t// Input: {channels}x{in_h}x{in_w}, Output: {channels}x{out_h}x{out_w}")
+
+        # Generate pooling code for each channel and output position
+        prev_layer_name = self._get_previous_layer_name(layer_name)
+
+        for c in range(channels):
+            for out_y in range(out_h):
+                for out_x in range(out_w):
+                    # Calculate input region for this output position
+                    in_y_start = out_y * stride - padding
+                    in_x_start = out_x * stride - padding
+                    in_y_end = min(in_y_start + kernel_size, in_h)
+                    in_x_end = min(in_x_start + kernel_size, in_w)
+                    in_y_start = max(in_y_start, 0)
+                    in_x_start = max(in_x_start, 0)
+
+                    output_idx = c * out_h * out_w + out_y * out_w + out_x
+
+                    # Initialize with first valid input
+                    first_input_idx = c * in_h * in_w + in_y_start * in_w + in_x_start
+                    if prev_layer_name == "inp":
+                        code.append(f"\tlayer_{layer_name}_out[{output_idx}] = inp[{first_input_idx}];")
+                    else:
+                        code.append(f"\tlayer_{layer_name}_out[{output_idx}] = layer_{prev_layer_name}_out[{first_input_idx}];")
+
+                    # Compare with remaining inputs in the kernel window (max pooling using OR)
+                    for ky in range(in_y_start, in_y_end):
+                        for kx in range(in_x_start, in_x_end):
+                            if ky == in_y_start and kx == in_x_start:
+                                continue  # Skip first element (already initialized)
+
+                            input_idx = c * in_h * in_w + ky * in_w + kx
+                            if prev_layer_name == "inp":
+                                input_var = f"inp[{input_idx}]"
+                            else:
+                                input_var = f"layer_{prev_layer_name}_out[{input_idx}]"
+
+                            # Max operation using bitwise OR (since we're working with binary values)
+                            code.append(f"\tlayer_{layer_name}_out[{output_idx}] |= {input_var};")
+
+        return code
+
+    def _get_previous_layer_name(self, current_layer_name: str) -> str:
+        """Get the name of the previous layer in execution order."""
+        layer_info = self._calculate_layer_output_sizes_and_shapes()
+        
+        # Find current layer in execution order
+        current_idx = None
+        for i, (layer_type, layer_idx, _, _) in enumerate(layer_info):
+            if f"{layer_type}_{layer_idx}" == current_layer_name:
+                current_idx = i
+                break
+
+        if current_idx is None or current_idx == 0:
+            return "inp"  # First layer uses input
+
+        # Get previous layer info
+        prev_layer_type, prev_layer_idx, _, _ = layer_info[current_idx - 1]
+
+        if prev_layer_type == 'flatten':
+            # Flatten doesn't create output, so go one more layer back
+            if current_idx >= 2:
+                prev_prev_layer_type, prev_prev_layer_idx, _, _ = layer_info[current_idx - 2]
+                return f"{prev_prev_layer_type}_{prev_prev_layer_idx}"
+            else:
+                return "inp"
+
+        return f"{prev_layer_type}_{prev_layer_idx}"
+
+    def _get_linear_layer_code(self, layer_a, layer_b, layer_op, layer_id: int, is_final: bool, has_non_linear_layers: bool) -> List[str]:
         """Generate C code for a linear layer."""
         code = []
-        
+
         # Determine input source based on layer position and model structure
-        if has_conv_layers:
-            # Conv -> Linear model: always use linear_input
-            input_var = "linear_input"
+        if has_non_linear_layers:
+            # Mixed model: first layer uses linear_input, subsequent layers alternate
+            if layer_id == 0:
+                input_var = "linear_input"
+            else:
+                # Alternate between linear_input and linear_buf_temp
+                if layer_id % 2 == 1:
+                    input_var = "linear_buf_temp"
+                else:
+                    input_var = "linear_input"
         elif layer_id == 0:
             # First layer in linear-only model: use direct input
             input_var = "inp"
@@ -1247,43 +1406,31 @@ class CompiledCombinedLogicNet(torch.nn.Module):
                 input_var = "linear_buf_a"
             else:
                 input_var = "linear_buf_b"
-        
+
         # Determine output destination
         if is_final:
             output_var = "out"
-        elif not has_conv_layers and len(self.linear_layers) > 1:
+        elif has_non_linear_layers:
+            # Mixed model: alternate between buffers
+            if layer_id % 2 == 0:
+                output_var = "linear_buf_temp"
+            else:
+                output_var = "linear_input"
+        elif layer_id < len(self.linear_layers) - 1:
             # Multi-layer linear model: alternate between buffers
             if layer_id % 2 == 0:
                 output_var = "linear_buf_a"
             else:
                 output_var = "linear_buf_b"
         else:
-            # This shouldn't happen, but fallback
             output_var = "out"
-        
+
         for var_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
             a = f"{input_var}[{gate_a}]"
             b = f"{input_var}[{gate_b}]"
-
             code.append(f"\t{output_var}[{var_id}] = {self.get_gate_code(a, b, gate_op)};")
 
         return code
-
-    def _calculate_conv_output_sizes(self) -> List[int]:
-        """Calculate output sizes for each convolutional layer."""
-        sizes = []
-        current_h, current_w = self.input_shape[1], self.input_shape[2]
-
-        for conv_info in self.conv_layers:
-            h_out = ((current_h + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
-                     // conv_info['stride']) + 1
-            w_out = ((current_w + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
-                     // conv_info['stride']) + 1
-            output_size = conv_info['num_kernels'] * h_out * w_out
-            sizes.append(output_size)
-            current_h, current_w = h_out, w_out
-
-        return sizes
 
     def get_c_code(self) -> str:
         """Generate the complete C code for the network."""
@@ -1302,65 +1449,116 @@ class CompiledCombinedLogicNet(torch.nn.Module):
             f"{BITS_TO_DTYPE[self.num_bits]} *out) {{",
         ]
 
-        # Calculate sizes
-        conv_output_sizes = self._calculate_conv_output_sizes() if self.conv_layers else []
-        
-        # Allocate intermediate buffers for conv layers
-        for i, size in enumerate(conv_output_sizes):
-            code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} conv_layer_{i}_out[{size}];")
+        # Calculate sizes and shapes for all layers
+        layer_info = self._calculate_layer_output_sizes_and_shapes()
 
-        # Allocate buffers for linear layers
-        if self.linear_layers:
-            if self.conv_layers:
-                # Conv -> Linear: need input buffer
-                code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_input[{conv_output_sizes[-1]}];")
-            
-            # For linear-only models with multiple layers, we need input/output buffers
-            if not self.conv_layers and len(self.linear_layers) > 1:
-                # We'll use two buffers and alternate between them
-                max_layer_size = max(len(layer[0]) for layer in self.linear_layers)
-                code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_a[{max_layer_size}];")
-                code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_b[{max_layer_size}];")
+        # Allocate intermediate buffers for non-linear layers
+        for layer_type, layer_idx, output_shape, output_size in layer_info:
+            if layer_type in ['conv', 'pool']:
+                code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} layer_{layer_type}_{layer_idx}_out[{output_size}];")
+
+        # Allocate buffers for linear layers if needed
+        linear_layer_count = len(self.linear_layers)
+        if linear_layer_count > 0:
+            has_non_linear_layers = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
+
+            if has_non_linear_layers:
+                # Mixed model: need buffer to transfer from conv/pool to linear
+                # Find the size after flattening
+                flatten_size = None
+                for layer_type, layer_idx, output_shape, output_size in layer_info:
+                    if layer_type == 'flatten':
+                        flatten_size = output_size
+                        break
+                
+                if flatten_size:
+                    # For multi-layer linear networks, we need the buffer to be large enough
+                    # for the largest intermediate layer size
+                    max_linear_input_size = flatten_size
+                    if linear_layer_count > 1:
+                        # Check all linear layer input sizes
+                        for i, (layer_a, layer_b, layer_op) in enumerate(self.linear_layers[:-1]):
+                            layer_output_size = len(layer_a)  # This layer's output size
+                            max_linear_input_size = max(max_linear_input_size, layer_output_size)
+                    
+                    code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_input[{max_linear_input_size}];")
+
+            # For multi-layer linear networks, use ping-pong buffers
+            if linear_layer_count > 1:
+                if has_non_linear_layers:
+                    # Mixed model: use one additional buffer for ping-ponging
+                    max_linear_size = max(len(layer[0]) for layer in self.linear_layers)
+                    code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_temp[{max_linear_size}];")
+                else:
+                    # Linear-only model: use two ping-pong buffers
+                    max_linear_size = max(len(layer[0]) for layer in self.linear_layers)
+                    code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_a[{max_linear_size}];")
+                    code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_b[{max_linear_size}];")
+
+        # Check if we need a flatten buffer even without linear layers (for GroupSum)
+        has_flatten = any(lt == 'flatten' for lt, _, _, _ in layer_info)
+        if has_flatten and linear_layer_count == 0:
+            # Need buffer for flatten → GroupSum case
+            flatten_size = None
+            for layer_type, layer_idx, output_shape, output_size in layer_info:
+                if layer_type == 'flatten':
+                    flatten_size = output_size
+                    break
+            if flatten_size:
+                code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} flattened_output[{flatten_size}];")
 
         code.append("")
 
-        # Generate conv layers
-        for i, conv_info in enumerate(self.conv_layers):
-            code.extend(self._get_conv_layer_code(conv_info, i))
-            code.append("")
+        # Generate code for all layers in execution order
+        linear_layer_counter = 0
+        current_shape = self.input_shape
 
-        # Copy conv output to linear input if needed
-        if self.conv_layers and self.linear_layers:
-            code.append(f"\t// Copy conv output to linear input")
-            code.append(f"\tmemcpy(linear_input, conv_layer_{len(self.conv_layers)-1}_out, "
-                       f"{conv_output_sizes[-1]} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
-            code.append("")
-
-        # Generate linear layers
-        for i, (layer_a, layer_b, layer_op) in enumerate(self.linear_layers):
-            is_final = (i == len(self.linear_layers) - 1)
-            code.extend(self._get_linear_layer_code(layer_a, layer_b, layer_op, i, is_final, bool(self.conv_layers)))
-
-            # For multi-layer linear networks, copy outputs between layers
-            if not is_final and not self.conv_layers:
-                layer_size = len(layer_a)
-                next_layer_size = len(self.linear_layers[i + 1][0])
+        for layer_type, layer_idx, output_shape, output_size in layer_info:
+            if layer_type == 'conv':
+                layer_name = f"{layer_type}_{layer_idx}"
+                code.extend(self._get_conv_layer_code(self.conv_layers[layer_idx], layer_name))
+                code.append("")
+            elif layer_type == 'pool':
+                layer_name = f"{layer_type}_{layer_idx}"
+                code.extend(self._get_pooling_layer_code(self.pooling_layers[layer_idx], layer_name, current_shape))
+                code.append("")
+            elif layer_type == 'flatten':
+                # Handle flattening: copy from previous layer to appropriate buffer
+                prev_layer_info = layer_info[layer_info.index((layer_type, layer_idx, output_shape, output_size)) - 1]
+                prev_layer_type, prev_layer_idx, prev_shape, prev_size = prev_layer_info
                 
-                # Determine which buffer to copy from/to
-                if i % 2 == 0:
-                    # Copy from buf_a to buf_b
-                    code.append(f"\t// Copy layer {i} output (buf_a) to next layer input (buf_b)")
-                    code.append(f"\tmemcpy(linear_buf_b, linear_buf_a, {layer_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                if linear_layer_count > 0:
+                    # Flatten → Linear case: copy to linear_input
+                    code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to linear_input")
+                    code.append(f"\tmemcpy(linear_input, layer_{prev_layer_type}_{prev_layer_idx}_out, "
+                               f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                 else:
-                    # Copy from buf_b to buf_a  
-                    code.append(f"\t// Copy layer {i} output (buf_b) to next layer input (buf_a)")
-                    code.append(f"\tmemcpy(linear_buf_a, linear_buf_b, {layer_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                    # Flatten → GroupSum case: copy to flattened_output buffer
+                    code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to flattened_output")
+                    code.append(f"\tmemcpy(flattened_output, layer_{prev_layer_type}_{prev_layer_idx}_out, "
+                               f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                code.append("")
+            elif layer_type == 'linear':
+                layer_a, layer_b, layer_op = self.linear_layers[layer_idx]
+                is_final = (linear_layer_counter == linear_layer_count - 1)
+                has_non_linear = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
+                code.extend(self._get_linear_layer_code(layer_a, layer_b, layer_op, linear_layer_counter, is_final, has_non_linear))
+                linear_layer_counter += 1
 
-        # If no linear layers, copy conv output to final output
-        if self.conv_layers and not self.linear_layers:
-            code.append(f"\t// Copy conv output to final output")
-            code.append(f"\tmemcpy(out, conv_layer_{len(self.conv_layers)-1}_out, "
-                       f"{conv_output_sizes[-1]} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+            current_shape = output_shape
+
+        # Handle case where we only have conv/pool layers (no linear layers)
+        if linear_layer_count == 0 and layer_info:
+            final_layer_type, final_layer_idx, _, final_size = layer_info[-1]
+            if final_layer_type in ['conv', 'pool']:
+                code.append(f"\t// Copy final layer output to result")
+                code.append(f"\tmemcpy(out, layer_{final_layer_type}_{final_layer_idx}_out, "
+                           f"{final_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+            elif final_layer_type == 'flatten':
+                # Flatten is the final operation, copy from flattened_output to out
+                code.append(f"\t// Copy flattened output to result")
+                code.append(f"\tmemcpy(out, flattened_output, "
+                           f"{final_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
 
         code.append("}")
 
@@ -1449,11 +1647,13 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
         """Get the total output size."""
         if self.linear_layers:
             return len(self.linear_layers[-1][0])
-        elif self.conv_layers:
-            conv_output_sizes = self._calculate_conv_output_sizes()
-            return conv_output_sizes[-1]
         else:
-            raise ValueError("No layers found")
+            # Get the final layer info
+            layer_info = self._calculate_layer_output_sizes_and_shapes()
+            if layer_info:
+                return layer_info[-1][3]  # output_size
+            else:
+                raise ValueError("No layers found")
 
     def compile(self, opt_level: int = 1, save_lib_path: str = None, verbose: bool = False):
         """Compile the network to a shared library."""
@@ -1569,5 +1769,3 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
         lib = ctypes.cdll.LoadLibrary(save_lib_path)
         self._setup_library_function(lib)
         return self
-
-
