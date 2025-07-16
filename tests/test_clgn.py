@@ -7,8 +7,6 @@ import pytest
 import torch
 
 from neurodifflogic.models.difflog_layers.conv import LogicConv2d
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet
-from neurodifflogic.models.difflog_layers.linear import GroupSum
 
 
 @pytest.fixture
