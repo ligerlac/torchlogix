@@ -7,9 +7,10 @@ import pytest
 import numpy as np
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet, CompiledCombinedLogicNet
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet, CompiledCombinedLogicNet
+
 
 
 @pytest.fixture
@@ -360,6 +361,97 @@ def test_compiled_model():
             stride=1,
             padding=0,
         ),
+        torch.nn.Flatten(),
+        GroupSum(1),
+    )
+
+    model.train(False)  # Switch model to eval mode
+    compiled_model = CompiledCombinedLogicNet(
+        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+    )
+    compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
+
+    # 8 random images of shape (1, 3, 3) (single channel, 3x3 input)
+    X = torch.randint(0, 2, (8, 1, 3, 3)).int()
+
+    preds = model(X)
+    preds_compiled = compiled_model(X.bool().numpy())
+
+    # c_code = compiled_model.get_c_code()
+    # print("Generated C code:")
+    # print(c_code)
+
+    print(f"{preds.shape=}, {preds_compiled.shape=}")
+
+    preds = preds.reshape(preds_compiled.shape)  # Reshape to match compiled output shape
+
+    print(f"{preds=}")
+    print(f"{preds_compiled=}")
+
+    assert np.allclose(preds, preds_compiled)
+
+
+def test_pooling_layer():
+    layer = OrPoolingLayer(
+        kernel_size=2,
+        stride=2,
+        padding=0,
+    )
+
+    test_cases = [
+        ([[0, 0, 0, 0], 
+          [0, 0, 0, 0], 
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ], [0, 0, 0, 0]),
+        ([[1, 0, 0, 1], 
+          [0, 1, 0, 0], 
+          [0, 0, 1, 1],
+          [1, 0, 0, 1],
+        ], [1, 1, 1, 1]),
+        ([[1, 1, 1, 1], 
+          [1, 1, 1, 1], 
+          [0, 0, 1, 1],
+          [0, 0, 1, 1],
+        ], [1, 1, 0, 1]),
+        ([[1, 1, 1, 1], 
+          [1, 1, 1, 1], 
+          [1, 1, 1, 1],
+          [1, 1, 1, 1]
+        ], [1, 1, 1, 1]),
+    ]
+
+    for x, y in test_cases:
+        # x = torch.tensor([[x]], dtype=torch.float32)
+        x_flat = torch.tensor(x, dtype=torch.float32).flatten()
+        x = x_flat.view(1, 1, -1)  # Shape: [1, 1, 16]
+
+        print(f"x.shape = {x.shape}")
+        output = layer(x)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
+        print(f"Input: {x}, Output: {output}, Expected: {expected}")
+        assert torch.allclose(
+            output, 
+            expected
+        )    
+
+
+def test_compiled_pooling_model():
+    """Test model compilation and inference."""
+    model = torch.nn.Sequential(
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=1,
+            num_kernels=1,
+            tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+        ),
+        OrPoolingLayer(kernel_size=2, stride=1, padding=0),
         torch.nn.Flatten(),
         GroupSum(1),
     )
