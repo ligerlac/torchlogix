@@ -11,7 +11,7 @@ from neurodifflogic.models.difflog_layers.conv import LogicConv3d
 
 @pytest.fixture
 def layer(
-    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding
+    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections
 ):
     """Create instance of LogicCNNLayer."""
     params = {
@@ -22,7 +22,7 @@ def layer(
         "tree_depth": tree_depth,
         "receptive_field_size": receptive_field_size,
         "implementation": "python",
-        "connections": "random",
+        "connections": connections,
         "stride": stride,
         "padding": padding,
     }
@@ -36,6 +36,12 @@ def layer(
         with pytest.raises(AssertionError):
             LogicConv3d(**params)
         pytest.skip("Stride should be smaller than receptive field size")
+    kernel_volume = receptive_field_size ** 2 * channels
+    if connections == "random-unique":
+        if kernel_volume * (kernel_volume - 1) / 2 < 2** tree_depth:
+            # with pytest.raises(AssertionError):
+            #     LogicConv3d(**params)
+            pytest.skip("Kernel volume should be large enough to support the tree depth")
     return LogicConv3d(**params)
 
 
@@ -46,7 +52,7 @@ def layer(
 @pytest.mark.parametrize("receptive_field_size", [2, 3])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("padding", [0])
-@pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
+@pytest.mark.parametrize("connections", ["random", "random-unique"])
 class TestIndeces:
     """Test the shape and structure of layer indices.
 
@@ -55,6 +61,7 @@ class TestIndeces:
     inputs for the binary logic gates.
     """
 
+    @pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
     def test_first_tree_level_shape(self, layer, side) -> None:
         """Test the shape of the first tree level indices.
 
@@ -66,15 +73,13 @@ class TestIndeces:
             int(
                 (layer.in_dim[0] + 2 * layer.padding - layer.receptive_field_size)
                 / layer.stride
-            )
-            + 1
+            ) + 1
         )
         horizontal_positions = (
             int(
                 (layer.in_dim[1] + 2 * layer.padding - layer.receptive_field_size)
                 / layer.stride
-            )
-            + 1
+            ) + 1
         )
         num_positions = horizontal_positions * vertical_positions
         indices = layer.indices[0][side]
@@ -85,6 +90,8 @@ class TestIndeces:
             3,
         )
 
+
+    @pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
     def test_other_tree_levels_shape(self, layer, side) -> None:
         """Test the shape of other tree level indices.
 
@@ -96,6 +103,8 @@ class TestIndeces:
             expected_gates = 2 ** (layer.tree_depth - level)
             assert indices.shape == (expected_gates,)
 
+
+    @pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
     def test_first_tree_level_range(self, layer, side):
         """Test that indices are within input dimensions.
 
@@ -106,6 +115,8 @@ class TestIndeces:
         assert torch.all(indices[..., 1] < layer.in_dim[1])
         assert torch.all(indices[..., 2] < layer.channels)
 
+    
+    @pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
     def test_other_tree_levels_range(self, layer, side):
         """Test that indices are within previous level range.
 
@@ -117,6 +128,45 @@ class TestIndeces:
             assert torch.all(indices < n_gates_prev)
 
 
+    def test_uniqueness(self, layer):
+        """Test that indices are unique within the first level.
+        For random-unique connections, the first level should have unique pairs of
+        indices.
+        """
+        if layer.connections != "random-unique":
+            pytest.skip("Test only applies to random-unique connections")
+        
+        # Only test the first level (level 0) which contains the actual position pairs
+        left_indices = layer.indices[0][0]   # Shape: (num_kernels, num_positions, sample_size, 3)
+        right_indices = layer.indices[0][1]  # Shape: (num_kernels, num_positions, sample_size, 3)
+        
+        # Test uniqueness for each kernel and each sliding position
+        for kernel_idx in range(left_indices.shape[0]):
+            for pos_idx in range(left_indices.shape[1]):
+                left_pos = left_indices[kernel_idx, pos_idx]    # Shape: (sample_size, 3)
+                right_pos = right_indices[kernel_idx, pos_idx]  # Shape: (sample_size, 3)
+                
+                # Convert tensor pairs to tuples for comparison
+                pairs = []
+                for i in range(left_pos.shape[0]):
+                    left_tuple = tuple(left_pos[i].tolist())
+                    right_tuple = tuple(right_pos[i].tolist())
+                    # Ensure consistent ordering (smaller index first) for uniqueness check
+                    pair = (left_tuple, right_tuple) if left_tuple < right_tuple else (right_tuple, left_tuple)
+                    pairs.append(pair)
+                
+                # Check that all pairs are unique
+                unique_pairs = set(pairs)
+                assert len(unique_pairs) == len(pairs), \
+                    f"Kernel {kernel_idx}, position {pos_idx}: Found duplicate pairs. " \
+                    f"Expected {len(pairs)} unique pairs, got {len(unique_pairs)}"
+                
+                # Also check that no self-connections exist
+                for left_tuple, right_tuple in pairs:
+                    assert left_tuple != right_tuple, \
+                        f"Kernel {kernel_idx}, position {pos_idx}: Found self-connection {left_tuple}"
+
+
 def test_and_model():
     """Test the AND gate implementation.
 
@@ -125,26 +175,23 @@ def test_and_model():
     - test some possible inputs
     """
     layer = LogicConv3d(
-        in_dim=2,
+        in_dim=3,
         device="cpu",
         channels=1,
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
         implementation="python",
-        connections="random",
+        connections="random-unique",
         stride=1,
         padding=0,
     )
 
-    # Set indices to select pairs of positions row-wise
-    layer.indices = [
-        (
-            torch.tensor([[[[0, 0, 0], [1, 0, 0]]]]),
-            torch.tensor([[[[0, 1, 0], [1, 1, 0]]]]),
-        ),
-        (torch.tensor([0]), torch.tensor([1])),
-    ]
+    kernel_pairs = (
+        torch.tensor([[0, 0, 0], [1, 0, 0]]),
+        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+    )
+    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -156,16 +203,29 @@ def test_and_model():
 
     # only all 1s should produce 1
     test_cases = [
-        ([[[[0, 0], [0, 0]]]], 0),
-        ([[[[0, 0], [0, 1]]]], 0),
-        ([[[[0, 0], [1, 1]]]], 0),
-        ([[[[0, 1], [1, 1]]]], 0),
-        ([[[[1, 1], [1, 1]]]], 1),
+        ([[0, 0, 0], 
+          [0, 0, 0], 
+          [0, 0, 0]
+        ], [0, 0, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 0], 
+          [0, 0, 1]]
+        , [1, 0, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 1], 
+          [0, 0, 1]]
+        , [1, 1, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 1], 
+          [1, 1, 1]]
+        , [1, 1, 1, 1]),
     ]
 
-    for x, expected in test_cases:
-        x = torch.tensor(x, dtype=torch.float32)
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
         output = layer(x)
-        assert torch.isclose(
-            output, torch.tensor([[[[expected]]]], dtype=torch.float32)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
+        assert torch.allclose(
+            output, 
+            expected
         )
