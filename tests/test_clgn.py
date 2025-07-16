@@ -4,9 +4,12 @@ This module contains tests for the core functionality of the CLGN class.
 """
 
 import pytest
+import numpy as np
 import torch
 
 from neurodifflogic.models.difflog_layers.conv import LogicConv2d
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet
+from neurodifflogic.models.difflog_layers.linear import GroupSum
 
 
 @pytest.fixture
@@ -279,3 +282,42 @@ def test_binary_model():
             output, 
             expected
         )
+
+
+def test_compiled_model():
+    """Test model compilation and inference."""
+    model = torch.nn.Sequential(
+        LogicConv2d(
+            in_dim=2,
+            device="cpu",
+            channels=1,
+            num_kernels=1,
+            tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+        ),
+        GroupSum(1),
+    )
+    compiled_model = CompiledConvLogicNet(
+        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+    )
+    compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
+
+    X = torch.randint(0, 2, (8, 2, 3, 3)).int()
+
+    preds_diff = model(X)
+
+    # switch model to eval mode
+    model.train(False)
+
+    # X = torch.randint(0, 2, (8, 42)).int()
+    preds = model(X)
+    preds_compiled = compiled_model(X.bool().numpy())
+
+    print(f"preds =\n{preds}")
+    print(f"preds_diff =\n{preds_diff}")
+    print(f"preds_compiled =\n{preds_compiled}")
+    assert np.allclose(preds, preds_compiled)
