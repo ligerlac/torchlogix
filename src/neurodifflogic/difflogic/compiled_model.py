@@ -4,14 +4,14 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Union, Dict, Any, List
+from typing import Union, List, Dict, Any
 
 import numpy as np
 import numpy.typing
 import torch
 
-from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
+from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 ALL_OPERATIONS = [
     "zero", "and", "not_implies", "a", "not_implied_by", "b", "xor", "or",
@@ -400,10 +400,12 @@ class CompiledLogicNet(torch.nn.Module):
     def _get_linear_layer_code(self, layer_a, layer_b, layer_op, layer_id: int, is_final: bool, has_non_linear_layers: bool) -> List[str]:
         """Generate C code for a linear layer."""
         code = []
+        
+        has_flatten = any(lt == 'flatten' for lt, _, _, _ in self._calculate_layer_output_sizes_and_shapes())
 
         # Determine input source based on layer position and model structure
-        if has_non_linear_layers:
-            # Mixed model: first layer uses linear_input, subsequent layers alternate
+        if has_non_linear_layers or has_flatten:
+            # Mixed model or model with flatten: first layer uses linear_input, subsequent layers alternate
             if layer_id == 0:
                 input_var = "linear_input"
             else:
@@ -425,8 +427,8 @@ class CompiledLogicNet(torch.nn.Module):
         # Determine output destination
         if is_final:
             output_var = "out"
-        elif has_non_linear_layers:
-            # Mixed model: alternate between buffers
+        elif has_non_linear_layers or has_flatten:
+            # Mixed model or flatten model: alternate between buffers
             if layer_id % 2 == 0:
                 output_var = "linear_buf_temp"
             else:
@@ -474,17 +476,25 @@ class CompiledLogicNet(torch.nn.Module):
 
         # Allocate buffers for linear layers if needed
         linear_layer_count = len(self.linear_layers)
+        has_non_linear_layers = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
+        has_flatten = any(lt == 'flatten' for lt, _, _, _ in layer_info)
+        
         if linear_layer_count > 0:
-            has_non_linear_layers = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
-
-            if has_non_linear_layers:
-                # Mixed model: need buffer to transfer from conv/pool to linear
-                # Find the size after flattening
+            if has_non_linear_layers or has_flatten:
+                # Mixed model or model with flatten: need buffer to transfer data to linear layers
+                # Find the size after flattening or from conv/pool layers
                 flatten_size = None
                 for layer_type, layer_idx, output_shape, output_size in layer_info:
                     if layer_type == 'flatten':
                         flatten_size = output_size
                         break
+                
+                # If no explicit flatten but we have conv/pool, use the last conv/pool output size
+                if flatten_size is None and has_non_linear_layers:
+                    for layer_type, layer_idx, output_shape, output_size in reversed(layer_info):
+                        if layer_type in ['conv', 'pool']:
+                            flatten_size = output_size
+                            break
                 
                 if flatten_size:
                     # For multi-layer linear networks, we need the buffer to be large enough
@@ -500,8 +510,8 @@ class CompiledLogicNet(torch.nn.Module):
 
             # For multi-layer linear networks, use ping-pong buffers
             if linear_layer_count > 1:
-                if has_non_linear_layers:
-                    # Mixed model: use one additional buffer for ping-ponging
+                if has_non_linear_layers or has_flatten:
+                    # Mixed model or flatten model: use one additional buffer for ping-ponging
                     max_linear_size = max(len(layer[0]) for layer in self.linear_layers)
                     code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_temp[{max_linear_size}];")
                 else:
@@ -510,8 +520,7 @@ class CompiledLogicNet(torch.nn.Module):
                     code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_a[{max_linear_size}];")
                     code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_b[{max_linear_size}];")
 
-        # Check if we need a flatten buffer even without linear layers (for GroupSum)
-        has_flatten = any(lt == 'flatten' for lt, _, _, _ in layer_info)
+        # Check if we need a flatten buffer when no linear layers follow (for GroupSum only)
         if has_flatten and linear_layer_count == 0:
             # Need buffer for flatten → GroupSum case
             flatten_size = None
@@ -538,20 +547,34 @@ class CompiledLogicNet(torch.nn.Module):
                 code.extend(self._get_pooling_layer_code(self.pooling_layers[layer_idx], layer_name, current_shape))
                 code.append("")
             elif layer_type == 'flatten':
-                # Handle flattening: copy from previous layer to appropriate buffer
-                prev_layer_info = layer_info[layer_info.index((layer_type, layer_idx, output_shape, output_size)) - 1]
-                prev_layer_type, prev_layer_idx, prev_shape, prev_size = prev_layer_info
+                # Handle flattening: copy from input or previous layer to appropriate buffer
+                current_layer_idx = layer_info.index((layer_type, layer_idx, output_shape, output_size))
                 
-                if linear_layer_count > 0:
-                    # Flatten → Linear case: copy to linear_input
-                    code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to linear_input")
-                    code.append(f"\tmemcpy(linear_input, layer_{prev_layer_type}_{prev_layer_idx}_out, "
-                               f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                if current_layer_idx == 0:
+                    # First layer is flatten: copy directly from input
+                    if linear_layer_count > 0:
+                        code.append(f"\t// Flatten layer: copy from input to linear_input")
+                        code.append(f"\tmemcpy(linear_input, inp, "
+                                   f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                    else:
+                        code.append(f"\t// Flatten layer: copy from input to flattened_output") 
+                        code.append(f"\tmemcpy(flattened_output, inp, "
+                                   f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                 else:
-                    # Flatten → GroupSum case: copy to flattened_output buffer
-                    code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to flattened_output")
-                    code.append(f"\tmemcpy(flattened_output, layer_{prev_layer_type}_{prev_layer_idx}_out, "
-                               f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                    # Flatten follows other layers: copy from previous layer
+                    prev_layer_info = layer_info[current_layer_idx - 1]
+                    prev_layer_type, prev_layer_idx, prev_shape, prev_size = prev_layer_info
+                    
+                    if linear_layer_count > 0:
+                        # Flatten → Linear case: copy to linear_input
+                        code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to linear_input")
+                        code.append(f"\tmemcpy(linear_input, layer_{prev_layer_type}_{prev_layer_idx}_out, "
+                                   f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                    else:
+                        # Flatten → GroupSum case: copy to flattened_output buffer
+                        code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to flattened_output")
+                        code.append(f"\tmemcpy(flattened_output, layer_{prev_layer_type}_{prev_layer_idx}_out, "
+                                   f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                 code.append("")
             elif layer_type == 'linear':
                 layer_a, layer_b, layer_op = self.linear_layers[layer_idx]
