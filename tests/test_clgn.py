@@ -6,7 +6,9 @@ This module contains tests for the core functionality of the CLGN class.
 import pytest
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv3d
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet
+from neurodifflogic.models.difflog_layers.linear import GroupSum
 
 
 @pytest.fixture
@@ -30,19 +32,19 @@ def layer(
     # itself or the min of the tuple
     if receptive_field_size > (min(in_dim) if isinstance(in_dim, tuple) else in_dim):
         with pytest.raises(AssertionError):
-            LogicConv3d(**params)
+            LogicConv2d(**params)
         pytest.skip("Receptive field size should be smaller than input dimension")
     if stride > receptive_field_size:
         with pytest.raises(AssertionError):
-            LogicConv3d(**params)
+            LogicConv2d(**params)
         pytest.skip("Stride should be smaller than receptive field size")
     kernel_volume = receptive_field_size ** 2 * channels
     if connections == "random-unique":
         if kernel_volume * (kernel_volume - 1) / 2 < 2** tree_depth:
             # with pytest.raises(AssertionError):
-            #     LogicConv3d(**params)
+            #     LogicConv2d(**params)
             pytest.skip("Kernel volume should be large enough to support the tree depth")
-    return LogicConv3d(**params)
+    return LogicConv2d(**params)
 
 
 @pytest.mark.parametrize("in_dim", [2, 7, (18, 14)])
@@ -174,7 +176,7 @@ def test_and_model():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv3d(
+    layer = LogicConv2d(
         in_dim=3,
         device="cpu",
         channels=1,
@@ -229,3 +231,43 @@ def test_and_model():
             output, 
             expected
         )
+
+
+def test_compile_model():
+    """Test model compilation and inference."""
+    import numpy as np
+    model = torch.nn.Sequential(
+        LogicConv2d(
+            in_dim=2,
+            device="cpu",
+            channels=1,
+            num_kernels=1,
+            tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+        ),
+        GroupSum(1),
+    )
+    compiled_model = CompiledConvLogicNet(
+        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+    )
+    compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
+
+    X = torch.randint(0, 2, (8, 2, 3, 3)).int()
+
+    preds_diff = model(X)
+
+    # switch model to eval mode
+    model.train(False)
+
+    # X = torch.randint(0, 2, (8, 42)).int()
+    preds = model(X)
+    preds_compiled = compiled_model(X.bool().numpy())
+
+    print(f"preds =\n{preds}")
+    print(f"preds_diff =\n{preds_diff}")
+    print(f"preds_compiled =\n{preds_compiled}")
+    assert np.allclose(preds, preds_compiled)

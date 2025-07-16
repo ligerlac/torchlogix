@@ -1,6 +1,6 @@
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv3d, OrPoolingLayer
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 
@@ -13,7 +13,7 @@ class CNN(torch.nn.Module):
         # specifically written for mnist
         k_num = 16
         logic_layers.append(
-            LogicConv3d(
+            LogicConv2d(
                 in_dim=28,
                 num_kernels=k_num,
                 channels=1,
@@ -26,7 +26,7 @@ class CNN(torch.nn.Module):
         logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=0))
 
         logic_layers.append(
-            LogicConv3d(
+            LogicConv2d(
                 in_dim=12,
                 channels=k_num,
                 num_kernels=3 * k_num,
@@ -39,7 +39,7 @@ class CNN(torch.nn.Module):
         logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=1))
 
         logic_layers.append(
-            LogicConv3d(
+            LogicConv2d(
                 in_dim=6,
                 channels=3 * k_num,
                 num_kernels=9 * k_num,
