@@ -9,7 +9,7 @@ import torch
 from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 from neurodifflogic.models import CNN
-from neurodifflogic.difflogic.compiled_model import CompiledCombinedLogicNet
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
 
 
 def test_clgn_model():
@@ -28,7 +28,7 @@ def test_clgn_model():
     assert preds.shape == (8, 10)  # Assuming class_count=10
     assert isinstance(preds, torch.Tensor)
 
-    compiled_model = CompiledCombinedLogicNet(
+    compiled_model = CompiledLogicNet(
         model=model.model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_clgn_model.so", verbose=False)

@@ -9,7 +9,7 @@ import torch
 
 from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledConvLogicNet, CompiledCombinedLogicNet
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
 
 
 
@@ -366,7 +366,7 @@ def test_compiled_model():
     )
 
     model.train(False)  # Switch model to eval mode
-    compiled_model = CompiledCombinedLogicNet(
+    compiled_model = CompiledLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
@@ -457,7 +457,7 @@ def test_compiled_pooling_model():
     )
 
     model.train(False)  # Switch model to eval mode
-    compiled_model = CompiledCombinedLogicNet(
+    compiled_model = CompiledLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet, CompiledCombinedLogicNet
+from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 llkw = {"connections": "unique", "implementation": "python", "device": "cpu"}
@@ -62,8 +62,7 @@ def test_compiled_model():
         ),
         GroupSum(1),
     )
-    # compiled_model = CompiledLogicNet(
-    compiled_model = CompiledCombinedLogicNet(
+    compiled_model = CompiledLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
@@ -86,8 +85,7 @@ def test_large_compiled_model():
         LogicLayer(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu", implementation="python"),
         GroupSum(8),
     )
-    # compiled_model = CompiledLogicNet(
-    compiled_model = CompiledCombinedLogicNet(
+    compiled_model = CompiledLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
