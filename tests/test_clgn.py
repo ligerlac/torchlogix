@@ -6,7 +6,7 @@ This module contains tests for the core functionality of the CLGN class.
 import pytest
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv3d
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d
 
 
 @pytest.fixture
@@ -30,19 +30,19 @@ def layer(
     # itself or the min of the tuple
     if receptive_field_size > (min(in_dim) if isinstance(in_dim, tuple) else in_dim):
         with pytest.raises(AssertionError):
-            LogicConv3d(**params)
+            LogicConv2d(**params)
         pytest.skip("Receptive field size should be smaller than input dimension")
     if stride > receptive_field_size:
         with pytest.raises(AssertionError):
-            LogicConv3d(**params)
+            LogicConv2d(**params)
         pytest.skip("Stride should be smaller than receptive field size")
     kernel_volume = receptive_field_size ** 2 * channels
     if connections == "random-unique":
         if kernel_volume * (kernel_volume - 1) / 2 < 2** tree_depth:
             # with pytest.raises(AssertionError):
-            #     LogicConv3d(**params)
+            #     LogicConv2d(**params)
             pytest.skip("Kernel volume should be large enough to support the tree depth")
-    return LogicConv3d(**params)
+    return LogicConv2d(**params)
 
 
 @pytest.mark.parametrize("in_dim", [2, 7, (18, 14)])
@@ -174,7 +174,7 @@ def test_and_model():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv3d(
+    layer = LogicConv2d(
         in_dim=3,
         device="cpu",
         channels=1,

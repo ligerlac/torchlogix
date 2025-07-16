@@ -9,10 +9,10 @@ from torch.nn.modules.utils import _pair
 from neurodifflogic.difflogic.functional import bin_op_cnn
 
 
-class LogicConv3d(nn.Module):
-    """3D convolutional layer with differentiable logic operations.
+class LogicConv2d(nn.Module):
+    """2d convolutional layer with differentiable logic operations.
 
-    This layer implements a 3D convolution with differentiable logic operations.
+    This layer implements a 2d convolution with differentiable logic operations.
     It uses a binary tree structure to combine input features using logical
     operations.
     """
@@ -31,7 +31,7 @@ class LogicConv3d(nn.Module):
         stride: int = 1,
         padding: int = None,
     ):
-        """Initialize the 3D logic convolutional layer.
+        """Initialize the 2d logic convolutional layer.
 
         Args:
             in_dim: Input dimensions (height, width)
