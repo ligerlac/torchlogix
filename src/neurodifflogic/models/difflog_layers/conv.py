@@ -103,6 +103,11 @@ class LogicConv2d(nn.Module):
             [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
             dim=0,
         )  # Shape: [8, 16, 16]
+        if not self.training:
+            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+                torch.float32
+            )
+
         current_level = bin_op_cnn(a, b, level_weights)  # Shape: [100, 16, 576, 8]
 
         # Process remaining levels
@@ -117,6 +122,11 @@ class LogicConv2d(nn.Module):
                 ],
                 dim=0,
             )  # Shape: [8, 16, 16]
+
+            if not self.training:
+                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+                    torch.float32
+                )
 
             current_level = bin_op_cnn(a, b, level_weights)
         return current_level
