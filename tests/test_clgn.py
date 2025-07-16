@@ -275,6 +275,7 @@ def test_binary_model():
 
     for x, y in test_cases:
         x = torch.tensor([[x]], dtype=torch.float32)
+        print(f"x.shape = {x.shape}")
         output = layer(x)
         expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
         print(f"Input: {x}, Output: {output}, Expected: {expected}")
@@ -301,23 +302,20 @@ def test_compiled_model():
         ),
         GroupSum(1),
     )
+
+    model.train(False)  # Switch model to eval mode
     compiled_model = CompiledConvLogicNet(
         model=model, num_bits=8, cpu_compiler="gcc", verbose=True
     )
-    compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
+    compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
-    X = torch.randint(0, 2, (8, 2, 3, 3)).int()
+    # 8 random images of shape (1, 2, 2) (single channel, 2x2 input)
+    X = torch.randint(0, 2, (8, 1, 2, 2)).int()
 
-    preds_diff = model(X)
-
-    # switch model to eval mode
-    model.train(False)
-
-    # X = torch.randint(0, 2, (8, 42)).int()
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
 
-    print(f"preds =\n{preds}")
-    print(f"preds_diff =\n{preds_diff}")
-    print(f"preds_compiled =\n{preds_compiled}")
+    preds = preds.reshape(preds_compiled.shape)  # Reshape to match compiled output shape
+
     assert np.allclose(preds, preds_compiled)
+

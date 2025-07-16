@@ -409,6 +409,34 @@ void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
 
         return out
 
+import ctypes
+import math
+import shutil
+import subprocess
+import tempfile
+import time
+from typing import Union, Tuple
+
+import numpy as np
+import numpy.typing
+import torch
+
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d
+from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
+
+ALL_OPERATIONS = [
+    "zero", "and", "not_implies", "a", "not_implied_by", "b", "xor", "or",
+    "not_or", "not_xor", "not_b", "implied_by", "not_a", "implies", "not_and", "one",
+]
+
+BITS_TO_DTYPE = {8: "char", 16: "short", 32: "int", 64: "long long"}
+BITS_TO_ZERO_LITERAL = {8: "(char) 0", 16: "(short) 0", 32: "0", 64: "0LL"}
+BITS_TO_ONE_LITERAL = {8: "(char) 1", 16: "(short) 1", 32: "1", 64: "1LL"}
+BITS_TO_C_DTYPE = {
+    8: ctypes.c_int8, 16: ctypes.c_int16, 32: ctypes.c_int32, 64: ctypes.c_int64,
+}
+BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
+
 
 class CompiledConvLogicNet(torch.nn.Module):
     """
@@ -471,7 +499,7 @@ class CompiledConvLogicNet(torch.nn.Module):
         for level_idx, level_weights in enumerate(layer.tree_weights):
             level_ops = []
             for weight_param in level_weights:
-                ops = weight_param.argmax(1).cpu().numpy()  # Get the selected operation for each kernel
+                ops = weight_param.argmax(1).cpu().numpy()  # Shape: (num_kernels,)
                 level_ops.append(ops)
             tree_operations.append(level_ops)
         
@@ -566,10 +594,11 @@ class CompiledConvLogicNet(torch.nn.Module):
                     left_h, left_w, left_c = left_indices[gate_idx]
                     right_h, right_w, right_c = right_indices[gate_idx]
                     
-                    gate_op = tree_ops[0][gate_idx][kernel_idx]  # Operation for this gate
+                    # Get operation for this gate - tree_ops[level][gate_idx] gives operations for all kernels
+                    gate_op = tree_ops[0][gate_idx][kernel_idx]
                     
                     if layer_id == 0:
-                        # Input layer
+                        # Input layer - use channel-height-width indexing
                         left_var = f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {left_h} * {conv_info['in_dim'][1]} + {left_w}]"
                         right_var = f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {right_h} * {conv_info['in_dim'][1]} + {right_w}]"
                     else:
@@ -594,6 +623,7 @@ class CompiledConvLogicNet(torch.nn.Module):
                         left_idx = left_gate_indices[gate_idx]
                         right_idx = right_gate_indices[gate_idx]
                         
+                        # Get operation for this gate
                         gate_op = tree_ops[level][gate_idx][kernel_idx]
                         
                         left_var = f"conv_{layer_id}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{left_idx}"
@@ -701,6 +731,12 @@ class CompiledConvLogicNet(torch.nn.Module):
                 code.append(f"\t// Copy to next layer input")
                 for j in range(len(layer_a)):
                     code.append(f"\tlinear_input[{j}] = linear_{i}_out_{j};")
+
+        # If no linear layers, copy conv output to final output
+        if not self.linear_layers and conv_output_sizes:
+            code.append(f"\t// Copy conv output to final output")
+            code.append(f"\tmemcpy(out, layer_{len(self.conv_layers)-1}_out, "
+                       f"{conv_output_sizes[-1]} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
 
         code.append("}")
 
@@ -883,14 +919,15 @@ void apply_logic_conv_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
                 out = out[:-pad_len]
         else:
             # Direct function call
+            batch_size = x.shape[0]
             input_size = np.prod(self.input_shape)
-            x_flat = x.reshape(-1, input_size).astype(BITS_TO_NP_DTYPE[self.num_bits])
+            x_flat = x.reshape(batch_size, input_size).astype(BITS_TO_NP_DTYPE[self.num_bits])
             
             # Calculate output size based on network structure
             output_size = self._calculate_output_size()
-            out = np.zeros((x_flat.shape[0], output_size), dtype=BITS_TO_NP_DTYPE[self.num_bits])
+            out = np.zeros((batch_size, output_size), dtype=BITS_TO_NP_DTYPE[self.num_bits])
             
-            for i in range(x_flat.shape[0]):
+            for i in range(batch_size):
                 self.lib_fn(x_flat[i], out[i])
             
             out = torch.tensor(out)
