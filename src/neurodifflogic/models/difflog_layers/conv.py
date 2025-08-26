@@ -88,7 +88,6 @@ class LogicConv2d(nn.Module):
 
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
-
         current_level = x
         left_indices, right_indices = self.indices[0]
         a_h, a_w, a_c = left_indices[..., 0], left_indices[..., 1], left_indices[..., 2]
@@ -143,7 +142,7 @@ class LogicConv2d(nn.Module):
         )
 
         return current_level
-
+    
 
     def get_random_receptive_field_pairs(self):
         """Generate random index pairs within the receptive field.
@@ -156,14 +155,14 @@ class LogicConv2d(nn.Module):
         h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
         w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
         c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
-
+        
         # Stack the indices
         indices = torch.stack([h_indices, w_indices, c_indices], dim=-1)
-
+        
         # Split for binary tree (split the random connections)
         pairs_a = indices[:sample_size]
         pairs_b = indices[sample_size:]
-
+        
         return pairs_a, pairs_b
 
 
@@ -178,33 +177,33 @@ class LogicConv2d(nn.Module):
         h_rf = torch.arange(0, h_k, device=self.device)
         w_rf = torch.arange(0, w_k, device=self.device)
         c_rf = torch.arange(0, c, device=self.device)
-
+        
         h_rf_grid, w_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, c_rf, indexing="ij")
         all_positions = torch.stack([
             h_rf_grid.flatten(),
             w_rf_grid.flatten(),
             c_rf_grid.flatten()
         ], dim=1)
-
+        
         num_positions = h_k * w_k * c
         max_unique_pairs = num_positions * (num_positions - 1) // 2
-
+        
         if sample_size > max_unique_pairs:
             raise ValueError(f"Not enough unique pairs: need {sample_size}, have {max_unique_pairs}")
-
+        
         # Use torch.randperm for efficient unique sampling
         # Create all possible pair indices
         triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=self.device)
         total_pairs = triu_indices.shape[1]
-
+        
         # Randomly select sample_size pairs
         selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
         selected_i = triu_indices[0, selected_pair_indices]
         selected_j = triu_indices[1, selected_pair_indices]
-
+        
         pairs_a = all_positions[selected_i]
         pairs_b = all_positions[selected_j]
-
+        
         return pairs_a, pairs_b
 
 
@@ -222,22 +221,22 @@ class LogicConv2d(nn.Module):
             f"Receptive field size ({h_k}, {w_k}) must fit within input dimensions "
             f"({h_padded}, {w_padded}) after padding."
         )
-
+        
         # Generate all possible positions the kernel can slide to
         h_starts = torch.arange(0, h_padded - h_k + 1, self.stride, device=self.device)
         w_starts = torch.arange(0, w_padded - w_k + 1, self.stride, device=self.device)
 
         # Generate meshgrid for all possible starting points of the receptive field
         h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing="ij")
-
+        
         all_stacked_as = []
         all_stacked_bs = []
-
+        
         # Process for each kernel
         for kernel_idx in range(self.num_kernels):
             stacked_as = []
             stacked_bs = []
-
+            
             # Slide the kernel over the image (across all positions)
             for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
                 # Apply sliding window offset
@@ -246,23 +245,23 @@ class LogicConv2d(nn.Module):
                     pairs_a[:, 1] + w_start,
                     pairs_a[:, 2]
                 ], dim=-1)
-
+                
                 indices_b = torch.stack([
                     pairs_b[:, 0] + h_start,
                     pairs_b[:, 1] + w_start,
                     pairs_b[:, 2]
                 ], dim=-1)
-
+                
                 stacked_as.append(indices_a)
                 stacked_bs.append(indices_b)
-
+            
             # After sliding over the whole image, store the result for this kernel
             all_stacked_as.append(torch.stack(stacked_as, dim=0))
             all_stacked_bs.append(torch.stack(stacked_bs, dim=0))
-
+        
         # Stack the results for all kernels
         return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
-
+    
 
     def get_indices_from_kernel_pairs(self, pairs_tuple):
         indices = [
