@@ -89,8 +89,6 @@ class LogicConv2d(nn.Module):
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
 
-        print("Debug info", flush=True)
-
         current_level = x
         left_indices, right_indices = self.indices[0]
         a_h, a_w, a_c = left_indices[..., 0], left_indices[..., 1], left_indices[..., 2]
