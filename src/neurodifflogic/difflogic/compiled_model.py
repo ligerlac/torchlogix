@@ -201,9 +201,9 @@ class CompiledLogicNet(torch.nn.Module):
                 conv_info = self.conv_layers[layer_idx]
                 if len(current_shape) == 3:  # (C, H, W)
                     c, h, w = current_shape
-                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
                              // conv_info['stride']) + 1
-                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
                              // conv_info['stride']) + 1
                     output_shape = (conv_info['num_kernels'], h_out, w_out)
                     output_size = conv_info['num_kernels'] * h_out * w_out
@@ -214,9 +214,9 @@ class CompiledLogicNet(torch.nn.Module):
                 pool_info = self.pooling_layers[layer_idx]
                 if len(current_shape) == 3:  # (C, H, W)
                     c, h, w = current_shape
-                    h_out = ((h + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                    h_out = ((h + 2 * pool_info['padding'] - pool_info['kernel_size']) 
                              // pool_info['stride']) + 1
-                    w_out = ((w + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                    w_out = ((w + 2 * pool_info['padding'] - pool_info['kernel_size']) 
                              // pool_info['stride']) + 1
                     output_shape = (c, h_out, w_out)
                     output_size = c * h_out * w_out
@@ -247,9 +247,9 @@ class CompiledLogicNet(torch.nn.Module):
         indices = conv_info['indices']
         tree_ops = conv_info['tree_operations']
 
-        h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+        h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
                  // conv_info['stride']) + 1
-        w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+        w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
                  // conv_info['stride']) + 1
 
         code.append(f"\t// Convolutional layer {layer_name}")
@@ -373,7 +373,7 @@ class CompiledLogicNet(torch.nn.Module):
     def _get_previous_layer_name(self, current_layer_name: str) -> str:
         """Get the name of the previous layer in execution order."""
         layer_info = self._calculate_layer_output_sizes_and_shapes()
-
+        
         # Find current layer in execution order
         current_idx = None
         for i, (layer_type, layer_idx, _, _) in enumerate(layer_info):
@@ -400,7 +400,7 @@ class CompiledLogicNet(torch.nn.Module):
     def _get_linear_layer_code(self, layer_a, layer_b, layer_op, layer_id: int, is_final: bool, has_non_linear_layers: bool) -> List[str]:
         """Generate C code for a linear layer."""
         code = []
-
+        
         has_flatten = any(lt == 'flatten' for lt, _, _, _ in self._calculate_layer_output_sizes_and_shapes())
 
         # Determine input source based on layer position and model structure
@@ -478,7 +478,7 @@ class CompiledLogicNet(torch.nn.Module):
         linear_layer_count = len(self.linear_layers)
         has_non_linear_layers = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
         has_flatten = any(lt == 'flatten' for lt, _, _, _ in layer_info)
-
+        
         if linear_layer_count > 0:
             if has_non_linear_layers or has_flatten:
                 # Mixed model or model with flatten: need buffer to transfer data to linear layers
@@ -488,14 +488,14 @@ class CompiledLogicNet(torch.nn.Module):
                     if layer_type == 'flatten':
                         flatten_size = output_size
                         break
-
+                
                 # If no explicit flatten but we have conv/pool, use the last conv/pool output size
                 if flatten_size is None and has_non_linear_layers:
                     for layer_type, layer_idx, output_shape, output_size in reversed(layer_info):
                         if layer_type in ['conv', 'pool']:
                             flatten_size = output_size
                             break
-
+                
                 if flatten_size:
                     # For multi-layer linear networks, we need the buffer to be large enough
                     # for the largest intermediate layer size
@@ -505,7 +505,7 @@ class CompiledLogicNet(torch.nn.Module):
                         for i, (layer_a, layer_b, layer_op) in enumerate(self.linear_layers[:-1]):
                             layer_output_size = len(layer_a)  # This layer's output size
                             max_linear_input_size = max(max_linear_input_size, layer_output_size)
-
+                    
                     code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_input[{max_linear_input_size}];")
 
             # For multi-layer linear networks, use ping-pong buffers
@@ -549,7 +549,7 @@ class CompiledLogicNet(torch.nn.Module):
             elif layer_type == 'flatten':
                 # Handle flattening: copy from input or previous layer to appropriate buffer
                 current_layer_idx = layer_info.index((layer_type, layer_idx, output_shape, output_size))
-
+                
                 if current_layer_idx == 0:
                     # First layer is flatten: copy directly from input
                     if linear_layer_count > 0:
@@ -557,14 +557,14 @@ class CompiledLogicNet(torch.nn.Module):
                         code.append(f"\tmemcpy(linear_input, inp, "
                                    f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                     else:
-                        code.append(f"\t// Flatten layer: copy from input to flattened_output")
+                        code.append(f"\t// Flatten layer: copy from input to flattened_output") 
                         code.append(f"\tmemcpy(flattened_output, inp, "
                                    f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                 else:
                     # Flatten follows other layers: copy from previous layer
                     prev_layer_info = layer_info[current_layer_idx - 1]
                     prev_layer_type, prev_layer_idx, prev_shape, prev_size = prev_layer_info
-
+                    
                     if linear_layer_count > 0:
                         # Flatten → Linear case: copy to linear_input
                         code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to linear_input")
@@ -706,8 +706,7 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
                 c_file.flush()
 
                 if verbose:
-                    n_lines = len(code.split('\n'))
-                    print(f"C code created with {n_lines} lines. (temp location {c_file.name})")
+                    print(f"C code created with {len(code.split('\n'))} lines. (temp location {c_file.name})")
 
                 t_s = time.time()
                 compiler_out = subprocess.run([
