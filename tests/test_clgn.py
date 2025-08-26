@@ -119,7 +119,7 @@ class TestIndeces:
         assert torch.all(indices[..., 1] < layer.in_dim[1])
         assert torch.all(indices[..., 2] < layer.channels)
 
-
+    
     @pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
     def test_other_tree_levels_range(self, layer, side):
         """Test that indices are within previous level range.
@@ -139,17 +139,17 @@ class TestIndeces:
         """
         if layer.connections != "random-unique":
             pytest.skip("Test only applies to random-unique connections")
-
+        
         # Only test the first level (level 0) which contains the actual position pairs
         left_indices = layer.indices[0][0]   # Shape: (num_kernels, num_positions, sample_size, 3)
         right_indices = layer.indices[0][1]  # Shape: (num_kernels, num_positions, sample_size, 3)
-
+        
         # Test uniqueness for each kernel and each sliding position
         for kernel_idx in range(left_indices.shape[0]):
             for pos_idx in range(left_indices.shape[1]):
                 left_pos = left_indices[kernel_idx, pos_idx]    # Shape: (sample_size, 3)
                 right_pos = right_indices[kernel_idx, pos_idx]  # Shape: (sample_size, 3)
-
+                
                 # Convert tensor pairs to tuples for comparison
                 pairs = []
                 for i in range(left_pos.shape[0]):
@@ -158,13 +158,13 @@ class TestIndeces:
                     # Ensure consistent ordering (smaller index first) for uniqueness check
                     pair = (left_tuple, right_tuple) if left_tuple < right_tuple else (right_tuple, left_tuple)
                     pairs.append(pair)
-
+                
                 # Check that all pairs are unique
                 unique_pairs = set(pairs)
                 assert len(unique_pairs) == len(pairs), \
                     f"Kernel {kernel_idx}, position {pos_idx}: Found duplicate pairs. " \
                     f"Expected {len(pairs)} unique pairs, got {len(unique_pairs)}"
-
+                
                 # Also check that no self-connections exist
                 for left_tuple, right_tuple in pairs:
                     assert left_tuple != right_tuple, \
@@ -207,20 +207,20 @@ def test_and_model():
 
     # only all 1s should produce 1
     test_cases = [
-        ([[0, 0, 0],
-          [0, 0, 0],
+        ([[0, 0, 0], 
+          [0, 0, 0], 
           [0, 0, 0]
         ], [0, 0, 0, 0]),
-        ([[1, 1, 1],
-          [1, 1, 0],
+        ([[1, 1, 1], 
+          [1, 1, 0], 
           [0, 0, 1]]
         , [1, 0, 0, 0]),
-        ([[1, 1, 1],
-          [1, 1, 1],
+        ([[1, 1, 1], 
+          [1, 1, 1], 
           [0, 0, 1]]
         , [1, 1, 0, 0]),
-        ([[1, 1, 1],
-          [1, 1, 1],
+        ([[1, 1, 1], 
+          [1, 1, 1], 
           [1, 1, 1]]
         , [1, 1, 1, 1]),
     ]
@@ -228,9 +228,9 @@ def test_and_model():
     for x, y in test_cases:
         x = torch.tensor([[x]], dtype=torch.float32)
         output = layer(x)
-        expected = torch.tensor(y, dtype=torch.float32).reshape(1,1,2,2)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
         assert torch.allclose(
-            output,
+            output, 
             expected
         )
 
@@ -264,13 +264,13 @@ def test_binary_model():
         layer.tree_weights[1][0].data = and_weights
 
     layer.train(False)  # Switch model to eval mode
-
+    
     test_cases = [
-        ([[0, 0],
-          [0, 0],
+        ([[0, 0], 
+          [0, 0], 
         ], [0]),
-        ([[1, 1],
-          [1, 1],
+        ([[1, 1], 
+          [1, 1], 
         ], [1]),
     ]
 
@@ -281,11 +281,11 @@ def test_binary_model():
         expected = torch.tensor(y, dtype=torch.float32)
         print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(
-            output,
+            output, 
             expected
         )
 
-
+    
 def test_conv_model():
     layer = LogicConv2d(
         in_dim=3,
@@ -318,20 +318,20 @@ def test_conv_model():
 
     # only all 1s should produce 1
     test_cases = [
-        ([[0, 0, 0],
-          [0, 0, 0],
+        ([[0, 0, 0], 
+          [0, 0, 0], 
           [0, 0, 0]
         ], 0),
-        ([[1, 1, 1],
-          [1, 1, 0],
+        ([[1, 1, 1], 
+          [1, 1, 0], 
           [0, 0, 1]]
         , 1),
-        ([[1, 1, 1],
-          [1, 1, 1],
+        ([[1, 1, 1], 
+          [1, 1, 1], 
           [0, 0, 1]]
         , 2),
-        ([[1, 1, 1],
-          [1, 1, 1],
+        ([[1, 1, 1], 
+          [1, 1, 1], 
           [1, 1, 1]]
         , 4),
     ]
@@ -341,9 +341,9 @@ def test_conv_model():
         output = model(x)
         expected = torch.tensor(y, dtype=torch.float32)
         assert torch.allclose(
-            output,
+            output, 
             expected
-        )
+        )    
 
 
 def test_conv_model_rect():
@@ -405,9 +405,10 @@ def test_conv_model_rect():
         output = model(x)
         expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
         assert torch.allclose(
-            output,
+            output, 
             expected
-        )
+        )    
+
 
 
 def test_compiled_model():
@@ -441,6 +442,13 @@ def test_compiled_model():
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
 
+    # c_code = compiled_model.get_c_code()
+    # print("Generated C code:")
+    # print(c_code)
+
+    print(f"{preds=}")
+    print(f"{preds_compiled=}")
+
     assert np.allclose(preds, preds_compiled)
 
 
@@ -469,21 +477,13 @@ def test_compiled_model_rect():
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
-    # 8 random images of shape (1, 3, 4) (single channel, 3x3 input)
+    # 8 random images of shape (1, 3, 4) (single channel, 3x4 input)
     X = torch.randint(0, 2, (8, 1, 3, 4)).int()
 
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
 
     assert np.allclose(preds, preds_compiled)
-
-
-def test_pooling_layer():
-    layer = OrPoolingLayer(
-        kernel_size=2,
-        stride=2,
-        padding=0,
-    )
 
     test_cases = [
         ([[0, 0, 0, 0],
@@ -521,6 +521,49 @@ def test_pooling_layer():
         )
 
 
+def test_pooling_layer():
+    layer = OrPoolingLayer(
+        kernel_size=2,
+        stride=2,
+        padding=0,
+    )
+
+    test_cases = [
+        ([[0, 0, 0, 0], 
+          [0, 0, 0, 0], 
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ], [0, 0, 0, 0]),
+        ([[1, 0, 0, 1], 
+          [0, 1, 0, 0], 
+          [0, 0, 1, 1],
+          [1, 0, 0, 1],
+        ], [1, 1, 1, 1]),
+        ([[1, 1, 1, 1], 
+          [1, 1, 1, 1], 
+          [0, 0, 1, 1],
+          [0, 0, 1, 1],
+        ], [1, 1, 0, 1]),
+        ([[1, 1, 1, 1], 
+          [1, 1, 1, 1], 
+          [1, 1, 1, 1],
+          [1, 1, 1, 1]
+        ], [1, 1, 1, 1]),
+    ]
+
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
+
+        print(f"x.shape = {x.shape}")
+        output = layer(x)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
+        print(f"Input: {x}, Output: {output}, Expected: {expected}")
+        assert torch.allclose(
+            output, 
+            expected
+        )    
+
+
 def test_compiled_pooling_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
@@ -552,6 +595,10 @@ def test_compiled_pooling_model():
 
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
+
+    # c_code = compiled_model.get_c_code()
+    # print("Generated C code:")
+    # print(c_code)
 
     assert np.allclose(preds, preds_compiled)
 
