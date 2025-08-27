@@ -233,10 +233,24 @@ class GroupSum(torch.nn.Module):
             return x.group_sum(self.k)
 
         assert x.shape[-1] % self.k == 0, (x.shape, self.k)
-        # print(f'x =\n{x}')
+
+        # # Handle both batched and non-batched inputs
+        # if len(x.shape) == 2:  # Shape is [N, features]
+        #     # Original non-batched case
+        #     return (
+        #         x.reshape(x.shape[0], self.k, x.shape[-1] // self.k).sum(-1) / self.tau
+        #         + self.beta
+        #     )
+        # elif len(x.shape) == 3:  # Shape is [batch, N, features]
+        #     # Batched case
+        #     return (
+        #         x.reshape(x.shape[0], x.shape[1], self.k, x.shape[-1] // self.k).sum(-1) / self.tau
+        #         + self.beta
+        #     )
+        # else:
+        #     raise ValueError(f"Unsupported input shape: {x.shape}")
         return (
-            x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1) / self.tau
-            + self.beta
+            (x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1) + self.beta) / self.tau
         )
 
     def extra_repr(self):
