@@ -129,6 +129,18 @@ class LogicConv2d(nn.Module):
                 )
 
             current_level = bin_op_cnn(a, b, level_weights)
+
+        # Reshape flattened output
+        reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+
+        current_level = current_level.view(
+            current_level.shape[0],
+            current_level.shape[1],
+            reshape_h,
+            reshape_w,
+        )
+
         return current_level
     
 
@@ -276,16 +288,8 @@ class OrPoolingLayer(torch.nn.Module):
 
     def forward(self, x):
         """Pool the max value in the kernel."""
-        num_kernels_each_direction = np.sqrt(x.shape[2])
-        assert num_kernels_each_direction.is_integer(), num_kernels_each_direction
-        x_reshaped = x.view(
-            x.shape[0],
-            x.shape[1],
-            int(num_kernels_each_direction),
-            int(num_kernels_each_direction),
-        )
         x = torch.nn.functional.max_pool2d(
-            x_reshaped,
+            x,
             kernel_size=self.kernel_size,
             stride=self.stride,
             padding=self.padding,

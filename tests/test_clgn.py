@@ -228,7 +228,7 @@ def test_and_model():
     for x, y in test_cases:
         x = torch.tensor([[x]], dtype=torch.float32)
         output = layer(x)
-        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
         assert torch.allclose(
             output, 
             expected
@@ -278,7 +278,7 @@ def test_binary_model():
         x = torch.tensor([[x]], dtype=torch.float32)
         print(f"x.shape = {x.shape}")
         output = layer(x)
-        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
+        expected = torch.tensor(y, dtype=torch.float32)
         print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(
             output, 
@@ -339,11 +339,76 @@ def test_conv_model():
     for x, y in test_cases:
         x = torch.tensor([[x]], dtype=torch.float32)
         output = model(x)
+        expected = torch.tensor(y, dtype=torch.float32)
+        assert torch.allclose(
+            output, 
+            expected
+        )    
+
+
+def test_conv_model_rect():
+    layer = LogicConv2d(
+        in_dim=(3, 4),
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+    )
+
+    kernel_pairs = (
+        torch.tensor([[0, 0, 0, 0], [1, 0, 0, 0]]),
+        torch.tensor([[0, 1, 0, 0], [1, 1, 0, 0]]),
+    )
+    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+
+    # Set weights to select AND operation
+    with torch.no_grad():
+        and_weights = torch.zeros(1, 16)
+        and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
+        layer.tree_weights[0][0].data = and_weights
+        layer.tree_weights[0][1].data = and_weights
+        layer.tree_weights[1][0].data = and_weights
+
+    model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
+
+    # only all 1s should produce 1
+    test_cases = [
+        ([[0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ], 0),
+        ([[1, 1, 1, 1],
+          [1, 1, 0, 1],
+          [0, 0, 1, 1]]
+        , 1),
+        ([[1, 1, 1, 1],
+          [1, 1, 1, 0],
+          [0, 0, 1, 1]]
+        , 2),
+        ([[1, 1, 1, 1],
+          [1, 1, 1, 0],
+          [0, 1, 1, 1]]
+        , 3),
+        ([[1, 1, 1, 1],
+          [1, 1, 1, 1],
+          [1, 1, 1, 1]]
+        , 6),
+    ]
+
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
+        output = model(x)
         expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, -1, 1)
         assert torch.allclose(
             output, 
             expected
         )    
+
 
 
 def test_compiled_model():
@@ -381,14 +446,79 @@ def test_compiled_model():
     # print("Generated C code:")
     # print(c_code)
 
-    print(f"{preds.shape=}, {preds_compiled.shape=}")
-
-    preds = preds.reshape(preds_compiled.shape)  # Reshape to match compiled output shape
-
     print(f"{preds=}")
     print(f"{preds_compiled=}")
 
     assert np.allclose(preds, preds_compiled)
+
+
+def test_compiled_model_rect():
+    """Test model compilation and inference."""
+    model = torch.nn.Sequential(
+        LogicConv2d(
+            in_dim=(3,4),
+            device="cpu",
+            channels=1,
+            num_kernels=1,
+            tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+        ),
+        torch.nn.Flatten(),
+        GroupSum(1),
+    )
+
+    model.train(False)  # Switch model to eval mode
+    compiled_model = CompiledLogicNet(
+        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+    )
+    compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
+
+    # 8 random images of shape (1, 3, 4) (single channel, 3x4 input)
+    X = torch.randint(0, 2, (8, 1, 3, 4)).int()
+
+    preds = model(X)
+    preds_compiled = compiled_model(X.bool().numpy())
+
+    assert np.allclose(preds, preds_compiled)
+
+    test_cases = [
+        ([[0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, 0]
+        ], [0, 0, 0, 0]),
+        ([[1, 0, 0, 1],
+          [0, 1, 0, 0],
+          [0, 0, 1, 1],
+          [1, 0, 0, 1],
+        ], [1, 1, 1, 1]),
+        ([[1, 1, 1, 1],
+          [1, 1, 1, 1],
+          [0, 0, 1, 1],
+          [0, 0, 1, 1],
+        ], [1, 1, 0, 1]),
+        ([[1, 1, 1, 1],
+          [1, 1, 1, 1],
+          [1, 1, 1, 1],
+          [1, 1, 1, 1]
+        ], [1, 1, 1, 1]),
+    ]
+
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
+
+        print(f"x.shape = {x.shape}")
+        output = layer(x)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
+        print(f"Input: {x}, Output: {output}, Expected: {expected}")
+        assert torch.allclose(
+            output,
+            expected
+        )
 
 
 def test_pooling_layer():
@@ -422,9 +552,7 @@ def test_pooling_layer():
     ]
 
     for x, y in test_cases:
-        # x = torch.tensor([[x]], dtype=torch.float32)
-        x_flat = torch.tensor(x, dtype=torch.float32).flatten()
-        x = x_flat.view(1, 1, -1)  # Shape: [1, 1, 16]
+        x = torch.tensor([[x]], dtype=torch.float32)
 
         print(f"x.shape = {x.shape}")
         output = layer(x)
@@ -471,13 +599,6 @@ def test_compiled_pooling_model():
     # c_code = compiled_model.get_c_code()
     # print("Generated C code:")
     # print(c_code)
-
-    print(f"{preds.shape=}, {preds_compiled.shape=}")
-
-    preds = preds.reshape(preds_compiled.shape)  # Reshape to match compiled output shape
-
-    print(f"{preds=}")
-    print(f"{preds_compiled=}")
 
     assert np.allclose(preds, preds_compiled)
 
