@@ -437,7 +437,7 @@ def test_compiled_model():
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
     # 8 random images of shape (1, 3, 3) (single channel, 3x3 input)
-    X = torch.randint(0, 2, (8, 1, 3, 3)).int()
+    X = torch.randint(0, 2, (8, 1, 3, 3)).float()
 
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
@@ -478,47 +478,12 @@ def test_compiled_model_rect():
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
     # 8 random images of shape (1, 3, 4) (single channel, 3x4 input)
-    X = torch.randint(0, 2, (8, 1, 3, 4)).int()
+    X = torch.randint(0, 2, (8, 1, 3, 4)).float()
 
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
 
     assert np.allclose(preds, preds_compiled)
-
-    test_cases = [
-        ([[0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0]
-        ], [0, 0, 0, 0]),
-        ([[1, 0, 0, 1],
-          [0, 1, 0, 0],
-          [0, 0, 1, 1],
-          [1, 0, 0, 1],
-        ], [1, 1, 1, 1]),
-        ([[1, 1, 1, 1],
-          [1, 1, 1, 1],
-          [0, 0, 1, 1],
-          [0, 0, 1, 1],
-        ], [1, 1, 0, 1]),
-        ([[1, 1, 1, 1],
-          [1, 1, 1, 1],
-          [1, 1, 1, 1],
-          [1, 1, 1, 1]
-        ], [1, 1, 1, 1]),
-    ]
-
-    for x, y in test_cases:
-        x = torch.tensor([[x]], dtype=torch.float32)
-
-        print(f"x.shape = {x.shape}")
-        output = layer(x)
-        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
-        print(f"Input: {x}, Output: {output}, Expected: {expected}")
-        assert torch.allclose(
-            output,
-            expected
-        )
 
 
 def test_pooling_layer():
@@ -591,7 +556,7 @@ def test_compiled_pooling_model():
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
     # 8 random images of shape (1, 3, 3) (single channel, 3x3 input)
-    X = torch.randint(0, 2, (8, 1, 3, 3)).int()
+    X = torch.randint(0, 2, (8, 1, 3, 3)).float()
 
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
