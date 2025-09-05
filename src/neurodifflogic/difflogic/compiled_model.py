@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d, LogicConv3d, OrPoolingLayer
 from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
 
 ALL_OPERATIONS = [
@@ -77,6 +77,12 @@ class CompiledLogicNet(torch.nn.Module):
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
                 if self.input_shape is None:
                     self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1])
+            elif isinstance(layer, LogicConv3d):
+                conv_info = self._extract_conv_layer_info(layer)
+                self.conv_layers.append(conv_info)
+                self.layer_order.append(('conv', len(self.conv_layers) - 1))
+                if self.input_shape is None:
+                    self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1], layer.in_dim[2])
             elif isinstance(layer, OrPoolingLayer):
                 pool_info = self._extract_pooling_layer_info(layer)
                 self.pooling_layers.append(pool_info)
@@ -103,7 +109,7 @@ class CompiledLogicNet(torch.nn.Module):
 
         # Validate model structure
         if not self.conv_layers and not self.linear_layers:
-            raise ValueError("Model must contain at least one LogicConv2d or LogicLayer")
+            raise ValueError("Model must contain at least one LogicConv2d, LogicConv3d, or LogicLayer")
 
         # Set input shape for linear-only models
         if not self.conv_layers and self.linear_layers:
@@ -115,8 +121,8 @@ class CompiledLogicNet(torch.nn.Module):
             if first_linear:
                 self.input_shape = (first_linear.in_dim,)
 
-    def _extract_conv_layer_info(self, layer: LogicConv2d) -> Dict[str, Any]:
-        """Extract information from a LogicConv2d layer for compilation."""
+    def _extract_conv_layer_info(self, layer: Union[LogicConv2d, LogicConv3d]) -> Dict[str, Any]:
+        """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
         tree_operations = []
         for level_idx, level_weights in enumerate(layer.tree_weights):
             level_ops = []
@@ -201,14 +207,24 @@ class CompiledLogicNet(torch.nn.Module):
                 conv_info = self.conv_layers[layer_idx]
                 if len(current_shape) == 3:  # (C, H, W)
                     c, h, w = current_shape
-                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
                              // conv_info['stride']) + 1
-                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
                              // conv_info['stride']) + 1
                     output_shape = (conv_info['num_kernels'], h_out, w_out)
                     output_size = conv_info['num_kernels'] * h_out * w_out
+                elif len(current_shape) == 4: # (C, H, W, D)
+                    c, h, w, d = current_shape
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+                             // conv_info['stride']) + 1
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+                             // conv_info['stride']) + 1
+                    d_out = ((d + 2 * conv_info['padding'] - conv_info['receptive_field_size'][2])
+                             // conv_info['stride']) + 1
+                    output_shape = (conv_info['num_kernels'], h_out, w_out, d_out)
+                    output_size = conv_info['num_kernels'] * h_out * w_out * d_out
                 else:
-                    raise ValueError(f"Conv layer expects 3D input, got {len(current_shape)}D")
+                    raise ValueError(f"Conv layer expects 3D or 4D input, got {len(current_shape)}D")
 
             elif layer_type == 'pool':
                 pool_info = self.pooling_layers[layer_idx]
@@ -220,11 +236,21 @@ class CompiledLogicNet(torch.nn.Module):
                              // pool_info['stride']) + 1
                     output_shape = (c, h_out, w_out)
                     output_size = c * h_out * w_out
+                elif len(current_shape) == 4: # (C, H, W, D)
+                    c, h, w, d = current_shape
+                    h_out = ((h + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                             // pool_info['stride']) + 1
+                    w_out = ((w + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                             // pool_info['stride']) + 1
+                    d_out = ((d + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                             // pool_info['stride']) + 1
+                    output_shape = (c, h_out, w_out, d_out)
+                    output_size = c * h_out * w_out * d_out
                 else:
-                    raise ValueError(f"Pool layer expects 3D input, got {len(current_shape)}D")
+                    raise ValueError(f"Pool layer expects 3D or 4D input, got {len(current_shape)}D")
 
             elif layer_type == 'flatten':
-                if len(current_shape) == 3:
+                if (len(current_shape) == 3) or (len(current_shape)==4):
                     output_size = np.prod(current_shape)
                     output_shape = (output_size,)
                 else:
@@ -247,15 +273,30 @@ class CompiledLogicNet(torch.nn.Module):
         indices = conv_info['indices']
         tree_ops = conv_info['tree_operations']
 
-        h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
-                 // conv_info['stride']) + 1
-        w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size']) 
-                 // conv_info['stride']) + 1
+        if len(conv_info['in_dim']) == 2:
+            conv_dim = 2
+            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    // conv_info['stride']) + 1
+            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    // conv_info['stride']) + 1
+        elif len(conv_info['in_dim']) == 3:
+            conv_dim = 3
+            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+                    // conv_info['stride']) + 1
+            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+                    // conv_info['stride']) + 1
+            d_out = ((conv_info['in_dim'][2] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][2])
+                    // conv_info['stride']) + 1
+        else:
+            raise ValueError(f"Conv layer expects 3D or 4D input, got {len(conv_info['in_dim'])}")
 
         code.append(f"\t// Convolutional layer {layer_name}")
 
         for kernel_idx in range(conv_info['num_kernels']):
-            for pos_idx in range(h_out * w_out):
+            iter_range = h_out * w_out
+            if conv_dim == 3:
+                iter_range *= d_out
+            for pos_idx in range(iter_range):
                 # First level: process receptive field positions
                 level_0_indices = indices[0]
                 left_indices = level_0_indices[0][kernel_idx, pos_idx]
@@ -263,19 +304,60 @@ class CompiledLogicNet(torch.nn.Module):
 
                 # Generate variables for the first level
                 for gate_idx in range(2**conv_info['tree_depth']):
-                    left_h, left_w, left_c = left_indices[gate_idx]
-                    right_h, right_w, right_c = right_indices[gate_idx]
+                    if conv_dim == 2:
+                        left_h, left_w, left_c = left_indices[gate_idx]
+                        right_h, right_w, right_c = right_indices[gate_idx]
+                    else:
+                        left_h, left_w, left_d, left_c = left_indices[gate_idx]
+                        right_h, right_w, right_d, right_c = right_indices[gate_idx]
 
                     gate_op = tree_ops[0][gate_idx][kernel_idx]
 
                     # Determine input source
                     prev_layer_name = self._get_previous_layer_name(layer_name)
                     if prev_layer_name == "inp":
-                        left_var = f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {left_h} * {conv_info['in_dim'][1]} + {left_w}]"
-                        right_var = f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+                        if conv_dim==2:
+                            left_var = (
+                                f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+                                f"{left_h} * {conv_info['in_dim'][1]} + {left_w}]"
+                            )
+                            right_var = (
+                                f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+                                f"{right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+                            )
+                        else:
+                            left_var = (
+                                f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
+                            )
+                            right_var = (
+                                f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
+                            )
                     else:
-                        left_var = f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {left_h} * {conv_info['in_dim'][1]} + {left_w}]"
-                        right_var = f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + {right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+                        if conv_dim == 2:
+                            left_var = (
+                                f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+                                f"{left_h} * {conv_info['in_dim'][1]} + {left_w}]"
+                            )
+                            right_var = (
+                                f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+                                f"{right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+                            )
+                        else:
+                            left_var = (
+                                f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
+                            )
+                            right_var = (
+                                f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
+                            )
+
 
                     var_name = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l0_g{gate_idx}"
                     code.append(
@@ -300,7 +382,10 @@ class CompiledLogicNet(torch.nn.Module):
                         right_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{right_idx}"
 
                         if level == conv_info['tree_depth']:
-                            output_idx = (kernel_idx * h_out * w_out + pos_idx)
+                            if conv_dim == 2:
+                                output_idx = (kernel_idx * h_out * w_out + pos_idx)
+                            else:
+                                output_idx = (kernel_idx * h_out * w_out * d_out + pos_idx)
                             code.append(
                                 f"\tlayer_{layer_name}_out[{output_idx}] = "
                                 f"{self.get_gate_code(left_var, right_var, gate_op)};"
@@ -318,7 +403,15 @@ class CompiledLogicNet(torch.nn.Module):
         """Generate C code for an OrPooling (max pooling) layer."""
         code = []
 
-        channels, in_h, in_w = input_shape
+        if len(input_shape) == 3:
+            pool_dim = 2
+            channels, in_h, in_w = input_shape
+        elif len(input_shape) == 4:
+            pool_dim = 3
+            channels, in_h, in_w, in_d = input_shape
+        else:
+            raise ValueError(f"Pool layer expects 3D or 4D input, got {len(input_shape)}D")
+
         kernel_size = pool_info['kernel_size']
         stride = pool_info['stride']
         padding = pool_info['padding']
@@ -326,54 +419,114 @@ class CompiledLogicNet(torch.nn.Module):
         # Calculate output dimensions
         out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
         out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
+        if pool_dim==3:
+            out_d = ((in_d + 2 * padding - kernel_size) // stride) + 1
 
         code.append(f"\t// Max pooling layer {layer_name}")
-        code.append(f"\t// Input: {channels}x{in_h}x{in_w}, Output: {channels}x{out_h}x{out_w}")
+        if pool_dim==2:
+            code.append(f"\t// Input: {channels}x{in_h}x{in_w}, Output: {channels}x{out_h}x{out_w}")
+        else:
+            code.append(f"\t// Input: {channels}x{in_h}x{in_w}x{in_d}, Output: {channels}x{out_h}x{out_w}x{out_d}")
 
         # Generate pooling code for each channel and output position
         prev_layer_name = self._get_previous_layer_name(layer_name)
 
         for c in range(channels):
-            for out_y in range(out_h):
-                for out_x in range(out_w):
-                    # Calculate input region for this output position
-                    in_y_start = out_y * stride - padding
-                    in_x_start = out_x * stride - padding
-                    in_y_end = min(in_y_start + kernel_size, in_h)
-                    in_x_end = min(in_x_start + kernel_size, in_w)
-                    in_y_start = max(in_y_start, 0)
-                    in_x_start = max(in_x_start, 0)
+            if pool_dim==2:
+                for out_y in range(out_h):
+                    for out_x in range(out_w):
+                        # Calculate input region for this output position
+                        in_y_start = out_y * stride - padding
+                        in_x_start = out_x * stride - padding
+                        in_y_end = min(in_y_start + kernel_size, in_h)
+                        in_x_end = min(in_x_start + kernel_size, in_w)
+                        in_y_start = max(in_y_start, 0)
+                        in_x_start = max(in_x_start, 0)
 
-                    output_idx = c * out_h * out_w + out_y * out_w + out_x
+                        output_idx = c * out_h * out_w + out_y * out_w + out_x
 
-                    # Initialize with first valid input
-                    first_input_idx = c * in_h * in_w + in_y_start * in_w + in_x_start
-                    if prev_layer_name == "inp":
-                        code.append(f"\tlayer_{layer_name}_out[{output_idx}] = inp[{first_input_idx}];")
-                    else:
-                        code.append(f"\tlayer_{layer_name}_out[{output_idx}] = layer_{prev_layer_name}_out[{first_input_idx}];")
+                        # Initialize with first valid input
+                        first_input_idx = c * in_h * in_w + in_y_start * in_w + in_x_start
+                        if prev_layer_name == "inp":
+                            code.append(f"\tlayer_{layer_name}_out[{output_idx}] = inp[{first_input_idx}];")
+                        else:
+                            code.append(f"\tlayer_{layer_name}_out[{output_idx}] = layer_{prev_layer_name}_out[{first_input_idx}];")
 
-                    # Compare with remaining inputs in the kernel window (max pooling using OR)
-                    for ky in range(in_y_start, in_y_end):
-                        for kx in range(in_x_start, in_x_end):
-                            if ky == in_y_start and kx == in_x_start:
-                                continue  # Skip first element (already initialized)
+                        # Compare with remaining inputs in the kernel window (max pooling using OR)
+                        for ky in range(in_y_start, in_y_end):
+                            for kx in range(in_x_start, in_x_end):
+                                if ky == in_y_start and kx == in_x_start:
+                                    continue  # Skip first element (already initialized)
 
-                            input_idx = c * in_h * in_w + ky * in_w + kx
+                                input_idx = c * in_h * in_w + ky * in_w + kx
+                                if prev_layer_name == "inp":
+                                    input_var = f"inp[{input_idx}]"
+                                else:
+                                    input_var = f"layer_{prev_layer_name}_out[{input_idx}]"
+
+                                # Max operation using bitwise OR (since we're working with binary values)
+                                code.append(f"\tlayer_{layer_name}_out[{output_idx}] |= {input_var};")
+            else:
+                for out_z in range(out_h):
+                    for out_y in range(out_w):
+                        for out_x in range(out_d):
+                            # Calculate input region for this output position
+                            in_z_start = out_z * stride - padding
+                            in_y_start = out_y * stride - padding
+                            in_x_start = out_x * stride - padding
+                            in_z_end = min(in_z_start + kernel_size, in_h)
+                            in_y_end = min(in_y_start + kernel_size, in_w)
+                            in_x_end = min(in_x_start + kernel_size, in_d)
+                            in_z_start = max(in_z_start, 0)
+                            in_y_start = max(in_y_start, 0)
+                            in_x_start = max(in_x_start, 0)
+
+                            output_idx = (
+                                c * out_h * out_w * out_d
+                                + out_z * out_w * out_d
+                                + out_y * out_d
+                                + out_x
+                             )
+
+                            # Initialize with first valid input
+                            first_input_idx = (
+                                c * in_h * in_w * in_d
+                                + in_z_start * in_w * in_d
+                                + in_y_start * in_d
+                                + in_x_start
+                            )
                             if prev_layer_name == "inp":
-                                input_var = f"inp[{input_idx}]"
+                                code.append(f"\tlayer_{layer_name}_out[{output_idx}] = inp[{first_input_idx}];")
                             else:
-                                input_var = f"layer_{prev_layer_name}_out[{input_idx}]"
+                                code.append(f"\tlayer_{layer_name}_out[{output_idx}] = layer_{prev_layer_name}_out[{first_input_idx}];")
 
-                            # Max operation using bitwise OR (since we're working with binary values)
-                            code.append(f"\tlayer_{layer_name}_out[{output_idx}] |= {input_var};")
+                            # Compare with remaining inputs in the kernel window (max pooling using OR)
+                            for kz in range(in_z_start, in_z_end):
+                                for ky in range(in_y_start, in_y_end):
+                                    for kx in range(in_x_start, in_x_end):
+                                        if (ky == in_y_start and kx == in_x_start) and kz == in_z_start:
+                                            continue  # Skip first element (already initialized)
+
+                                        input_idx = (
+                                            c * in_h * in_w * in_d
+                                            + kz * in_w * in_d
+                                            + ky * in_d
+                                            + kx
+                                        )
+                                        if prev_layer_name == "inp":
+                                            input_var = f"inp[{input_idx}]"
+                                        else:
+                                            input_var = f"layer_{prev_layer_name}_out[{input_idx}]"
+
+                                        # Max operation using bitwise OR (since we're working with binary values)
+                                        code.append(f"\tlayer_{layer_name}_out[{output_idx}] |= {input_var};")
 
         return code
 
     def _get_previous_layer_name(self, current_layer_name: str) -> str:
         """Get the name of the previous layer in execution order."""
         layer_info = self._calculate_layer_output_sizes_and_shapes()
-        
+
         # Find current layer in execution order
         current_idx = None
         for i, (layer_type, layer_idx, _, _) in enumerate(layer_info):
@@ -400,7 +553,7 @@ class CompiledLogicNet(torch.nn.Module):
     def _get_linear_layer_code(self, layer_a, layer_b, layer_op, layer_id: int, is_final: bool, has_non_linear_layers: bool) -> List[str]:
         """Generate C code for a linear layer."""
         code = []
-        
+
         has_flatten = any(lt == 'flatten' for lt, _, _, _ in self._calculate_layer_output_sizes_and_shapes())
 
         # Determine input source based on layer position and model structure
@@ -478,7 +631,7 @@ class CompiledLogicNet(torch.nn.Module):
         linear_layer_count = len(self.linear_layers)
         has_non_linear_layers = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
         has_flatten = any(lt == 'flatten' for lt, _, _, _ in layer_info)
-        
+
         if linear_layer_count > 0:
             if has_non_linear_layers or has_flatten:
                 # Mixed model or model with flatten: need buffer to transfer data to linear layers
@@ -495,7 +648,7 @@ class CompiledLogicNet(torch.nn.Module):
                         if layer_type in ['conv', 'pool']:
                             flatten_size = output_size
                             break
-                
+
                 if flatten_size:
                     # For multi-layer linear networks, we need the buffer to be large enough
                     # for the largest intermediate layer size
@@ -505,7 +658,7 @@ class CompiledLogicNet(torch.nn.Module):
                         for i, (layer_a, layer_b, layer_op) in enumerate(self.linear_layers[:-1]):
                             layer_output_size = len(layer_a)  # This layer's output size
                             max_linear_input_size = max(max_linear_input_size, layer_output_size)
-                    
+
                     code.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_input[{max_linear_input_size}];")
 
             # For multi-layer linear networks, use ping-pong buffers
@@ -557,14 +710,14 @@ class CompiledLogicNet(torch.nn.Module):
                         code.append(f"\tmemcpy(linear_input, inp, "
                                    f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                     else:
-                        code.append(f"\t// Flatten layer: copy from input to flattened_output") 
+                        code.append(f"\t// Flatten layer: copy from input to flattened_output")
                         code.append(f"\tmemcpy(flattened_output, inp, "
                                    f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
                 else:
                     # Flatten follows other layers: copy from previous layer
                     prev_layer_info = layer_info[current_layer_idx - 1]
                     prev_layer_type, prev_layer_idx, prev_shape, prev_size = prev_layer_info
-                    
+
                     if linear_layer_count > 0:
                         # Flatten → Linear case: copy to linear_input
                         code.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to linear_input")
@@ -706,7 +859,8 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
                 c_file.flush()
 
                 if verbose:
-                    print(f"C code created with {len(code.split('\n'))} lines. (temp location {c_file.name})")
+                    n_lines = len(code.split('\n'))
+                    print(f"C code created with {n_lines} lines. (temp location {c_file.name})")
 
                 t_s = time.time()
                 compiler_out = subprocess.run([
