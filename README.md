@@ -1,6 +1,6 @@
 # difflogic - A Library for Differentiable Logic Gate Networks
 
-![difflogic_logo](difflogic_logo.png)
+![difflogic_logo](assets/difflogic_logo.png)
 
 This repository includes the official implementation of our NeurIPS 2022 Paper "Deep Differentiable Logic Gate Networks"
 (Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)).
