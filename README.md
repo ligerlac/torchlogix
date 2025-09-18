@@ -2,8 +2,8 @@
 
 ![torchlogix_logo](assets/logo.png)
 
-**Note:** `torchlogix` is based on the original `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), which serves as the official implementation the NeurIPS 2022 Paper "Deep Differentiable Logic Gate Networks"
-(Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)) by Felix Petersen et al. As the aforementioned repository is not maintained anymore, `torchlogix` extends `difflogic` by performance improvements, bugfixes, and several new concepts such as learnable thermometer thresholding, and convolutional logic gate layers as described in the NeurIPS 2024 Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
+**Note:** `torchlogix` is based on the original `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), which serves as the official implementation of the NeurIPS 2022 Paper "Deep Differentiable Logic Gate Networks"
+(Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)) by Felix Petersen et al. As the aforementioned repository is not maintained anymore, `torchlogix` extends `difflogic` by performance improvements, bugfixes, and new concepts such as learnable thermometer thresholding. It also implements convolutional logic gate layers as described in the NeurIPS 2024 Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 The goal behind differentiable logic gate networks is to solve machine learning tasks by learning combinations of logic
 gates, i.e., so-called logic gate networks. As logic gate networks are conventionally non-differentiable, they can
