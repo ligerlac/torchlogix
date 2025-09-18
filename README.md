@@ -6,13 +6,11 @@
 (Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)) by Felix Petersen et al. As the aforementioned repository is not maintained anymore, `torchlogix` extends `difflogic` by performance improvements, bugfixes, and new concepts such as learnable thermometer thresholding. It also implements convolutional logic gate layers as described in the NeurIPS 2024 Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 The goal behind differentiable logic gate networks is to solve machine learning tasks by learning combinations of logic
-gates, i.e., so-called logic gate networks. As logic gate networks are conventionally non-differentiable, they can
-conventionally not be trained with methods such as gradient descent. Thus, differentiable logic gate networks are a
-differentiable relaxation of logic gate networks which allows efficiently learning of logic gate networks with gradient
-descent. Specifically, `torchlogix` combines real-valued logics and a continuously parameterized relaxation of
-the network. This allows learning which logic gate (out of 16 possible) is optimal for each neuron.
-The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a million images
-of MNIST per second on a single CPU core.
+gates, i.e., logic gate networks. As the choice of a logic is conventionally non-differentiable, relaxations of are applied
+to allow training logic gate networks with gradient-based methods. Specifically, `torchlogix` combines real-valued logics
+and a continuously parameterized approximation of the network. This allows learning which logic gate (out of 16 possible)
+is optimal for each neuron. The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a
+million images of MNIST per second on a single CPU core.
 
 `torchlogix` is a Python 3.6+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
 
@@ -36,7 +34,7 @@ pip install "torchlogix[cuda,dev]"     # CUDA + dev tools
 
 > ⚠️ **CUDA Note:** CUDA extensions are optional and require CUDA Toolkit and `torch>=1.9.0` (matching CUDA version). The CPU-only version works without CUDA but will be significantly slower for large models.
 
-For additional installation support, see [INSTALLATION_SUPPORT.md](INSTALLATION_SUPPORT.md).
+For additional installation support, see [INSTALLATION_SUPPORT.md](misc/INSTALLATION_SUPPORT.md).
 
 ## 🌱 Intro and Training
 
@@ -44,21 +42,22 @@ This library provides a framework for both training and inference with logic gat
 The following gives an example of a definition of a differentiable logic network model for the MNIST data set:
 
 ```python
-from torchlogix import LogicLayer, GroupSum
 import torch
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum
 
 model = torch.nn.Sequential(
+    LogicConv2d(in_dim=28, num_kernels=64, receptive_field_size=5),
+    OrPooling(kernel_size=2, stride=2, padding=0),
+    LogicConv2d(in_dim=12, num_kernels=256, receptive_field_size=3),
     torch.nn.Flatten(),
-    LogicLayer(784, 16_000),
-    LogicLayer(16_000, 16_000),
-    LogicLayer(16_000, 16_000),
+    LogicLayer(256*10*10, 16_000),
     LogicLayer(16_000, 16_000),
     LogicLayer(16_000, 16_000),
     GroupSum(k=10, tau=30)
 )
 ```
 
-This model receives a `784` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
+This model receives a `(1,28,28)` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
 The model may be trained, e.g., with a `torch.nn.CrossEntropyLoss` similar to how other neural networks models are trained in PyTorch.
 Notably, the Adam optimizer (`torch.optim.Adam`) should be used for training and the recommended default learning rate is `0.01` instead of `0.001`.
 Finally, it is also important to note that the number of neurons in each layer is much higher for logic gate networks compared to
@@ -67,13 +66,21 @@ conventional MLP neural networks because logic gate networks are very sparse.
 To go into details, for each of these modules, in the following we provide more in-depth examples:
 
 ```python
-layer = LogicLayer(
+layer = DenseLogic(
     in_dim=784,             # number of inputs
     out_dim=16_000,         # number of outputs
     device='cuda',          # the device (cuda / cpu)
     implementation='cuda',  # the implementation to be used (native cuda / vanilla pytorch)
     connections='random',   # the method for the random initialization of the connections
     grad_factor=1.1,        # for deep models (>6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients
+)
+layer = LogicConv2d(
+    in_dim=28,              # dimension of input (can be two-tuple for non-quadratic shapes)
+    channels=1,             # number of channels of the input (1 for grey-scale)
+    num_kernels: int = 16,  # number of convolutional kernels (filters)
+    tree_depth: int = 3,    # depth of the binary logic tree that make up each kernel
+    receptive_field_size: int = None, # comparable to kernel size in ordinary convolutional kernels
+    padding: int = None,
 )
 ```
 
