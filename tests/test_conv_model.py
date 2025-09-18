@@ -6,10 +6,9 @@ import pytest
 import numpy as np
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
-from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum
 from neurodifflogic.models import CNN
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
+from torchlogix import CompiledLogicNet
 
 
 def test_clgn_model():

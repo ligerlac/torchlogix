@@ -1,11 +1,11 @@
 # Installation Support
 
-`difflogic` is a Python 3.6+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
+`torchlogix` is a Python 3.6+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
 The library can be installed with:
 ```shell
-pip install difflogic
+pip install torchlogix
 ```
-> ⚠️ Note that, by default, `difflogic` requires CUDA, the CUDA Toolkit (for compilation), and `torch>=1.9.0` (matching the CUDA version). CUDA can be disable by setting a flag like so `export DIFFLOGIC_BUILD_CUDA_EXT=false` before running `pip install .` Only the much slower pure python implementation is available in that case.
+> ⚠️ Note that, by default, `torchlogix` requires CUDA, the CUDA Toolkit (for compilation), and `torch>=1.9.0` (matching the CUDA version). CUDA can be disable by setting a flag like so `export TORCHLOGIX_BUILD_CUDA_EXT=false` before running `pip install .` Only the much slower pure python implementation is available in that case.
 
 **It is very important that the installed version of PyTorch was compiled with a CUDA version that is compatible with the CUDA version of the locally installed CUDA Toolkit.**
 
@@ -22,7 +22,7 @@ pip install torch==1.13.0+cu117 torchvision==0.14.0+cu117 -f https://download.py
 If you get the following error message:
 
 ```
-Failed to build difflogic
+Failed to build torchlogix
 
 ...
 
@@ -37,7 +37,7 @@ versions, so in case it should match but doesn't, a quick fix can be to try some
 
 ---
 
-`difflogic` has been tested with PyTorch versions between 1.9 and 1.13.
+`torchlogix` has been tested with PyTorch versions between 1.9 and 1.13.
 
 ---
 
