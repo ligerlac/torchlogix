@@ -6,8 +6,7 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum
-from neurodifflogic.models import CNN
+from torchlogix.models import CNN
 from torchlogix import CompiledLogicNet
 
 

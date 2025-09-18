@@ -1,7 +1,6 @@
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
-from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
+from ..layers import LogicDense, LogicConv2d, OrPooling, GroupSum
 
 
 class CNN(torch.nn.Module):
@@ -23,7 +22,7 @@ class CNN(torch.nn.Module):
                 padding=0,
             )
         )
-        logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=0))
+        logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=0))
 
         logic_layers.append(
             LogicConv2d(
@@ -36,7 +35,7 @@ class CNN(torch.nn.Module):
                 padding=0,
             )
         )
-        logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=1))
+        logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=1))
 
         logic_layers.append(
             LogicConv2d(
@@ -49,15 +48,15 @@ class CNN(torch.nn.Module):
                 padding=0,
             )
         )
-        logic_layers.append(OrPoolingLayer(kernel_size=2, stride=2, padding=1))
+        logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=1))
 
         logic_layers.append(torch.nn.Flatten())
 
-        logic_layers.append(LogicLayer(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
+        logic_layers.append(LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
         logic_layers.append(
-            LogicLayer(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw)
+            LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw)
         )
-        logic_layers.append(LogicLayer(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
+        logic_layers.append(LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
 
         self.model = torch.nn.Sequential(*logic_layers, GroupSum(class_count, tau))
 
