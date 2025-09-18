@@ -188,19 +188,6 @@ python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 
 python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 200_000 -ef 1_000 -k 1_024_000 -l 5
 ```
 
-## 📖 Citing
-
-```bibtex
-@inproceedings{petersen2022difflogic,
-  title={{Deep Differentiable Logic Gate Networks}},
-  author={Petersen, Felix and Borgelt, Christian and Kuehne, Hilde and Deussen, Oliver},
-  booktitle={Conference on Neural Information Processing Systems (NeurIPS)},
-  year={2022}
-}
-```
-
 ## 📜 License
 
 `torchlogix` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it.
-
-Patent pending.
