@@ -34,7 +34,24 @@ pip install "torchlogix[cuda,dev]"     # CUDA + dev tools
 
 > ⚠️ **CUDA Note:** CUDA extensions are optional and require CUDA Toolkit and `torch>=1.9.0` (matching CUDA version). The CPU-only version works without CUDA but will be significantly slower for large models.
 
-For additional installation support, see [INSTALLATION_SUPPORT.md](misc/INSTALLATION_SUPPORT.md).
+## 📚 Documentation
+
+**Full documentation is available at:** [TorchLogix Documentation](docs/_build/html/index.html)
+
+- **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions with CUDA support
+- **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
+- **[Logic Gates Guide](docs/guides/logic_gates.md)** - Understanding the 16 Boolean operations
+- **[Examples](docs/guides/examples.md)** - Complete training examples and tutorials
+- **[API Reference](docs/api/torchlogix.rst)** - Comprehensive API documentation
+
+### Building Documentation
+
+```bash
+cd docs
+pip install -r requirements.txt
+make html
+open _build/html/index.html  # macOS
+```
 
 ## 🌱 Intro and Training
 
@@ -43,7 +60,7 @@ The following gives an example of a definition of a differentiable logic network
 
 ```python
 import torch
-from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
 
 model = torch.nn.Sequential(
     LogicConv2d(in_dim=28, num_kernels=64, receptive_field_size=5),
@@ -82,6 +99,7 @@ layer = LogicConv2d(
     receptive_field_size: int = None, # comparable to kernel size in ordinary convolutional kernels
     padding: int = None,
 )
+layer = 
 ```
 
 At this point, it is important to discuss the options for `device` and the provided implementations. Specifically,
