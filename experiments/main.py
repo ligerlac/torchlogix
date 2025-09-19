@@ -306,9 +306,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--connections", type=str, default="unique", choices=["random", "unique"]
+        "--connections", type=str, default="random", choices=["random", "unique"]
     )
-    parser.add_argument("--architecture", "-a", type=str, default="randomly_connected")
+    # parser.add_argument("--architecture", "-a", type=str, default="randomly_connected")
+    parser.add_argument("--architecture", "-a", choices=[
+        "randomly_connected",
+        "fully_connected",
+        "cnn",
+    ], default="randomly_connected")
     parser.add_argument("--num_neurons", "-k", type=int, default=6000)
     parser.add_argument("--num_layers", "-l", type=int, default=4)
 

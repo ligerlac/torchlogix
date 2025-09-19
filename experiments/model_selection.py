@@ -27,7 +27,6 @@ def get_model(args):
         "implementation": args.implementation,
         "device": IMPL_TO_DEVICE[args.implementation],
     }
-    device = IMPL_TO_DEVICE[args.implementation]
     in_dim = input_dim_of_dataset(args.dataset)
     class_count = num_classes_of_dataset(args.dataset)
     dtype = BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]
@@ -43,20 +42,6 @@ def get_model(args):
         model = FullyConnectedNN(in_dim, k, num_layers, class_count, dtype)
     elif arch == "cnn":
         model = CNN(class_count, tau, **llkw)
-    elif arch == "gcn":
-        model = GCN(num_node_features=in_dim, num_classes=class_count)
-    elif arch == "gcn_cora_baseline":
-        model = GCNCoraBaseline(num_node_features=in_dim, num_classes=class_count).to(
-            device
-        )
-    elif arch == "gat_cora_baseline":
-        model = GATBaseline(
-            in_channels=in_dim, hidden_channels=16, out_channels=class_count
-        ).to(device)
-    elif arch == "gat":
-        model = GATDifflog(
-            in_channels=in_dim, hidden_channels=16, out_channels=class_count
-        ).to(device)
     else:
         raise NotImplementedError(arch)
 

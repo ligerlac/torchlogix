@@ -37,6 +37,7 @@ class LogicDense(torch.nn.Module):
         grad_factor: float = 1.0,
         implementation: str = None,
         connections: str = "random",
+        weight_init: str = "residual",  # "residual" or "random"
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -47,10 +48,19 @@ class LogicDense(torch.nn.Module):
         :param connections: method for initializing the connectivity of the logic gate net
         """
         super().__init__()
-        self.weight = torch.nn.parameter.Parameter(
-            torch.randn(out_dim, 16, device=device)
-        )
 
+        if self.weight_init == "residual":
+            # all weights to 0 except for weight number 3, which is set to 5
+            weights = torch.zeros((out_dim, 16), device=device)
+            weights[:, 3] = 5.0
+            self.weight = torch.nn.parameter.Parameter(weights)
+        elif self.weight_init == "random":
+            self.weight = torch.nn.parameter.Parameter(
+                torch.randn(out_dim, 16, device=device)
+            )
+        else:
+            raise ValueError(weight_init)
+        
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.device = device
