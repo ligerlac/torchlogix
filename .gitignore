@@ -15,3 +15,7 @@ docs/api/generated/
 
 # Sphinx temporary files
 docs/.doctrees/
+
+# data in experiments folder
+experiments/data-mnist/
+experiments/data-fmnist/
