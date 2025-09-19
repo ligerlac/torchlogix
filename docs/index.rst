@@ -14,7 +14,7 @@ Key Features
 * **Convolutional Support**: 2D and 3D logic convolutional layers with flexible receptive fields
 * **Model Compilation**: Convert trained logic networks to optimized implementations
 * **CUDA Acceleration**: Optional CUDA extensions for high-performance computing
-* **Easy Integration**: Drop-in replacement for standard PyTorch layers
+* **Easy Integration**: New layers mostly follow PyTorch conventions
 
 Quick Start
 -----------

@@ -3,6 +3,7 @@ name: Documentation
 on:
   push:
     branches: [ main, master ]
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   docs:

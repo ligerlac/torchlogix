@@ -1,6 +1,6 @@
 import torch
 
-from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
+from ..layers import GroupSum, LogicDense
 
 
 class RandomlyConnectedNN(torch.nn.Module):
@@ -14,9 +14,9 @@ class RandomlyConnectedNN(torch.nn.Module):
         super(RandomlyConnectedNN, self).__init__()
         logic_layers = []
         logic_layers.append(torch.nn.Flatten())
-        logic_layers.append(LogicLayer(in_dim=in_dim, out_dim=k, **llkw))
+        logic_layers.append(LogicDense(in_dim=in_dim, out_dim=k, **llkw))
         for _ in range(layers - 1):
-            logic_layers.append(LogicLayer(in_dim=k, out_dim=k, **llkw))
+            logic_layers.append(LogicDense(in_dim=k, out_dim=k, **llkw))
 
         self.model = torch.nn.Sequential(*logic_layers, GroupSum(class_count, tau))
 
