@@ -9,14 +9,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 
 # Check if we should build CUDA extensions
-# Priority: command line extras > env variable > default (false for safer installs)
+# Only build when explicitly requested via pip install .[cuda]
 build_cuda_ext = False
 
 # Check if 'cuda' is in the extras being installed
 import sys
 if any('cuda' in arg for arg in sys.argv if '[' in arg and ']' in arg):
-    build_cuda_ext = True
-elif os.getenv("TORCHLOGIX_BUILD_CUDA_EXT", "false").lower() == "true":
     build_cuda_ext = True
 
 if build_cuda_ext:

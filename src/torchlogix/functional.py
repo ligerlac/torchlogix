@@ -1,3 +1,11 @@
+"""Functional operations for differentiable logic gate neural networks.
+
+This module provides the core mathematical operations for computing logic gate
+operations in a differentiable manner. It includes implementations for binary
+operations, vectorized operations, and utility functions for building logic
+gate networks.
+"""
+
 import numpy as np
 import torch
 

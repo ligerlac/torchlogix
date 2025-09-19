@@ -32,7 +32,7 @@ pip install "torchlogix[dev]"          # CPU-only with dev tools
 pip install "torchlogix[cuda,dev]"     # CUDA + dev tools
 ```
 
-> ⚠️ **CUDA Note:** CUDA extensions are optional and require CUDA Toolkit and `torch>=1.9.0` (matching CUDA version). The CPU-only version works without CUDA but will be significantly slower for large models.
+> ⚠️ **CUDA Note:** CUDA extensions are optional but provide significant performance improvements. They require CUDA Toolkit and `torch>=1.9.0` (matching CUDA version). The default installation uses pure Python implementation.
 
 ## 📚 Documentation
 

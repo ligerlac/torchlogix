@@ -8,3 +8,10 @@ __pycache__/
 .ipynb_checkpoints
 *.pytest_cache/
 build/
+
+# Documentation build artifacts
+docs/_build/
+docs/api/generated/
+
+# Sphinx temporary files
+docs/.doctrees/

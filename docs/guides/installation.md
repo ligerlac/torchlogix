@@ -34,7 +34,7 @@ pip install -e .[dev]
 
 ## CUDA Extension Support
 
-> ⚠️ **Important**: By default, `torchlogix` requires CUDA, the CUDA Toolkit (for compilation), and `torch>=1.9.0` (matching the CUDA version). CUDA can be disabled by setting a flag like so `export TORCHLOGIX_BUILD_CUDA_EXT=false` before running `pip install .`. Only the much slower pure Python implementation is available in that case.
+> ⚠️ **Important**: CUDA extensions are optional but provide significant performance improvements. Install with `pip install .[cuda]` to enable CUDA support. This requires the CUDA Toolkit and `torch>=1.9.0` (matching the CUDA version). Without CUDA extensions, only the slower pure Python implementation is available.
 
 **It is very important that the installed version of PyTorch was compiled with a CUDA version that is compatible with the CUDA version of the locally installed CUDA Toolkit.**
 
@@ -131,13 +131,14 @@ sudo apt-get install build-essential
 sudo yum groupinstall "Development Tools"
 ```
 
-### Disable CUDA (CPU-only)
+### CPU-only Installation
 
-For CPU-only installation:
+For CPU-only installation (default):
 
 ```bash
-export TORCHLOGIX_BUILD_CUDA_EXT=false
 pip install -e .
+# or
+pip install torchlogix
 ```
 
 ## Supported Versions
