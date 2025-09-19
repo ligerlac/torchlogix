@@ -36,6 +36,8 @@ def get_model(args):
     num_layers = args.num_layers
     tau = args.tau
     if arch == "randomly_connected":
+        print("Using randomly connected architecture.")
+        print(f"in_dim = {in_dim}, k = {k}, layers = {num_layers}")
         model = RandomlyConnectedNN(in_dim, k, num_layers, class_count, tau, **llkw)
     elif arch == "fully_connected":
         model = FullyConnectedNN(in_dim, k, num_layers, class_count, dtype)

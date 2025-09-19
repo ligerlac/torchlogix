@@ -12,7 +12,6 @@ from torchlogix import CompiledLogicNet
 from torchlogix.utils import eval, packbits_eval, train
 
 from accuracy_metrics import evaluate_model
-from args import parse_args
 from model_selection import get_model
 from loading import load_dataset, load_n
 
@@ -42,7 +41,7 @@ def main(args):
 
     if args.experiment_id is not None:
         assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
-        results = ResultsJSON(eid=args.expriment_id, path="./results/")
+        results = ResultsJSON(eid=args.experiment_id, path="./results/")
         results.store_args(args)
 
     device = IMPL_TO_DEVICE[args.implementation]
@@ -53,6 +52,8 @@ def main(args):
 
     train_loader, validation_loader, test_loader = load_dataset(args)
     model, loss_fn, optim = get_model(args)
+
+    model.to(device)
 
     best_acc = 0
     if test_loader is not None:
@@ -308,8 +309,8 @@ if __name__ == "__main__":
         "--connections", type=str, default="unique", choices=["random", "unique"]
     )
     parser.add_argument("--architecture", "-a", type=str, default="randomly_connected")
-    parser.add_argument("--num_neurons", "-k", type=int)
-    parser.add_argument("--num_layers", "-l", type=int)
+    parser.add_argument("--num_neurons", "-k", type=int, default=6000)
+    parser.add_argument("--num_layers", "-l", type=int, default=4)
 
     parser.add_argument("--grad-factor", type=float, default=1.0)
 
