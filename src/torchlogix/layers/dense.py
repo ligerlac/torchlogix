@@ -49,12 +49,12 @@ class LogicDense(torch.nn.Module):
         """
         super().__init__()
 
-        if self.weight_init == "residual":
+        if weight_init == "residual":
             # all weights to 0 except for weight number 3, which is set to 5
             weights = torch.zeros((out_dim, 16), device=device)
             weights[:, 3] = 5.0
             self.weight = torch.nn.parameter.Parameter(weights)
-        elif self.weight_init == "random":
+        elif weight_init == "random":
             self.weight = torch.nn.parameter.Parameter(
                 torch.randn(out_dim, 16, device=device)
             )
