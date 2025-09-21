@@ -8,6 +8,7 @@ __pycache__/
 .ipynb_checkpoints
 *.pytest_cache/
 build/
+experiments/results/
 
 # Documentation build artifacts
 docs/_build/
