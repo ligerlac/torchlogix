@@ -4,7 +4,7 @@ from torchlogix.models.baseline_nn import FullyConnectedNN
 from torchlogix.models.conv import CNN
 from torchlogix.models.nn import RandomlyConnectedNN
 
-from loading import input_dim_of_dataset, num_classes_of_dataset
+from .loading import input_dim_of_dataset, num_classes_of_dataset
 
 IMPL_TO_DEVICE = {"cuda": "cuda", "python": "cpu"}
 

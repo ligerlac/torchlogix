@@ -1,0 +1,18 @@
+{
+  "dataset": "mnist",
+  "architecture": "randomly_connected",
+  "num_neurons": 6000,
+  "num_layers": 4,
+  "tau": 10,
+  "grad_factor": 1.0,
+  "connections": "random",
+  "seed": 0,
+  "batch_size": 128,
+  "learning_rate": 0.01,
+  "num_iterations": 1000,
+  "eval_freq": 50,
+  "training_bit_count": 32,
+  "implementation": "python",
+  "valid_set_size": 0.2,
+  "output": "results/1"
+}

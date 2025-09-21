@@ -10,10 +10,10 @@ from collections import defaultdict
 import torch
 import numpy as np
 
-from shared_config import setup_experiment
-from utils import CreateFolder, save_metrics_csv, save_config
-from model_selection import get_model
-from loading import load_dataset
+from utils import (
+    setup_experiment, CreateFolder, save_metrics_csv, save_config,
+    get_model, load_dataset
+)
 from torchlogix import CompiledLogicNet
 
 

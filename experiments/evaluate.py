@@ -10,14 +10,11 @@ import torch
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 
-from shared_config import (
+from utils import (
     DATASET_CHOICES, ARCHITECTURE_CHOICES, BITS_TO_TORCH_FLOATING_POINT_TYPE,
-    IMPL_TO_DEVICE, setup_experiment
+    IMPL_TO_DEVICE, setup_experiment, CreateFolder, save_metrics_csv, save_config,
+    create_eval_functions, evaluate_model, get_model, load_dataset
 )
-from utils import CreateFolder, save_metrics_csv, save_config, create_eval_functions, evaluate_model
-from model_selection import get_model
-from loading import load_dataset
-from accuracy_metrics import evaluate_model as evaluate_model_detailed
 
 
 def load_trained_model(model_path: Path, config_path: Path, device: str):

@@ -5,7 +5,8 @@ import torchvision
 from torch_geometric.datasets import NELL, Planetoid
 from torch_geometric.transforms import BaseTransform
 
-import mnist_dataset, uci_datasets
+from . import mnist_dataset
+from . import uci_datasets
 
 
 class MinMaxNormalize(BaseTransform):

@@ -8,14 +8,11 @@ from collections import defaultdict
 import torch
 from tqdm import tqdm
 
-from shared_config import (
+from utils import (
     DATASET_CHOICES, ARCHITECTURE_CHOICES, BITS_TO_TORCH_FLOATING_POINT_TYPE,
-    IMPL_TO_DEVICE, setup_experiment
+    IMPL_TO_DEVICE, setup_experiment, CreateFolder, save_metrics_csv, save_config,
+    create_eval_functions, evaluate_model, train, get_model, load_dataset, load_n
 )
-from utils import CreateFolder, save_metrics_csv, save_config, create_eval_functions, evaluate_model
-from model_selection import get_model
-from loading import load_dataset, load_n
-from torchlogix.utils import train
 
 
 def run_training(args):
@@ -23,8 +20,8 @@ def run_training(args):
     # Setup experiment
     device = setup_experiment(args.seed, args.implementation)
 
-    # Load data
-    train_loader, validation_loader, test_loader = load_dataset(args)
+    # Load data (omit test set during training)
+    train_loader, validation_loader, _ = load_dataset(args)
 
     # Get model, loss, and optimizer
     model, loss_fn, optim = get_model(args)
@@ -125,7 +122,7 @@ def main():
     )
 
     # Training parameters
-    parser.add_argument("--seed", "-s", type=int, default=0, help="Random seed")
+    parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
     parser.add_argument("--batch-size", "-bs", type=int, default=128, help="Batch size")
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.01, help="Learning rate")
     parser.add_argument(
