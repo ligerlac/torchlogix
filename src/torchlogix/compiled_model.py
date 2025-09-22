@@ -13,19 +13,20 @@ import torch
 from .layers.conv import LogicConv2d, LogicConv3d, OrPooling
 from .layers.dense import LogicDense
 from .layers.groupsum import GroupSum
+from .layers.thresholding import LearnableThermometerThresholding
 
 ALL_OPERATIONS = [
     "zero", "and", "not_implies", "a", "not_implied_by", "b", "xor", "or",
     "not_or", "not_xor", "not_b", "implied_by", "not_a", "implies", "not_and", "one",
 ]
 
-BITS_TO_DTYPE = {8: "char", 16: "short", 32: "int", 64: "long long"}
-BITS_TO_ZERO_LITERAL = {8: "(char) 0", 16: "(short) 0", 32: "0", 64: "0LL"}
-BITS_TO_ONE_LITERAL = {8: "(char) 1", 16: "(short) 1", 32: "1", 64: "1LL"}
+BITS_TO_DTYPE = {1: "bool", 8: "char", 16: "short", 32: "int", 64: "long long"}
+BITS_TO_ZERO_LITERAL = {1: "0", 8: "(char) 0", 16: "(short) 0", 32: "0", 64: "0LL"}
+BITS_TO_ONE_LITERAL = {1: "1", 8: "(char) 1", 16: "(short) 1", 32: "1", 64: "1LL"}
 BITS_TO_C_DTYPE = {
-    8: ctypes.c_int8, 16: ctypes.c_int16, 32: ctypes.c_int32, 64: ctypes.c_int64,
+    1: ctypes.c_bool, 8: ctypes.c_int8, 16: ctypes.c_int16, 32: ctypes.c_int32, 64: ctypes.c_int64,
 }
-BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
+BITS_TO_NP_DTYPE = {1: np.bool_, 8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
 
 class CompiledLogicNet(torch.nn.Module):
@@ -40,22 +41,33 @@ class CompiledLogicNet(torch.nn.Module):
         num_bits: int = 64,
         cpu_compiler: str = "gcc",
         verbose: bool = False,
+        input_shape: tuple = None,
+        apply_thresholding: bool = False,
+        use_bitpacking: bool = False,
+
     ):
         super().__init__()
         self.model = model
         self.device = device
         self.num_bits = num_bits
+        self.apply_thresholding = apply_thresholding
+        self.use_bitpacking = use_bitpacking
+        if apply_thresholding:
+            # can't do batch processing if thresholding is applied within the compiled network
+            self.num_bits = 1
+            self.use_bitpacking = False
         self.cpu_compiler = cpu_compiler
 
         assert cpu_compiler in ["clang", "gcc"], cpu_compiler
-        assert num_bits in [8, 16, 32, 64]
+        assert num_bits in [1, 8, 16, 32, 64]
 
         # Initialize layer storage
+        self.thresholding_layer = None
         self.conv_layers = []
         self.pooling_layers = []
         self.linear_layers = []
         self.num_classes = None
-        self.input_shape = None
+        self.input_shape = input_shape
         self.layer_order = []
         self.lib_fn = None
 
@@ -72,7 +84,17 @@ class CompiledLogicNet(torch.nn.Module):
 
         # Parse all layers and track execution order
         for layer in self.model:
-            if isinstance(layer, LogicConv2d):
+            if isinstance(layer, LearnableThermometerThresholding):
+                if not self.apply_thresholding:
+                    raise ValueError("If apply_thresholding is False, LearnableThermometerThresholding is not allowed.")
+                if len(self.layer_order)>0:
+                    raise ValueError("LearnableThermometerThresholding layer must appear first in layer order.")
+                if self.input_shape is None:
+                    raise ValueError(("If model begins with a LearnableThermometerThresholding layer, input_shape"
+                                      " must be specified when initializing CompiledLogicNet"))
+                thresholding_info = self._extract_thresholding_layer_info(layer)
+                self.thresholding_layer = thresholding_info # there will only be one quantize layer
+            elif isinstance(layer, LogicConv2d):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
@@ -105,7 +127,8 @@ class CompiledLogicNet(torch.nn.Module):
                     print(f"Warning: Unknown layer type: {type(layer)}")
 
         if verbose:
-            print(f"Parsed {len(self.conv_layers)} conv, {len(self.pooling_layers)} pooling, {len(self.linear_layers)} linear layers")
+            print((f"Parsed {int(self.quantize_layer is not None)} quantize, {len(self.conv_layers)} conv," 
+                   f"{len(self.pooling_layers)} pooling, {len(self.linear_layers)} linear layers"))
             print(f"Layer execution order: {self.layer_order}")
 
         # Validate model structure
@@ -119,8 +142,15 @@ class CompiledLogicNet(torch.nn.Module):
                 if isinstance(layer, LogicDense):
                     first_linear = layer
                     break
-            if first_linear:
+            if first_linear and not self.apply_thresholding:
                 self.input_shape = (first_linear.in_dim,)
+
+    def _extract_thresholding_layer_info(self, layer: LearnableThermometerThresholding) -> Dict[str, Any]:
+        """Extract information from a thresholding layer for compilation."""
+        return {
+            'num_thresholds': layer.num_thresholds,
+            'thresholds': layer.get_thresholds(),
+        }
 
     def _extract_conv_layer_info(self, layer: Union[LogicConv2d, LogicConv3d]) -> Dict[str, Any]:
         """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
@@ -156,52 +186,100 @@ class CompiledLogicNet(torch.nn.Module):
         """Generate C code for a logic gate operation."""
         operation_name = ALL_OPERATIONS[gate_op]
 
-        if operation_name == "zero":
-            res = BITS_TO_ZERO_LITERAL[self.num_bits]
-        elif operation_name == "and":
-            res = f"{var1} & {var2}"
-        elif operation_name == "not_implies":
-            res = f"{var1} & ~{var2}"
-        elif operation_name == "a":
-            res = f"{var1}"
-        elif operation_name == "not_implied_by":
-            res = f"{var2} & ~{var1}"
-        elif operation_name == "b":
-            res = f"{var2}"
-        elif operation_name == "xor":
-            res = f"{var1} ^ {var2}"
-        elif operation_name == "or":
-            res = f"{var1} | {var2}"
-        elif operation_name == "not_or":
-            res = f"~({var1} | {var2})"
-        elif operation_name == "not_xor":
-            res = f"~({var1} ^ {var2})"
-        elif operation_name == "not_b":
-            res = f"~{var2}"
-        elif operation_name == "implied_by":
-            res = f"~{var2} | {var1}"
-        elif operation_name == "not_a":
-            res = f"~{var1}"
-        elif operation_name == "implies":
-            res = f"~{var1} | {var2}"
-        elif operation_name == "not_and":
-            res = f"~({var1} & {var2})"
-        elif operation_name == "one":
-            res = f"~{BITS_TO_ZERO_LITERAL[self.num_bits]}"
-        else:
-            raise ValueError(f"Operator {operation_name} unknown.")
+        if self.num_bits > 1:
+            if operation_name == "zero":
+                res = BITS_TO_ZERO_LITERAL[self.num_bits]
+            elif operation_name == "and":
+                res = f"{var1} & {var2}"
+            elif operation_name == "not_implies":
+                res = f"{var1} & ~{var2}"
+            elif operation_name == "a":
+                res = f"{var1}"
+            elif operation_name == "not_implied_by":
+                res = f"{var2} & ~{var1}"
+            elif operation_name == "b":
+                res = f"{var2}"
+            elif operation_name == "xor":
+                res = f"{var1} ^ {var2}"
+            elif operation_name == "or":
+                res = f"{var1} | {var2}"
+            elif operation_name == "not_or":
+                res = f"~({var1} | {var2})"
+            elif operation_name == "not_xor":
+                res = f"~({var1} ^ {var2})"
+            elif operation_name == "not_b":
+                res = f"~{var2}"
+            elif operation_name == "implied_by":
+                res = f"~{var2} | {var1}"
+            elif operation_name == "not_a":
+                res = f"~{var1}"
+            elif operation_name == "implies":
+                res = f"~{var1} | {var2}"
+            elif operation_name == "not_and":
+                res = f"~({var1} & {var2})"
+            elif operation_name == "one":
+                res = f"~{BITS_TO_ZERO_LITERAL[self.num_bits]}"
+            else:
+                raise ValueError(f"Operator {operation_name} unknown.")
 
-        if self.num_bits == 8:
-            res = f"(char) ({res})"
-        elif self.num_bits == 16:
-            res = f"(short) ({res})"
+            if self.num_bits == 8:
+                res = f"(char) ({res})"
+            elif self.num_bits == 16:
+                res = f"(short) ({res})"
+
+        else:
+            if operation_name == "zero":
+                res = BITS_TO_ZERO_LITERAL[self.num_bits]
+            elif operation_name == "and":
+                res = f"{var1} && {var2}"
+            elif operation_name == "not_implies":
+                res = f"{var1} && !{var2}"
+            elif operation_name == "a":
+                res = f"{var1}"
+            elif operation_name == "not_implied_by":
+                res = f"{var2} && !{var1}"
+            elif operation_name == "b":
+                res = f"{var2}"
+            elif operation_name == "xor":
+                res = f"{var1} != {var2}"
+            elif operation_name == "or":
+                res = f"{var1} || {var2}"
+            elif operation_name == "not_or":
+                res = f"!({var1} || {var2})"
+            elif operation_name == "not_xor":
+                res = f"({var1} == {var2})"
+            elif operation_name == "not_b":
+                res = f"!{var2}"
+            elif operation_name == "implied_by":
+                res = f"(!{var2}) || {var1}"
+            elif operation_name == "not_a":
+                res = f"!{var1}"
+            elif operation_name == "implies":
+                res = f"(!{var1}) || {var2}"
+            elif operation_name == "not_and":
+                res = f"!({var1} && {var2})"
+            elif operation_name == "one":
+                res = f"~{BITS_TO_ZERO_LITERAL[self.num_bits]}"
+            else:
+                raise ValueError(f"Operator {operation_name} unknown.")
 
         return res
 
     def _calculate_layer_output_sizes_and_shapes(self) -> List[tuple]:
         """Calculate output sizes and shapes for all layers in execution order."""
         layer_info = []
-        current_shape = self.input_shape
+        if self.quantize_layer is None:
+            current_shape = self.input_shape
+        else:
+            quantize_info = self.quantize_layer
+            if len(self.input_shape)==2:
+                current_shape = (quantize_info['num_thresholds'], self.input_shape[0], self.input_shape[1])
+            elif len(self.input_shape)==3:
+                if self.input_shape[0]!=1:
+                    raise ValueError("If the input tensor is rank 3, index 0 must be a dummy index.")
+                current_shape = (quantize_info['num_thresholds'], self.input_shape[1], self.input_shape[2])
+            else:
+                raise ValueError("The quantize layer can only accept input tensors of rank 2 or 3.")
 
         for layer_type, layer_idx in self.layer_order:
             if layer_type == 'conv':
@@ -610,18 +688,46 @@ class CompiledLogicNet(torch.nn.Module):
             "#include <stdlib.h>",
             "#include <stdbool.h>",
             "#include <string.h>",
-            "",
-            f"void logic_net("
-            f"{BITS_TO_DTYPE[self.num_bits]} const *inp, "
-            f"{BITS_TO_DTYPE[self.num_bits]} *out);",
-            "",
-            f"void logic_net("
-            f"{BITS_TO_DTYPE[self.num_bits]} const *inp, "
-            f"{BITS_TO_DTYPE[self.num_bits]} *out) {{",
+            "#include <stdio.h>",
         ]
+
+        if self.use_bitpacking:
+            dtype = BITS_TO_DTYPE[self.num_bits]
+        else:
+            dtype = "bool"
 
         # Calculate sizes and shapes for all layers
         layer_info = self._calculate_layer_output_sizes_and_shapes()
+        logic_net_inp_size = self._get_input_size()
+
+        if self.apply_thresholding:
+            if self.thresholding_layer is None:
+                raise ValueError("If the inputs are not boolean then the first layer must be a thresholding layer.")
+            logic_net_inp_size *= self.thresholding_layer['num_thresholds']
+
+        if self.use_bitpacking:
+            code.extend([
+                "",
+                f"void logic_net("
+                f"{dtype} const *inp, "
+                f"{dtype} *out);",
+                "",
+                f"void logic_net("
+                f"{dtype} const *inp, "
+                f"{dtype} *out) {{",
+            ])
+
+        else: # processing one event at a time
+            code.extend([
+                ""
+                f"void logic_net("
+                f"bool const inp[{logic_net_inp_size}], "
+                f"bool out[{self._get_output_size()}]);",
+                "",
+                f"void logic_net("
+                f"bool const inp[{logic_net_inp_size}], "
+                f"bool out[{self._get_output_size()}]) {{",
+            ])
 
         # Allocate intermediate buffers for non-linear layers
         for layer_type, layer_idx, output_shape, output_size in layer_info:
@@ -758,6 +864,13 @@ class CompiledLogicNet(torch.nn.Module):
         if self.num_classes:
             code.extend(self._generate_batch_processing_function())
 
+        # Add processing function if needed
+        if self.num_classes:
+            if self.use_bitpacking:
+                code.extend(self._generate_batch_processing_function())
+            else:
+                code.extend(self._generate_single_processing_function())
+
         return "\n".join(code)
 
     def _generate_batch_processing_function(self) -> List[str]:
@@ -829,6 +942,87 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
 """
         ]
 
+    def _generate_single_processing_function(self) -> List[str]:
+        """Generate the processing function for the case where we want to process one event at a time.
+        Includes thresholding if apply_thresholding is set to True. Also includes GroupSum. 
+        This method is meant to be the top-level method for HLS synthesis."""
+
+        input_size = self._get_input_size()
+        num_neurons_ll = self._get_output_size()
+
+        if self.apply_thresholding:
+            quantize_info = self.quantize_layer
+            num_thresholds = quantize_info["num_thresholds"]
+            thresholds = quantize_info["thresholds"].tolist()
+            thresholds_str = ", ".join(str(int(x)) for x in thresholds)
+            thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+            inp_dtype = BITS_TO_DTYPE[32]
+        
+        else:
+            inp_dtype = "bool"
+
+        code = [
+            f"""void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{self.num_classes}]) {{
+    bool out_temp[{num_neurons_ll}];"""
+        ]
+
+        if self.apply_thresholding:
+            code.append(f"""
+    bool inp_temp[{input_size * num_thresholds}];
+    {thresholds_c_def}
+
+    // Convert the inputs into boolean
+    for (size_t t = 0; t < {num_thresholds}; t++) {{
+        for (size_t in_idx = 0; in_idx < {input_size}; in_idx++){{
+            size_t out_idx = t * {input_size} + in_idx;
+            inp_temp[out_idx] = (inp[in_idx] > thresholds[t])? 1 : 0;
+        }}
+    }})
+    
+    //run logic net
+    logic_net(inp_temp, out_temp);
+""")
+        else:
+            code.append(f"""
+    //run logic net
+    logic_net(inp, out_temp);
+""")
+            
+        code.append(f"""
+    //apply GroupSum
+    for (size_t c = 0; c < {self.num_classes}; c++) {{
+        {BITS_TO_DTYPE[32]} sum = 0;
+        for(size_t a = 0; a < {num_neurons_ll} / {self.num_classes}; a++) {{
+            sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
+        }}
+        out[c] = sum;
+    }}
+}}
+""")
+
+        return code.extend[
+            f"""
+    
+void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
+    {inp_dtype} *inp_temp = malloc({input_size}*sizeof({inp_dtype}));
+    {BITS_TO_DTYPE[32]} *out_temp = malloc({self.num_classes}*sizeof({BITS_TO_DTYPE[32]}));
+
+    // run inference one event at a time
+    for (size_t i = 0; i < len; ++i) {{
+        for (size_t j = 0; j < {input_size}; ++j) {{
+            inp_temp[j] = inp[i * {input_size} + j];
+        }}
+        apply_logic_net_one_event(inp_temp, out_temp);
+        for (size_t k = 0; k < {self.num_classes}; ++k) {{
+            out[i * {self.num_classes} + k] = out_temp[k];
+        }}
+    }}
+    free(inp_temp);
+    free(out_temp);
+}}
+
+"""]
+
     def _get_input_size(self) -> int:
         """Get the total input size."""
         if self.input_shape is None:
@@ -885,10 +1079,15 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
     def _setup_library_function(self, lib):
         """Setup the library function with appropriate signatures."""
         if self.num_classes:
+            if self.apply_thresholding:
+                inp_type = BITS_TO_C_DTYPE[32]
+            else:
+                inp_type = ctypes.c_bool
+
             lib_fn = lib.apply_logic_net
             lib_fn.restype = None
             lib_fn.argtypes = [
-                np.ctypeslib.ndpointer(ctypes.c_bool, flags="C_CONTIGUOUS"),
+                np.ctypeslib.ndpointer(inp_type, flags="C_CONTIGUOUS"),
                 np.ctypeslib.ndpointer(BITS_TO_C_DTYPE[32], flags="C_CONTIGUOUS"),
                 ctypes.c_size_t,
             ]
@@ -917,9 +1116,14 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
 
     def _forward_with_groupsum(self, x: np.ndarray, verbose: bool) -> torch.IntTensor:
         """Forward pass with GroupSum (batch processing)."""
-        batch_size_div_bits = math.ceil(x.shape[0] / self.num_bits)
-        pad_len = batch_size_div_bits * self.num_bits - x.shape[0]
-        x = np.concatenate([x, np.zeros_like(x[:pad_len])])
+        if self.use_bitpacking:
+            batch_size_div_bits = math.ceil(x.shape[0] / self.num_bits)
+            pad_len = batch_size_div_bits * self.num_bits - x.shape[0]
+            x = np.concatenate([x, np.zeros_like(x[:pad_len])])
+            n_iter = batch_size_div_bits
+        else:
+            pad_len = 0
+            n_iter = x.shape[0]
 
         if verbose:
             print("x.shape", x.shape)
@@ -927,9 +1131,13 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
         out = np.zeros(x.shape[0] * self.num_classes, dtype=BITS_TO_NP_DTYPE[32])
         x = x.reshape(-1)
 
-        self.lib_fn(x, out, batch_size_div_bits)
+        self.lib_fn(x, out, n_iter)
 
-        out = torch.tensor(out).view(batch_size_div_bits * self.num_bits, self.num_classes)
+        if self.use_bitpacking:
+            out = torch.tensor(out).view(batch_size_div_bits * self.num_bits, self.num_classes)
+        else:
+            out = torch.tensor(out).view(n_iter, self.num_classes)
+
         if pad_len > 0:
             out = out[:-pad_len]
 
