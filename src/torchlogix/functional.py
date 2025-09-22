@@ -141,6 +141,30 @@ def bin_op_cnn(a, b, i_s):
     return torch.einsum('bchdn,dcn->bchd', r, i_s)
 
 
+def bin_op_cnn_walsh(a, b, i_s):
+    assert a.shape == b.shape, f"Mismatched shapes: {a.shape}, {b.shape}"
+
+    print(f"a =\n{a}")
+    print(f"b =\n{b}")
+
+    A = 2 * a - 1  # Convert to {-1, 1}
+    B = 2 * b - 1  # Convert to {-1, 1}
+
+    r = torch.stack([
+        torch.ones_like(A),  # 0: 1
+        A,                   # 1: A
+        B,                   # 2: B
+        A * B                # 3: A and B in Walsh basis
+    ], dim=-1)
+
+    print(f"r =\n{r}")
+
+    i_s = i_s.unsqueeze(0).unsqueeze(2)
+    i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
+    i_s = i_s.permute(0, 3, 2, 1, 4)
+    return (r * i_s).sum(dim=-1)
+
+
 ##########################################################################
 
 
