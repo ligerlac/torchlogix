@@ -71,6 +71,10 @@ class CompiledLogicNet(torch.nn.Module):
         self.layer_order = []
         self.lib_fn = None
 
+        # GroupSum information
+        self.tau = 1
+        self.beta = 0
+
         if model is not None:
             self._parse_model(verbose)
 
@@ -80,6 +84,8 @@ class CompiledLogicNet(torch.nn.Module):
         for layer in self.model:
             if isinstance(layer, GroupSum):
                 self.num_classes = layer.k
+                self.tau = layer.tau
+                self.beta = layer.beta
                 break
 
         # Parse all layers and track execution order
@@ -121,7 +127,7 @@ class CompiledLogicNet(torch.nn.Module):
                     print(f"Found Flatten layer")
             elif isinstance(layer, GroupSum):
                 if verbose:
-                    print(f"Found GroupSum layer with {layer.k} classes")
+                    print(f"Found GroupSum layer (tau={self.tau}, beta={self.beta}) with {layer.k} classes")
             else:
                 if verbose:
                     print(f"Warning: Unknown layer type: {type(layer)}")
@@ -931,7 +937,7 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
                     res <<= 1;
                     res += !!(out_temp_o[d] & bit_mask);
                 }}
-                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = res;
+                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = (res + {self.beta}) / {self.tau};
             }}
         }}
     }}
@@ -994,7 +1000,16 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
         {BITS_TO_DTYPE[32]} sum = 0;
         for(size_t a = 0; a < {num_neurons_ll} / {self.num_classes}; a++) {{
             sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
-        }}
+        }}""")
+
+        if (self.beta!=0) or (self.tau!=1):
+            code.append(f"""
+        out[c] = (sum + {self.beta}) / {self.tau};
+    }}
+}}
+""")
+        else:
+            code.append(f"""
         out[c] = sum;
     }}
 }}
