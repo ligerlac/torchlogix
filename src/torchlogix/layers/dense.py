@@ -38,6 +38,7 @@ class LogicDense(torch.nn.Module):
         implementation: str = None,
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
+        parametrization: str = "raw",  # standard or walsh
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -49,17 +50,38 @@ class LogicDense(torch.nn.Module):
         """
         super().__init__()
 
-        if weight_init == "residual":
-            # all weights to 0 except for weight number 3, which is set to 5
-            weights = torch.zeros((out_dim, 16), device=device)
-            weights[:, 3] = 5.0
-            self.weight = torch.nn.parameter.Parameter(weights)
-        elif weight_init == "random":
-            self.weight = torch.nn.parameter.Parameter(
-                torch.randn(out_dim, 16, device=device)
-            )
+        self.parametrization = parametrization
+        self.weight_init = weight_init
+
+        if self.parametrization == "raw":
+            if weight_init == "residual":
+                # all weights to 0 except for weight number 3, which is set to 5
+                weights = torch.zeros((out_dim, 16), device=device)
+                weights[:, 3] = 5.0
+                self.weight = torch.nn.parameter.Parameter(weights)
+            elif weight_init == "random":
+                self.weight = torch.nn.parameter.Parameter(
+                    torch.randn(out_dim, 16, device=device)
+                )
+            else:
+                raise ValueError(weight_init)
+        elif self.parametrization == "walsh":
+            if weight_init == "residual":
+                # all weights to 0 except for weight number 1, which is set to 5
+                # weights = torch.zeros((out_dim, 4), device=device)
+                # weights[:, 1] = 5.0
+                # self.weight = torch.nn.parameter.Parameter(weights)
+                weights = torch.randn(out_dim, 4, device=device) - 0.5
+                weights[:, 1] = torch.randn(out_dim, device=device) + 1.0
+                self.weight = torch.nn.parameter.Parameter(weights)
+            elif weight_init == "random":
+                self.weight = torch.nn.parameter.Parameter(
+                    torch.randn(out_dim, 4, device=device)
+                )
+            else:
+                raise ValueError(weight_init)
         else:
-            raise ValueError(weight_init)
+            raise ValueError(self.parametrization)
         
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -128,7 +150,6 @@ class LogicDense(torch.nn.Module):
             return self.forward_cuda(x)
         elif self.implementation == "python":
             return self.forward_python(x)
-
         else:
             raise ValueError(self.implementation)
 
@@ -137,14 +158,28 @@ class LogicDense(torch.nn.Module):
         if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
             self.indices = self.indices[0].long(), self.indices[1].long()
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
-        if self.training:
-            x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
-        else:
-            weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
-                torch.float32
-            )
-            x = bin_op_s(a, b, weights)
-
+        if self.parametrization == "raw":
+            if self.training:
+                x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
+            else:
+                weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
+                    torch.float32
+                )
+                x = bin_op_s(a, b, weights)
+        elif self.parametrization == "walsh":
+            A = 2 * a -1
+            B = 2 * b -1
+            basis = torch.stack([
+                torch.ones_like(A),
+                A,
+                B,
+                A*B
+            ], dim=-1)
+            x = (self.weight * basis).sum(dim=-1)
+            if self.training:
+                x = torch.sigmoid(x)
+            else:
+                x = (x > 0).to(torch.float32)
         return x
 
     def forward_cuda(self, x):

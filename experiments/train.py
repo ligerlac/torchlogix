@@ -135,19 +135,20 @@ def main():
         "--training-bit-count", "-c", type=int, default=32, help="Training bit count"
     )
 
-    # Implementation
     parser.add_argument(
         "--implementation", type=str, default="cuda", choices=["cuda", "python"],
         help="Implementation to use (cuda is faster)"
     )
+    parser.add_argument(
+        "--parametrization", type=str, default="raw", choices=["raw", "walsh"],
+        help="Parametrization to use"
+    )
 
-    # Data splitting
     parser.add_argument(
         "--valid-set-size", "-vss", type=float, default=0.2,
         help="Fraction of train set for validation"
     )
 
-    # Output
     parser.add_argument(
         "--output", "-o", action=CreateFolder, type=Path, default="results/training/",
         help="Output directory for results"
