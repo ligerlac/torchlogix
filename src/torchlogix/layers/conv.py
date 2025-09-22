@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from ..functional import bin_op_cnn
+from ..functional import bin_op_cnn, bin_op_cnn_walsh
 
 
 class LogicConv2d(nn.Module):
@@ -30,6 +30,7 @@ class LogicConv2d(nn.Module):
         connections: str = "random",  # or 'random-unique'
         stride: int = 1,
         padding: int = None,
+        parametrization: str = "raw", # or 'walsh'
     ):
         """Initialize the 2d logic convolutional layer.
 
@@ -47,9 +48,10 @@ class LogicConv2d(nn.Module):
                 within the receptive field.
             stride: Stride of the convolution
             padding: Padding of the convolution
+            parametrization: Parametrization to use ("raw" or "walsh")
         """
         super().__init__()
-        # residual weights
+        self.parametrization = parametrization
 
         # self.tree_weights = []
         assert stride <= receptive_field_size, (
@@ -60,12 +62,17 @@ class LogicConv2d(nn.Module):
         for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
             for _ in range(2**i):  # Iterate over nodes at this level
-                weights = torch.zeros(
-                    num_kernels, 16, device=device
-                )  # Initialize with zeros
-                weights[:, 3] = 5  # Set the fourth element (index 3) to 5
-                # Wrap as a trainable parameter
-                level_weights.append(torch.nn.Parameter(weights))
+                if self.parametrization == "raw":
+                    weights = torch.zeros(
+                        num_kernels, 16, device=device
+                    )  # Initialize with zeros
+                    weights[:, 3] = 5  # Set the fourth element (index 3) to 5
+                    # Wrap as a trainable parameter
+                    level_weights.append(torch.nn.Parameter(weights))
+                elif self.parametrization == "walsh":
+                    weights = torch.randn(num_kernels, 4, device=device) - 0.5
+                    weights[:, 1] = torch.randn(num_kernels, device=device) + 1.0
+                    level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
         self.in_dim = _pair(in_dim)
         self.device = device
@@ -98,37 +105,60 @@ class LogicConv2d(nn.Module):
         )
         a = current_level[:, a_c, a_h, a_w]
         b = current_level[:, b_c, b_h, b_w]
-        # Process first level
-        level_weights = torch.stack(
-            [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
-            dim=0,
-        )  # Shape: [8, 16, 16]
-        if not self.training:
-            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                torch.float32
-            )
 
-        current_level = bin_op_cnn(a, b, level_weights)  # Shape: [100, 16, 576, 8]
-
-        # Process remaining levels
-        for level in range(1, self.tree_depth + 1):
-            left_indices, right_indices = self.indices[level]
-            a = current_level[..., left_indices]
-            b = current_level[..., right_indices]
-            level_weights = torch.stack(
-                [
-                    torch.nn.functional.softmax(w, dim=-1)
-                    for w in self.tree_weights[level]
-                ],
-                dim=0,
-            )  # Shape: [8, 16, 16]
-
-            if not self.training:
+        if self.parametrization == "raw":
+            if self.training:
+                level_weights = torch.stack(
+                    [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
+                    dim=0,
+                )  # Shape: [8, 16, 16]
+            else:
                 level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
                     torch.float32
                 )
 
-            current_level = bin_op_cnn(a, b, level_weights)
+            current_level = bin_op_cnn(a, b, level_weights)  # Shape: [100, 16, 576, 8]
+
+            # Process remaining levels
+            for level in range(1, self.tree_depth + 1):
+                left_indices, right_indices = self.indices[level]
+                a = current_level[..., left_indices]
+                b = current_level[..., right_indices]
+                if self.training:
+                    level_weights = torch.stack(
+                        [
+                            torch.nn.functional.softmax(w, dim=-1)
+                            for w in self.tree_weights[level]
+                        ],
+                        dim=0,
+                    )  # Shape: [8, 16, 16]
+                else:
+                    level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+                        torch.float32
+                    )
+
+                current_level = bin_op_cnn(a, b, level_weights)
+
+        elif self.parametrization == "walsh":
+            level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)  # might need reshaping
+            current_level = bin_op_cnn_walsh(a, b, level_weights)
+            if self.training:
+                current_level = torch.sigmoid(current_level)
+            else:
+                current_level = (current_level > 0).to(torch.float32)
+
+            # Process remaining levels
+            for level in range(1, self.tree_depth + 1):
+                left_indices, right_indices = self.indices[level]
+                a = current_level[..., left_indices]
+                b = current_level[..., right_indices]
+                # level_weights = self.tree_weights[level]
+                level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
+                current_level = bin_op_cnn_walsh(a, b, level_weights)
+                if self.training:
+                    current_level = torch.sigmoid(current_level)
+                else:
+                    current_level = (current_level > 0).to(torch.float32)
 
         # Reshape flattened output
         reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
