@@ -43,6 +43,23 @@ def test_xor_model():
         assert np.isclose(model(torch.tensor([x, y])).item(), expected)
 
 
+def test_xor_model_walsh():
+    """Test the XOR gate implementation.
+
+    XOR is the 6-th gate:
+    - set the weights to 0, except for the 6-th element (set to some high value)
+    - test the 4 possible inputs
+    """
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer.weight.data = torch.zeros(4)
+    layer.weight.data[3] = -100
+    model = torch.nn.Sequential(layer)
+    test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
+    for (x, y), expected in test_cases:
+        pred = model(torch.tensor([x, y])).item()
+        assert np.isclose(pred, expected)
+
+
 def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
