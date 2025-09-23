@@ -99,7 +99,7 @@ class CompiledLogicNet(torch.nn.Module):
                     raise ValueError(("If model begins with a LearnableThermometerThresholding layer, input_shape"
                                       " must be specified when initializing CompiledLogicNet"))
                 thresholding_info = self._extract_thresholding_layer_info(layer)
-                self.thresholding_layer = thresholding_info # there will only be one quantize layer
+                self.thresholding_layer = thresholding_info # there will only be one thresholding layer
             elif isinstance(layer, LogicConv2d):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
@@ -133,7 +133,7 @@ class CompiledLogicNet(torch.nn.Module):
                     print(f"Warning: Unknown layer type: {type(layer)}")
 
         if verbose:
-            print((f"Parsed {int(self.quantize_layer is not None)} quantize, {len(self.conv_layers)} conv," 
+            print((f"Parsed {int(self.thresholding_layer is not None)} thresholding, {len(self.conv_layers)} conv," 
                    f"{len(self.pooling_layers)} pooling, {len(self.linear_layers)} linear layers"))
             print(f"Layer execution order: {self.layer_order}")
 
@@ -274,18 +274,18 @@ class CompiledLogicNet(torch.nn.Module):
     def _calculate_layer_output_sizes_and_shapes(self) -> List[tuple]:
         """Calculate output sizes and shapes for all layers in execution order."""
         layer_info = []
-        if self.quantize_layer is None:
+        if self.thresholding_layer is None:
             current_shape = self.input_shape
         else:
-            quantize_info = self.quantize_layer
+            thresholding_info = self.thresholding_layer
             if len(self.input_shape)==2:
-                current_shape = (quantize_info['num_thresholds'], self.input_shape[0], self.input_shape[1])
+                current_shape = (thresholding_info['num_thresholds'], self.input_shape[0], self.input_shape[1])
             elif len(self.input_shape)==3:
                 if self.input_shape[0]!=1:
                     raise ValueError("If the input tensor is rank 3, index 0 must be a dummy index.")
-                current_shape = (quantize_info['num_thresholds'], self.input_shape[1], self.input_shape[2])
+                current_shape = (thresholding_info['num_thresholds'], self.input_shape[1], self.input_shape[2])
             else:
-                raise ValueError("The quantize layer can only accept input tensors of rank 2 or 3.")
+                raise ValueError("The thresholding layer can only accept input tensors of rank 2 or 3.")
 
         for layer_type, layer_idx in self.layer_order:
             if layer_type == 'conv':
@@ -866,12 +866,8 @@ class CompiledLogicNet(torch.nn.Module):
 
         code.append("}")
 
-        # Add batch processing function if needed
-        if self.num_classes:
-            code.extend(self._generate_batch_processing_function())
-
         # Add processing function if needed
-        if self.num_classes:
+        if self.num_classes or not self.use_bitpacking:
             if self.use_bitpacking:
                 code.extend(self._generate_batch_processing_function())
             else:
@@ -957,20 +953,23 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
         num_neurons_ll = self._get_output_size()
 
         if self.apply_thresholding:
-            quantize_info = self.quantize_layer
-            num_thresholds = quantize_info["num_thresholds"]
-            thresholds = quantize_info["thresholds"].tolist()
+            thresholding_info = self.thresholding_layer
+            num_thresholds = thresholding_info["num_thresholds"]
+            thresholds = thresholding_info["thresholds"].tolist()
             thresholds_str = ", ".join(str(int(x)) for x in thresholds)
             thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
-            inp_dtype = BITS_TO_DTYPE[32]
         
-        else:
-            inp_dtype = "bool"
+        inp_dtype = BITS_TO_DTYPE[32] if self.apply_thresholding else "bool"
+        out_len = self.num_classes if self.num_classes else num_neurons_ll
+        logic_net_out_arg = "out_temp" if self.num_classes else "out"
+        out_dtype = BITS_TO_DTYPE[32] if self.num_classes else "bool"
 
         code = [
-            f"""void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{self.num_classes}]) {{
-    bool out_temp[{num_neurons_ll}];"""
+            f"void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{out_len}]) {{"
         ]
+
+        if self.num_classes:
+            code.append(f"bool out_temp[{num_neurons_ll}];")
 
         if self.apply_thresholding:
             code.append(f"""
@@ -986,15 +985,16 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
     }})
     
     //run logic net
-    logic_net(inp_temp, out_temp);
+    logic_net(inp_temp, {logic_net_out_arg});
 """)
         else:
             code.append(f"""
     //run logic net
-    logic_net(inp, out_temp);
+    logic_net(inp, {logic_net_out_arg});
 """)
-            
-        code.append(f"""
+
+        if self.num_classes:    
+            code.append(f"""
     //apply GroupSum
     for (size_t c = 0; c < {self.num_classes}; c++) {{
         {BITS_TO_DTYPE[32]} sum = 0;
@@ -1002,25 +1002,25 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
             sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
         }}""")
 
-        if (self.beta!=0) or (self.tau!=1):
-            code.append(f"""
+            if (self.beta!=0) or (self.tau!=1):
+                code.append(f"""
         out[c] = (sum + {self.beta}) / {self.tau};
     }}
 }}
 """)
-        else:
-            code.append(f"""
+            else:
+                code.append(f"""
         out[c] = sum;
     }}
 }}
 """)
 
-        return code.extend[
+        code.append(
             f"""
     
-void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
+void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
     {inp_dtype} *inp_temp = malloc({input_size}*sizeof({inp_dtype}));
-    {BITS_TO_DTYPE[32]} *out_temp = malloc({self.num_classes}*sizeof({BITS_TO_DTYPE[32]}));
+    {out_dtype} *out_temp = malloc({out_len}*sizeof({out_dtype}));
 
     // run inference one event at a time
     for (size_t i = 0; i < len; ++i) {{
@@ -1028,15 +1028,17 @@ void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t le
             inp_temp[j] = inp[i * {input_size} + j];
         }}
         apply_logic_net_one_event(inp_temp, out_temp);
-        for (size_t k = 0; k < {self.num_classes}; ++k) {{
-            out[i * {self.num_classes} + k] = out_temp[k];
+        for (size_t k = 0; k < {out_len}; ++k) {{
+            out[i * {out_len} + k] = out_temp[k];
         }}
     }}
     free(inp_temp);
     free(out_temp);
 }}
 
-"""]
+""")
+        return code
+    
 
     def _get_input_size(self) -> int:
         """Get the total input size."""
@@ -1093,17 +1095,15 @@ void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t le
 
     def _setup_library_function(self, lib):
         """Setup the library function with appropriate signatures."""
-        if self.num_classes:
-            if self.apply_thresholding:
-                inp_type = BITS_TO_C_DTYPE[32]
-            else:
-                inp_type = ctypes.c_bool
+        if self.num_classes or self.apply_thresholding:
+            inp_type = BITS_TO_C_DTYPE[32] if self.apply_thresholding else ctypes.c_bool
+            out_type = BITS_TO_C_DTYPE[32] if self.num_classes else ctypes.c_bool
 
             lib_fn = lib.apply_logic_net
             lib_fn.restype = None
             lib_fn.argtypes = [
                 np.ctypeslib.ndpointer(inp_type, flags="C_CONTIGUOUS"),
-                np.ctypeslib.ndpointer(BITS_TO_C_DTYPE[32], flags="C_CONTIGUOUS"),
+                np.ctypeslib.ndpointer(out_type, flags="C_CONTIGUOUS"),
                 ctypes.c_size_t,
             ]
         else:
