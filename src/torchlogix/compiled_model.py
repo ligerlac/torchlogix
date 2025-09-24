@@ -982,7 +982,7 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
             size_t out_idx = t * {input_size} + in_idx;
             inp_temp[out_idx] = (inp[in_idx] > thresholds[t])? 1 : 0;
         }}
-    }})
+    }}
     
     //run logic net
     logic_net(inp_temp, {logic_net_out_arg});
