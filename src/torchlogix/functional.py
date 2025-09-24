@@ -144,9 +144,6 @@ def bin_op_cnn(a, b, i_s):
 def bin_op_cnn_walsh(a, b, i_s):
     assert a.shape == b.shape, f"Mismatched shapes: {a.shape}, {b.shape}"
 
-    print(f"a =\n{a}")
-    print(f"b =\n{b}")
-
     A = 2 * a - 1  # Convert to {-1, 1}
     B = 2 * b - 1  # Convert to {-1, 1}
 
@@ -156,8 +153,6 @@ def bin_op_cnn_walsh(a, b, i_s):
         B,                   # 2: B
         A * B                # 3: A and B in Walsh basis
     ], dim=-1)
-
-    print(f"r =\n{r}")
 
     i_s = i_s.unsqueeze(0).unsqueeze(2)
     i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
