@@ -12,10 +12,6 @@ def plot_loss_histories(
     output=None
 ):
 
-    print(f"baseline_df =\n{baseline_df}")
-    print(f"alternative_df =\n{alternative_df}")
-    print(f"output = {output}")
-
     n_baseline_runs = len(np.unique(baseline_df["run"]))
     n_alternative_runs = len(np.unique(alternative_df["run"]))
     # Generate colors using colormaps
@@ -33,8 +29,6 @@ def plot_loss_histories(
     for i_run in range(n_baseline_runs):
         sub_df = baseline_df[baseline_df["run"] == i_run]
         sub_df = sub_df.dropna(subset=["val_loss_train", "val_loss_eval"])
-        print(f"sub_df['step'] = {sub_df['step']}")
-        print(f"sub_df['val_loss_train'] = {sub_df['val_loss_train']}")
         axs[0, 0].plot(
             sub_df["step"],
             sub_df["val_loss_train"],
@@ -73,56 +67,86 @@ def plot_loss_histories(
             label="Alternative" if i_run == 0 else ""
         )
 
-    # Right column: Averages with confidence intervals
-    
-    # Calculate statistics for BaselineNode
-    baseline_train_data = np.array([baseline_df[baseline_df["run"] == i_run]["val_loss_train"] for i_run in range(n_baseline_runs)])
-    baseline_eval_data = np.array([baseline_df[baseline_df["run"] == i_run]["val_loss_eval"] for i_run in range(n_baseline_runs)])
+    # Calculate statistics for Baseline
+    baseline_df = baseline_df.dropna(subset=["val_loss_train", "val_loss_eval"])
+    max_length = max(len(baseline_df[baseline_df["run"] == i_run]) for i_run in range(n_baseline_runs))
+    longest_run = np.argmax([len(baseline_df[baseline_df["run"] == i_run]) for i_run in range(n_baseline_runs)])
+    epochs_baseline = baseline_df[baseline_df["run"] == longest_run]["step"].values
+    print(f"Baseline longest run: run {longest_run} with length {max_length}")
+    print(f"Epochs: {epochs_baseline}")
+
+    # Pad shorter runs with NaN
+    baseline_train_data, baseline_eval_data = [], []
+    for i_run in range(n_baseline_runs):
+        train_data = baseline_df[baseline_df["run"] == i_run]["val_loss_train"].values
+        eval_data = baseline_df[baseline_df["run"] == i_run]["val_loss_eval"].values
+        if len(train_data) < max_length:
+            train_data = np.pad(train_data, (0, max_length - len(train_data)),
+                            mode='constant', constant_values=np.nan)
+            eval_data = np.pad(eval_data, (0, max_length - len(eval_data)),
+                            mode='constant', constant_values=np.nan)
+        baseline_train_data.append(train_data)
+        baseline_eval_data.append(eval_data)
 
     baseline_train_mean = np.mean(baseline_train_data, axis=0)
     baseline_train_std = np.std(baseline_train_data, axis=0)
     baseline_eval_mean = np.mean(baseline_eval_data, axis=0)
     baseline_eval_std = np.std(baseline_eval_data, axis=0)
 
-    # Calculate statistics for alternativeNode
-    alternative_train_data = np.array([alternative_df[alternative_df["run"] == i_run]["val_loss_train"] for i_run in range(n_alternative_runs)])
-    alternative_eval_data = np.array([alternative_df[alternative_df["run"] == i_run]["val_loss_eval"] for i_run in range(n_alternative_runs)])
+    alternative_df = alternative_df.dropna(subset=["val_loss_train", "val_loss_eval"])
+    max_length = max(len(alternative_df[alternative_df["run"] == i_run]) for i_run in range(n_alternative_runs))
+    longest_run = np.argmax([len(alternative_df[alternative_df["run"] == i_run]) for i_run in range(n_alternative_runs)])
+    epochs_alternative = alternative_df[alternative_df["run"] == longest_run]["step"].values
+    print(f"Alternative longest run: run {longest_run} with length {max_length}")
+    print(f"Epochs: {epochs_alternative}")
 
-    alternative_train_mean = np.mean(alternative_train_data, axis=0)
-    alternative_train_std = np.std(alternative_train_data, axis=0)
-    alternative_eval_mean = np.mean(alternative_eval_data, axis=0)
-    alternative_eval_std = np.std(alternative_eval_data, axis=0)
+    alternative_train_data, alternative_eval_data = [], []
+    for i_run in range(n_alternative_runs):
+        train_data = alternative_df[alternative_df["run"] == i_run]["val_loss_train"].values
+        eval_data = alternative_df[alternative_df["run"] == i_run]["val_loss_eval"].values
+        if len(train_data) < max_length:
+            train_data = np.pad(train_data, (0, max_length - len(train_data)),
+                            mode='constant', constant_values=np.nan)
+            eval_data = np.pad(eval_data, (0, max_length - len(eval_data)),
+                            mode='constant', constant_values=np.nan)
+        alternative_train_data.append(train_data)
+        alternative_eval_data.append(eval_data)
 
-    # Create x-axis (epochs)
-    epochs_train = range(len(baseline_train_mean))
-    epochs_eval = range(len(baseline_eval_mean))
+    # ignore NaNs
+    alternative_train_mean = np.nanmean(alternative_train_data, axis=0)
+    alternative_train_std = np.nanstd(alternative_train_data, axis=0)
+    alternative_eval_mean = np.nanmean(alternative_eval_data, axis=0)
+    alternative_eval_std = np.nanstd(alternative_eval_data, axis=0)
+
+    print(f"baseline_train_mean = {baseline_train_mean}")
+    print(f"alternative_train_mean = {alternative_train_mean}")
     
     # Plot BaselineNode averages with 68% confidence intervals (1 std dev)
-    axs[0, 1].plot(epochs_train, baseline_train_mean, color=baseline_avg_color, 
+    axs[0, 1].plot(epochs_baseline, baseline_train_mean, color=baseline_avg_color, 
                    linewidth=2, label="Baseline (avg)")
-    axs[0, 1].fill_between(epochs_train, 
+    axs[0, 1].fill_between(epochs_baseline, 
                            baseline_train_mean - baseline_train_std,
                            baseline_train_mean + baseline_train_std,
                            color=baseline_avg_color, alpha=0.3)
-    
-    axs[1, 1].plot(epochs_eval, baseline_eval_mean, color=baseline_avg_color, 
+
+    axs[1, 1].plot(epochs_baseline, baseline_eval_mean, color=baseline_avg_color, 
                    linewidth=2, label="Baseline (avg)")
-    axs[1, 1].fill_between(epochs_eval,
+    axs[1, 1].fill_between(epochs_baseline,
                            baseline_eval_mean - baseline_eval_std,
                            baseline_eval_mean + baseline_eval_std,
                            color=baseline_avg_color, alpha=0.3)
     
     # Plot alternative averages with 68% confidence intervals
-    axs[0, 1].plot(epochs_train, alternative_train_mean, color=alternative_avg_color, 
+    axs[0, 1].plot(epochs_alternative, alternative_train_mean, color=alternative_avg_color, 
                    linewidth=2, label="Alternative (avg)")
-    axs[0, 1].fill_between(epochs_train,
+    axs[0, 1].fill_between(epochs_alternative,
                            alternative_train_mean - alternative_train_std,
                            alternative_train_mean + alternative_train_std,
                            color=alternative_avg_color, alpha=0.3)
 
-    axs[1, 1].plot(epochs_eval, alternative_eval_mean, color=alternative_avg_color, 
+    axs[1, 1].plot(epochs_alternative, alternative_eval_mean, color=alternative_avg_color, 
                    linewidth=2, label="Alternative (avg)")
-    axs[1, 1].fill_between(epochs_eval,
+    axs[1, 1].fill_between(epochs_alternative,
                            alternative_eval_mean - alternative_eval_std,
                            alternative_eval_mean + alternative_eval_std,
                            color=alternative_avg_color, alpha=0.3)
@@ -134,6 +158,9 @@ def plot_loss_histories(
     axs[1, 0].set_ylabel('Loss (Eval Mode)')
     axs[0, 0].set_title('Individual Runs')
     axs[0, 1].set_title('Average ± 1σ (68% CI)')
+
+    for ax in axs.flat:
+        ax.set_ylim(bottom=0)
 
     # Create gradient legend for left column
     # Simpler alternative - create multi-segment legend entries
