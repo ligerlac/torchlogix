@@ -31,6 +31,7 @@ class LogicConv2d(nn.Module):
         stride: int = 1,
         padding: int = None,
         parametrization: str = "raw", # or 'walsh'
+        temperature: float = 1.0,
     ):
         """Initialize the 2d logic convolutional layer.
 
@@ -70,8 +71,10 @@ class LogicConv2d(nn.Module):
                     # Wrap as a trainable parameter
                     level_weights.append(torch.nn.Parameter(weights))
                 elif self.parametrization == "walsh":
-                    weights = torch.randn(num_kernels, 4, device=device) - 0.5
-                    weights[:, 1] = torch.randn(num_kernels, device=device) + 1.0
+                    # weights = torch.randn(num_kernels, 4, device=device) - 0.5
+                    # weights[:, 1] = torch.randn(num_kernels, device=device) + 1.0
+                    weights = torch.zeros(num_kernels, 4, device=device)
+                    weights[:, 1] = 1.0
                     level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
         self.in_dim = _pair(in_dim)
@@ -91,6 +94,7 @@ class LogicConv2d(nn.Module):
         else:
             raise ValueError(f"Unknown connections type: {connections}")
         self.indices = self.get_indices_from_kernel_pairs(self.kernel_pairs)
+        self.temperature = temperature
 
 
     def forward(self, x):
@@ -107,32 +111,30 @@ class LogicConv2d(nn.Module):
         b = current_level[:, b_c, b_h, b_w]
 
         if self.parametrization == "raw":
-            if self.training:
-                level_weights = torch.stack(
-                    [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
-                    dim=0,
-                )  # Shape: [8, 16, 16]
-            else:
+            level_weights = torch.stack(
+                [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
+                dim=0,
+            )
+            if not self.training:
                 level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
                     torch.float32
                 )
 
-            current_level = bin_op_cnn(a, b, level_weights)  # Shape: [100, 16, 576, 8]
+            current_level = bin_op_cnn(a, b, level_weights)
 
             # Process remaining levels
             for level in range(1, self.tree_depth + 1):
                 left_indices, right_indices = self.indices[level]
                 a = current_level[..., left_indices]
                 b = current_level[..., right_indices]
-                if self.training:
-                    level_weights = torch.stack(
-                        [
-                            torch.nn.functional.softmax(w, dim=-1)
-                            for w in self.tree_weights[level]
-                        ],
-                        dim=0,
-                    )  # Shape: [8, 16, 16]
-                else:
+                level_weights = torch.stack(
+                    [
+                        torch.nn.functional.softmax(w, dim=-1)
+                        for w in self.tree_weights[level]
+                    ],
+                    dim=0,
+                )  # Shape: [8, 16, 16]
+                if not self.training:
                     level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
                         torch.float32
                     )
@@ -140,10 +142,10 @@ class LogicConv2d(nn.Module):
                 current_level = bin_op_cnn(a, b, level_weights)
 
         elif self.parametrization == "walsh":
-            level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)  # might need reshaping
+            level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
             current_level = bin_op_cnn_walsh(a, b, level_weights)
             if self.training:
-                current_level = torch.sigmoid(current_level)
+                current_level = torch.sigmoid(current_level / self.temperature)
             else:
                 current_level = (current_level > 0).to(torch.float32)
 
@@ -156,7 +158,7 @@ class LogicConv2d(nn.Module):
                 level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
                 current_level = bin_op_cnn_walsh(a, b, level_weights)
                 if self.training:
-                    current_level = torch.sigmoid(current_level)
+                    current_level = torch.sigmoid(current_level / self.temperature)
                 else:
                     current_level = (current_level > 0).to(torch.float32)
 
