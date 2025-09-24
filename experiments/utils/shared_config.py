@@ -33,6 +33,9 @@ ARCHITECTURE_CHOICES = [
     "randomly_connected",
     "fully_connected",
     "cnn",
+    "tiny",
+    "small",
+    "paper",
 ]
 
 def setup_experiment(seed: int, implementation: str):
