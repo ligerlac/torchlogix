@@ -4,6 +4,7 @@
 import argparse
 from pathlib import Path
 from collections import defaultdict
+import numpy as np
 
 import torch
 from tqdm import tqdm
@@ -13,6 +14,8 @@ from utils import (
     IMPL_TO_DEVICE, setup_experiment, CreateFolder, save_metrics_csv, save_config,
     create_eval_functions, evaluate_model, train, get_model, load_dataset, load_n
 )
+
+import torchlogix
 
 
 def run_training(args):
@@ -38,19 +41,30 @@ def run_training(args):
     print(f"Model: {args.architecture}, Dataset: {args.dataset}")
     print(f"Device: {device}, Implementation: {args.implementation}")
 
-    # Training loop
-    for i, (x, y) in tqdm(
+    pbar = tqdm(
         enumerate(load_n(train_loader, args.num_iterations)),
         desc="Training",
         total=args.num_iterations,
-    ):
+    )
+    for i, (x, y) in pbar:
         # Move data to device
+        # x = x.bool().float()
         x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to(device)
         y = y.to(device)
 
+        # import numpy as np
+        # print(np.unique(x.cpu().numpy()))
+
         # Training step
         loss = train(model, x, y, loss_fn, optim)
-        print(f"loss = {loss}")
+        pbar.set_postfix(loss=f"{loss:.4f}")
+
+        if args.temp_decay is not None:
+            temperature = np.exp(- i / args.num_iterations * args.temp_decay)
+            for layer in model:
+                if isinstance(layer, torchlogix.layers.LogicConv2d) or isinstance(layer, torchlogix.layers.LogicDense):
+                    layer.temperature = temperature
+            pbar.set_postfix(loss=f"{loss:.4f}", temp=f"{temperature:.4f}")
 
         # Log training loss
         metrics[i + 1] = {"train_loss": loss}
@@ -58,6 +72,23 @@ def run_training(args):
         # Evaluation
         if (i + 1) % args.eval_freq == 0:
             print(f"\nEvaluation at iteration {i + 1}")
+
+            # with torch.no_grad():
+            #     for i, layer in enumerate(model):
+            #         if isinstance(layer, torchlogix.layers.LogicConv2d):
+            #             layer_type = "Conv"
+            #             all_params = []
+            #             for param_list in layer.tree_weights:
+            #                 for param in param_list:
+            #                     all_params.append(param.data.detach().cpu().numpy())
+            #             all_params = np.concatenate([p for p in all_params])
+            #         elif isinstance(layer, torchlogix.layers.LogicDense):
+            #             layer_type = "Dense"
+            #             all_params = layer.weight.data.detach().cpu().numpy()
+            #         else:
+            #             continue
+            #         m, s = all_params.mean(axis=0), all_params.std(axis=0)
+            #         print(f"{layer_type} Layer {m[0]:.3f} +- {s[0]:.3f} | {m[1]:.3f} +- {s[1]:.3f} | {m[2]:.3f} +- {s[2]:.3f} | {m[3]:.3f} +- {s[3]:.3f}")
 
             # Evaluate on validation set
             eval_metrics = evaluate_model(
@@ -125,6 +156,8 @@ def main():
     parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
     parser.add_argument("--batch-size", "-bs", type=int, default=128, help="Batch size")
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.01, help="Learning rate")
+    parser.add_argument("--temp-decay", "-td", type=float, default=None,
+                         help="Temperature decay, e.g. 4 (only applicable to walsh-parametrized models)")
     parser.add_argument(
         "--num-iterations", "-ni", type=int, default=100_000, help="Number of training iterations"
     )
@@ -152,6 +185,11 @@ def main():
     parser.add_argument(
         "--output", "-o", action=CreateFolder, type=Path, default="results/training/",
         help="Output directory for results"
+    )
+
+    parser.add_argument(
+        "--temperature", type=float, default=1.0,
+        help="Temperature for sigmoid in walsh parametrization"
     )
 
     args = parser.parse_args()
