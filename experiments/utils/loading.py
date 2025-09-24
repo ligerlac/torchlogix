@@ -29,6 +29,11 @@ BITS_TO_TORCH_FLOATING_POINT_TYPE = {
 }
 
 IMPL_TO_DEVICE = {"cuda": "cuda", "python": "cpu"}
+    
+
+class BooleanTransform:
+    def __call__(self, sample):
+        return sample.bool().float()
 
 
 def load_dataset(args):
@@ -73,14 +78,21 @@ def load_dataset(args):
             test_set, batch_size=int(1e6), shuffle=False
         )
     elif args.dataset in ["mnist", "mnist20x20"]:
+        transforms = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                BooleanTransform(),  # Binarize the input
+            ]
+        )        
         train_set = mnist_dataset.MNIST(
             "./data-mnist",
             train=True,
             download=True,
             remove_border=args.dataset == "mnist20x20",
+            transform=transforms
         )
         test_set = mnist_dataset.MNIST(
-            "./data-mnist", train=False, remove_border=args.dataset == "mnist20x20"
+            "./data-mnist", train=False, remove_border=args.dataset == "mnist20x20", transform=transforms
         )
 
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
