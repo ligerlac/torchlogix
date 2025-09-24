@@ -88,6 +88,9 @@ class CompiledLogicNet(torch.nn.Module):
                 self.beta = layer.beta
                 break
 
+        if self.num_classes is None:
+            raise ValueError("No GroupSum layer found in model")
+
         # Parse all layers and track execution order
         for layer in self.model:
             if isinstance(layer, LearnableThermometerThresholding):
@@ -866,12 +869,11 @@ class CompiledLogicNet(torch.nn.Module):
 
         code.append("}")
 
-        # Add processing function if needed
-        if self.num_classes or not self.use_bitpacking:
-            if self.use_bitpacking:
-                code.extend(self._generate_batch_processing_function())
-            else:
-                code.extend(self._generate_single_processing_function())
+        # Add processing function
+        if self.use_bitpacking:
+            code.extend(self._generate_batch_processing_function())
+        else:
+            code.extend(self._generate_single_processing_function())
 
         return "\n".join(code)
 
@@ -960,20 +962,17 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
             thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
         
         inp_dtype = BITS_TO_DTYPE[32] if self.apply_thresholding else "bool"
-        out_len = self.num_classes if self.num_classes else num_neurons_ll
-        logic_net_out_arg = "out_temp" if self.num_classes else "out"
-        out_dtype = BITS_TO_DTYPE[32] if self.num_classes else "bool"
+        out_len = self.num_classes
+        logic_net_out_arg = "out_temp"
+        out_dtype = BITS_TO_DTYPE[32]
 
         code = [
-            f"void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{out_len}]) {{"
+            f"""void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{out_len}]) {{
+    bool out_temp[{num_neurons_ll}];"""
         ]
 
-        if self.num_classes:
-            code.append(f"  bool out_temp[{num_neurons_ll}];")
-
         if self.apply_thresholding:
-            code.append(f"""
-    bool inp_temp[{input_size * num_thresholds}];
+            code.append(f"""    bool inp_temp[{input_size * num_thresholds}];
     {thresholds_c_def}
 
     // Convert the inputs into boolean
@@ -993,8 +992,7 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
     logic_net(inp, {logic_net_out_arg});
 """)
 
-        if self.num_classes:    
-            code.append(f"""
+        code.append(f"""
     //apply GroupSum
     for (size_t c = 0; c < {self.num_classes}; c++) {{
         {BITS_TO_DTYPE[32]} sum = 0;
@@ -1002,13 +1000,13 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
             sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
         }}""")
 
-            if (self.beta!=0) or (self.tau!=1):
+        if (self.beta!=0) or (self.tau!=1):
                 code.append(f"""
         out[c] = (sum + {self.beta}) / {self.tau};
     }}
 }}
 """)
-            else:
+        else:
                 code.append(f"""
         out[c] = sum;
     }}
@@ -1095,24 +1093,16 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
 
     def _setup_library_function(self, lib):
         """Setup the library function with appropriate signatures."""
-        if self.num_classes or self.apply_thresholding:
-            inp_type = BITS_TO_C_DTYPE[32] if self.apply_thresholding else ctypes.c_bool
-            out_type = BITS_TO_C_DTYPE[32] if self.num_classes else ctypes.c_bool
+        inp_type = BITS_TO_C_DTYPE[32] if self.apply_thresholding else ctypes.c_bool
+        out_type = BITS_TO_C_DTYPE[32]
 
-            lib_fn = lib.apply_logic_net
-            lib_fn.restype = None
-            lib_fn.argtypes = [
-                np.ctypeslib.ndpointer(inp_type, flags="C_CONTIGUOUS"),
-                np.ctypeslib.ndpointer(out_type, flags="C_CONTIGUOUS"),
-                ctypes.c_size_t,
-            ]
-        else:
-            lib_fn = lib.logic_net
-            lib_fn.restype = None
-            lib_fn.argtypes = [
-                np.ctypeslib.ndpointer(BITS_TO_C_DTYPE[self.num_bits], flags="C_CONTIGUOUS"),
-                np.ctypeslib.ndpointer(BITS_TO_C_DTYPE[self.num_bits], flags="C_CONTIGUOUS"),
-            ]
+        lib_fn = lib.apply_logic_net
+        lib_fn.restype = None
+        lib_fn.argtypes = [
+            np.ctypeslib.ndpointer(inp_type, flags="C_CONTIGUOUS"),
+            np.ctypeslib.ndpointer(out_type, flags="C_CONTIGUOUS"),
+            ctypes.c_size_t,
+        ]
         self.lib_fn = lib_fn
 
     def forward(
@@ -1124,13 +1114,10 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
         if isinstance(x, torch.Tensor):
             x = x.numpy()
 
-        if self.num_classes:
-            return self._forward_with_groupsum(x, verbose)
-        else:
-            return self._forward_direct(x, verbose)
+        return self._forward(x, verbose)
 
-    def _forward_with_groupsum(self, x: np.ndarray, verbose: bool) -> torch.IntTensor:
-        """Forward pass with GroupSum (batch processing)."""
+    def _forward(self, x: np.ndarray, verbose: bool) -> torch.IntTensor:
+        """Forward pass."""
         if self.use_bitpacking:
             batch_size_div_bits = math.ceil(x.shape[0] / self.num_bits)
             pad_len = batch_size_div_bits * self.num_bits - x.shape[0]
@@ -1160,20 +1147,6 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
             print("out.shape", out.shape)
 
         return out
-
-    def _forward_direct(self, x: np.ndarray, verbose: bool) -> torch.IntTensor:
-        """Direct forward pass without GroupSum."""
-        batch_size = x.shape[0]
-        input_size = self._get_input_size()
-        x_flat = x.reshape(batch_size, input_size).astype(BITS_TO_NP_DTYPE[self.num_bits])
-
-        output_size = self._get_output_size()
-        out = np.zeros((batch_size, output_size), dtype=BITS_TO_NP_DTYPE[self.num_bits])
-
-        for i in range(batch_size):
-            self.lib_fn(x_flat[i], out[i])
-
-        return torch.tensor(out)
 
     @staticmethod
     def load(save_lib_path: str, input_shape: tuple, num_classes: int = None, num_bits: int = 64):
