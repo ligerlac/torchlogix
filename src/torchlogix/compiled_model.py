@@ -969,7 +969,7 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
         ]
 
         if self.num_classes:
-            code.append(f"bool out_temp[{num_neurons_ll}];")
+            code.append(f"  bool out_temp[{num_neurons_ll}];")
 
         if self.apply_thresholding:
             code.append(f"""
