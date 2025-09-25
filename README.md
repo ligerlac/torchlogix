@@ -1,27 +1,57 @@
-# difflogic - A Library for Differentiable Logic Gate Networks
+# torchlogix - Differentiable Logic Gate Networks in PyTorch
 
-![difflogic_logo](assets/difflogic_logo.png)
+![torchlogix_logo](assets/logo.png)
 
-This repository includes the official implementation of our NeurIPS 2022 Paper "Deep Differentiable Logic Gate Networks"
-(Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)).
+**Note:** `torchlogix` is based on the original `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), which serves as the official implementation of the NeurIPS 2022 Paper "Deep Differentiable Logic Gate Networks"
+(Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)) by Felix Petersen et al. As the aforementioned repository is not maintained anymore, `torchlogix` extends `difflogic` by performance improvements, bugfixes, and new concepts such as learnable thermometer thresholding. It also implements convolutional logic gate layers as described in the NeurIPS 2024 Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 The goal behind differentiable logic gate networks is to solve machine learning tasks by learning combinations of logic
-gates, i.e., so-called logic gate networks. As logic gate networks are conventionally non-differentiable, they can
-conventionally not be trained with methods such as gradient descent. Thus, differentiable logic gate networks are a
-differentiable relaxation of logic gate networks which allows efficiently learning of logic gate networks with gradient
-descent. Specifically, `difflogic` combines real-valued logics and a continuously parameterized relaxation of
-the network. This allows learning which logic gate (out of 16 possible) is optimal for each neuron.
-The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a million images
-of MNIST per second on a single CPU core.
+gates, i.e., logic gate networks. As the choice of a logic is conventionally non-differentiable, relaxations of are applied
+to allow training logic gate networks with gradient-based methods. Specifically, `torchlogix` combines real-valued logics
+and a continuously parameterized approximation of the network. This allows learning which logic gate (out of 16 possible)
+is optimal for each neuron. The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a
+million images of MNIST per second on a single CPU core.
 
-`difflogic` is a Python 3.6+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
-The library can be installed with:
+`torchlogix` is a Python 3.6+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
+
+## Installation
+
+**Basic installation (CPU-only):**
 ```shell
-pip install difflogic
+pip install torchlogix
 ```
-> ⚠️ Note that `difflogic` requires CUDA, the CUDA Toolkit (for compilation), and `torch>=1.9.0` (matching the CUDA version).
 
-For additional installation support, see [INSTALLATION_SUPPORT.md](INSTALLATION_SUPPORT.md).
+**With CUDA support (for GPU acceleration):**
+```shell
+pip install "torchlogix[cuda]"
+```
+
+**For development:**
+```shell
+pip install "torchlogix[dev]"          # CPU-only with dev tools
+pip install "torchlogix[cuda,dev]"     # CUDA + dev tools
+```
+
+> ⚠️ **CUDA Note:** CUDA extensions are optional but provide significant performance improvements. They require CUDA Toolkit and `torch>=1.9.0` (matching CUDA version). The default installation uses pure Python implementation.
+
+## 📚 Documentation
+
+**Full documentation is available at:** [TorchLogix Documentation](docs/_build/html/index.html)
+
+- **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions with CUDA support
+- **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
+- **[Logic Gates Guide](docs/guides/logic_gates.md)** - Understanding the 16 Boolean operations
+- **[Examples](docs/guides/examples.md)** - Complete training examples and tutorials
+- **[API Reference](docs/api/torchlogix.rst)** - Comprehensive API documentation
+
+### Building Documentation
+
+```bash
+cd docs
+pip install -r requirements.txt
+make html
+open _build/html/index.html  # macOS
+```
 
 ## 🌱 Intro and Training
 
@@ -29,21 +59,22 @@ This library provides a framework for both training and inference with logic gat
 The following gives an example of a definition of a differentiable logic network model for the MNIST data set:
 
 ```python
-from difflogic import LogicLayer, GroupSum
 import torch
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
 
 model = torch.nn.Sequential(
+    LogicConv2d(in_dim=28, num_kernels=64, receptive_field_size=5),
+    OrPooling(kernel_size=2, stride=2, padding=0),
+    LogicConv2d(in_dim=12, num_kernels=256, receptive_field_size=3),
     torch.nn.Flatten(),
-    LogicLayer(784, 16_000),
-    LogicLayer(16_000, 16_000),
-    LogicLayer(16_000, 16_000),
+    LogicLayer(256*10*10, 16_000),
     LogicLayer(16_000, 16_000),
     LogicLayer(16_000, 16_000),
     GroupSum(k=10, tau=30)
 )
 ```
 
-This model receives a `784` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
+This model receives a `(1,28,28)` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
 The model may be trained, e.g., with a `torch.nn.CrossEntropyLoss` similar to how other neural networks models are trained in PyTorch.
 Notably, the Adam optimizer (`torch.optim.Adam`) should be used for training and the recommended default learning rate is `0.01` instead of `0.001`.
 Finally, it is also important to note that the number of neurons in each layer is much higher for logic gate networks compared to
@@ -52,7 +83,7 @@ conventional MLP neural networks because logic gate networks are very sparse.
 To go into details, for each of these modules, in the following we provide more in-depth examples:
 
 ```python
-layer = LogicLayer(
+layer = DenseLogic(
     in_dim=784,             # number of inputs
     out_dim=16_000,         # number of outputs
     device='cuda',          # the device (cuda / cpu)
@@ -60,10 +91,19 @@ layer = LogicLayer(
     connections='random',   # the method for the random initialization of the connections
     grad_factor=1.1,        # for deep models (>6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients
 )
+layer = LogicConv2d(
+    in_dim=28,              # dimension of input (can be two-tuple for non-quadratic shapes)
+    channels=1,             # number of channels of the input (1 for grey-scale)
+    num_kernels: int = 16,  # number of convolutional kernels (filters)
+    tree_depth: int = 3,    # depth of the binary logic tree that make up each kernel
+    receptive_field_size: int = None, # comparable to kernel size in ordinary convolutional kernels
+    padding: int = None,
+)
+layer = 
 ```
 
 At this point, it is important to discuss the options for `device` and the provided implementations. Specifically,
-`difflogic` provides two implementations (both of which work with PyTorch):
+`torchlogix` provides two implementations (both of which work with PyTorch):
 
 * **`python`** the Python implementation is a substantially slower implementation that is easy to understand as it is implemented directly in Python with PyTorch and does not require any C++ / CUDA extensions. It is compatible with `device='cpu'` and `device='cuda'`.
 * **`cuda`** is a well-optimized implementation that runs natively on CUDA via custom extensions. This implementation is around 50 to 100 times faster than the python implementation (for large models). It only supports `device='cuda'`.
@@ -94,7 +134,7 @@ required by a bool) by packing the bits along the batch dimension. If we choose 
 type (the options are 8, 16, 32, and 64 bits), we would receive a tensor of shape `ceil(b/32) x n` of dtype `int32`.
 To create a `PackBitsTensor` from a boolean tensor `data`, simply call:
 ```python
-data_bits = difflogic.PackBitsTensor(data)
+data_bits = torchlogix.PackBitsTensor(data)
 ```
 To apply a model to the `PackBitsTensor`, simply call:
 ```python
@@ -115,7 +155,7 @@ can then be efficiently run or exported for applications.
 The following is an example for creating `CompiledLogicNet` from a trained `model`:
 
 ```python
-compiled_model = difflogic.CompiledLogicNet(
+compiled_model = torchlogix.CompiledLogicNet(
     model=model,            # the trained model (should be a `torch.nn.Sequential` with `LogicLayer`s)
     num_bits=64,            # the number of bits of the datatype used for inference (typically 64 is fastest, should not be larger than batch size)
     cpu_compiler='gcc',     # the compiler to use for the c code (alternative: clang)
@@ -135,7 +175,7 @@ To export this to other applications, one may either call the shared object bina
 the model into C code via `compiled_model.get_c_code()`.
 A limitation of the current `CompiledLogicNet` is that the compilation time can become long for large models.
 
-We note that between publishing the paper and the publication of `difflogic`, we have substantially improved the implementations.
+We note that between publishing the paper and the publication of `torchlogix`, we have substantially improved the implementations.
 Thus, the model inference modes have some deviation from the implementations for the original paper as we have
 focussed on making it more scalable, efficient, and easier to apply in applications.
 We have especially focussed on modularity and efficiency for larger models and have opted to polish the presented
@@ -144,7 +184,7 @@ implementations over publishing a plethora of different competing implementation
 ## 🧪 Experiments
 
 In the following, we present a few example experiments which are contained in the `experiments` directory.
-`main.py` executes the experiments for difflogic or baselines.
+`main.py` executes the experiments for torchlogix or baselines.
 
 ### ☄️ Adult / Breast Cancer
 
@@ -173,19 +213,6 @@ python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 
 python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 200_000 -ef 1_000 -k 1_024_000 -l 5
 ```
 
-## 📖 Citing
-
-```bibtex
-@inproceedings{petersen2022difflogic,
-  title={{Deep Differentiable Logic Gate Networks}},
-  author={Petersen, Felix and Borgelt, Christian and Kuehne, Hilde and Deussen, Oliver},
-  booktitle={Conference on Neural Information Processing Systems (NeurIPS)},
-  year={2022}
-}
-```
-
 ## 📜 License
 
-`difflogic` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it.
-
-Patent pending.
+`torchlogix` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it.

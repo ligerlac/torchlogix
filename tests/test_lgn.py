@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 import torch
 
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
-from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
+from torchlogix import CompiledLogicNet
+from torchlogix.layers import GroupSum, LogicDense
 
 llkw = {"connections": "unique", "implementation": "python", "device": "cpu"}
 
@@ -20,11 +20,11 @@ def test_trivial_layer():
     and its weights should have shape (1, 16).
     It should not be possible to have more than one connection (==out_dim).
     """
-    layer = LogicLayer(in_dim=2, out_dim=1, **llkw)
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
     assert layer.indices == (0, 1) or layer.indices == (1, 0)
     assert layer.weight.shape == (1, 16)
     with pytest.raises(AssertionError):
-        LogicLayer(in_dim=2, out_dim=2, **llkw)
+        LogicDense(in_dim=2, out_dim=2, **llkw)
 
 
 def test_xor_model():
@@ -34,7 +34,7 @@ def test_xor_model():
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicLayer(in_dim=2, out_dim=1, **llkw)
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros(16)
     layer.weight.data[6] = 100
     model = torch.nn.Sequential(layer)
@@ -46,14 +46,14 @@ def test_xor_model():
 def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicLayer(
+        LogicDense(
             in_dim=42,
             out_dim=42,
             connections="unique",
             implementation="python",
             device="cpu",
         ),
-        LogicLayer(
+        LogicDense(
             in_dim=42,
             out_dim=42,
             connections="unique",
@@ -80,9 +80,9 @@ def test_large_compiled_model():
     """Test model compilation and inference."""
     k_num = 16
     model = torch.nn.Sequential(
-        LogicLayer(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu", implementation="python"),
-        LogicLayer(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu", implementation="python"),
-        LogicLayer(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu", implementation="python"),
+        LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu", implementation="python"),
+        LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu", implementation="python"),
+        LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu", implementation="python"),
         GroupSum(8),
     )
     compiled_model = CompiledLogicNet(

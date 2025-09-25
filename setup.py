@@ -1,4 +1,4 @@
-"""Setup configuration for the neurodifflogic package."""
+"""Setup configuration for the torchlogix package."""
 
 import os
 
@@ -8,34 +8,43 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 
-# decide from env variable if cuda extension should be built (default is 'true')
-build_cuda_ext = os.getenv("DIFFLOGIC_BUILD_CUDA_EXT", "true").lower()
+# Check if we should build CUDA extensions
+# Only build when explicitly requested via pip install .[cuda]
+build_cuda_ext = False
 
-if build_cuda_ext == "true":
-    from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+# Check if 'cuda' is in the extras being installed
+import sys
+if any('cuda' in arg for arg in sys.argv if '[' in arg and ']' in arg):
+    build_cuda_ext = True
 
-    ext_modules = [
-        CUDAExtension(
-            "neurodifflogic.difflogic_cuda",
-            [
-                "src/neurodifflogic/difflogic/cuda/difflogic.cpp",
-                "src/neurodifflogic/difflogic/cuda/difflogic_kernel.cu",
-            ],
-            extra_compile_args={"nvcc": ["-lineinfo"]},
-        )
-    ]
+if build_cuda_ext:
+    try:
+        from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+        ext_modules = [
+            CUDAExtension(
+                "torchlogix.difflogic_cuda",
+                [
+                    "src/torchlogix/difflogic/cuda/difflogic.cpp",
+                    "src/torchlogix/difflogic/cuda/difflogic_kernel.cu",
+                ],
+                extra_compile_args={"nvcc": ["-lineinfo"]},
+            )
+        ]
+    except ImportError:
+        print("Warning: CUDA extension requested but torch.utils.cpp_extension not available")
+        ext_modules = []
 else:
     ext_modules = []
 
 
 setup(
-    name="neurodifflogic",
+    name="torchlogix",
     version="0.1.0",
-    author="Felix Petersen",
-    author_email="ads0600@felix-petersen.de",
+    author="Lino Gerlach",
+    author_email="lino.oscar.gerlach@cern.ch",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Felix-Petersen/difflogic",
+    url="https://github.com/ligerlac/torchlogix",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -56,6 +65,25 @@ setup(
     python_requires=">=3.6",
     install_requires=[
         "torch>=1.6.0",
-        "numpy",
+        "numpy>=1.26",
+        "tqdm",
+        "scikit-learn",
+        "torchvision",
+        "rich",
+        "torch-geometric",
+        "wheel",
     ],
+    extras_require={
+        "dev": [
+            "flake8>=6.1.0",
+            "black>=23.12.1", 
+            "isort>=5.13.2",
+            "pre-commit>=3.6.0",
+            "pytest>=8.0.0",
+            "autopep8>=2.0.4",
+        ],
+        "cuda": [
+            # No additional dependencies needed, just triggers CUDA extension build
+        ],
+    },
 )

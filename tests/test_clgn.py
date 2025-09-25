@@ -7,10 +7,8 @@ import pytest
 import numpy as np
 import torch
 
-from neurodifflogic.models.difflog_layers.conv import LogicConv2d, OrPoolingLayer
-from neurodifflogic.models.difflog_layers.linear import GroupSum
-from neurodifflogic.difflogic.compiled_model import CompiledLogicNet
-
+from torchlogix.layers import LogicConv2d, OrPooling, GroupSum
+from torchlogix import CompiledLogicNet
 
 
 @pytest.fixture
@@ -487,7 +485,7 @@ def test_compiled_model_rect():
 
 
 def test_pooling_layer():
-    layer = OrPoolingLayer(
+    layer = OrPooling(
         kernel_size=2,
         stride=2,
         padding=0,
@@ -544,7 +542,7 @@ def test_compiled_pooling_model():
             stride=1,
             padding=0,
         ),
-        OrPoolingLayer(kernel_size=2, stride=2, padding=0),
+        OrPooling(kernel_size=2, stride=2, padding=0),
         torch.nn.Flatten(),
         GroupSum(1),
     )
