@@ -2,3 +2,21 @@ venv/
 *pyc
 .idea
 *.so
+*egg-info
+__pycache__/
+.DS_Store
+.ipynb_checkpoints
+*.pytest_cache/
+build/
+experiments/results/
+
+# Documentation build artifacts
+docs/_build/
+docs/api/generated/
+
+# Sphinx temporary files
+docs/.doctrees/
+
+# data in experiments folder
+experiments/data-mnist/
+experiments/data-fmnist/
