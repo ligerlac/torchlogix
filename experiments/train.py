@@ -192,6 +192,11 @@ def main():
         help="Temperature for sigmoid in walsh parametrization"
     )
 
+    parser.add_argument(
+        "--walsh-sampling", type=str, default="sigmoid", choices=["sigmoid", "gumbel_soft", "gumbel_hard"],
+        help="Sampling method for walsh parametrization during training"
+    )
+
     args = parser.parse_args()
 
     # Validation

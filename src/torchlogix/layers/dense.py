@@ -5,11 +5,13 @@ import torch
 from rich import print
 from torch.nn.common_types import _size_2_t
 from torch.nn.modules.utils import _pair
+from torch.nn.functional import gumbel_softmax, softmax
 
 from ..functional import (
     GradFactor,
     bin_op_s,
     get_unique_connections,
+    gumbel_sigmoid,
 )
 from ..packbitstensor import PackBitsTensor
 
@@ -39,6 +41,8 @@ class LogicDense(torch.nn.Module):
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
         parametrization: str = "raw",  # standard or walsh
+        temperature: float = 1.0,
+        walsh_sampling: str = "sigmoid"  # "sigmoid", "gumbel_soft", "gumbel_hard"
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -51,6 +55,8 @@ class LogicDense(torch.nn.Module):
         super().__init__()
 
         self.parametrization = parametrization
+        self.temperature = temperature
+        self.walsh_sampling = walsh_sampling
         self.weight_init = weight_init
 
         if self.parametrization == "raw":
@@ -177,7 +183,12 @@ class LogicDense(torch.nn.Module):
             ], dim=-1)
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
-                x = torch.sigmoid(x)
+                if self.walsh_sampling == "sigmoid":
+                    x = torch.sigmoid(x / self.temperature)
+                elif self.walsh_sampling == "gumbel_soft":
+                    x = gumbel_sigmoid(x, tau=self.temperature, hard=False)
+                elif self.walsh_sampling == "gumbel_hard":
+                    x = gumbel_sigmoid(x, tau=self.temperature, hard=True)
             else:
                 x = (x > 0).to(torch.float32)
         return x

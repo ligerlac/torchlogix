@@ -7,7 +7,7 @@ from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 from torch.nn.functional import gumbel_softmax
 
-from ..functional import bin_op_cnn, bin_op_cnn_walsh
+from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid
 
 
 class LogicConv2d(nn.Module):
@@ -146,10 +146,12 @@ class LogicConv2d(nn.Module):
             level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
             current_level = bin_op_cnn_walsh(a, b, level_weights)
             if self.training:
-                current_level = torch.sigmoid(current_level / self.temperature)
-                #hard = gumbel_softmax(current_level, tau=self.temperature, hard=True)
-                #soft = gumbel_softmax(current_level, tau=self.temperature, hard=False)
-                #current_level = hard - soft.detach() + soft
+                if self.walsh_sampling == "sigmoid":
+                    current_level = torch.sigmoid(current_level / self.temperature)
+                elif self.walsh_sampling == "gumbel_soft":
+                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=False)
+                elif self.walsh_sampling == "gumbel_hard":
+                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=True)
             else:
                 current_level = (current_level > 0).to(torch.float32)
 
