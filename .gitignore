@@ -20,3 +20,4 @@ docs/.doctrees/
 # data in experiments folder
 experiments/data-mnist/
 experiments/data-fmnist/
+experiments/run_test.sh
