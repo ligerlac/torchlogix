@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
+from torch.nn.functional import gumbel_softmax
 
 from ..functional import bin_op_cnn, bin_op_cnn_walsh
 
@@ -146,6 +147,9 @@ class LogicConv2d(nn.Module):
             current_level = bin_op_cnn_walsh(a, b, level_weights)
             if self.training:
                 current_level = torch.sigmoid(current_level / self.temperature)
+                #hard = gumbel_softmax(current_level, tau=self.temperature, hard=True)
+                #soft = gumbel_softmax(current_level, tau=self.temperature, hard=False)
+                #current_level = hard - soft.detach() + soft
             else:
                 current_level = (current_level > 0).to(torch.float32)
 
