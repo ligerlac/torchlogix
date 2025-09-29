@@ -33,7 +33,7 @@ class LogicConv2d(nn.Module):
         padding: int = None,
         parametrization: str = "raw", # or 'walsh'
         temperature: float = 1.0,
-        walsh_sampling: str = "sigmoid" # or 'gumbel_soft' or 'gumbel_hard'
+        forward_sampling: str = "soft" # or "hard", "gumbel_soft", or "gumbel_hard"
     ):
         """Initialize the 2d logic convolutional layer.
 
@@ -55,7 +55,7 @@ class LogicConv2d(nn.Module):
         """
         super().__init__()
         self.parametrization = parametrization
-        self.walsh_sampling = walsh_sampling
+        self.forward_sampling = forward_sampling
 
         # self.tree_weights = []
         assert stride <= receptive_field_size, (
@@ -152,11 +152,20 @@ class LogicConv2d(nn.Module):
             level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
             current_level = bin_op_cnn_walsh(a, b, level_weights)
             if self.training:
-                if self.walsh_sampling == "sigmoid":
+                if self.forward_sampling == "soft":
                     current_level = torch.sigmoid(current_level / self.temperature)
-                elif self.walsh_sampling == "gumbel_soft":
+                elif self.forward_sampling == "hard":
+                    current_level = torch.sigmoid(current_level / self.temperature)
+                    # Straight through.
+                    index = current_level.max(-1, keepdim=True)[1]
+                    x_hard = torch.zeros_like(
+                        self.weight, memory_format=torch.legacy_contiguous_format
+                    ).scatter_(-1, index, 1.0)
+                    x_hard = (current_level > 0).to(torch.float32)
+                    current_level = x_hard - current_level.detach() + current_level
+                elif self.forward_sampling == "gumbel_soft":
                     current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=False)
-                elif self.walsh_sampling == "gumbel_hard":
+                elif self.forward_sampling == "gumbel_hard":
                     current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=True)
             else:
                 current_level = (current_level > 0).to(torch.float32)

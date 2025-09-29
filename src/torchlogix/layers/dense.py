@@ -12,6 +12,10 @@ from ..functional import (
     bin_op_s,
     get_unique_connections,
     gumbel_sigmoid,
+    soft_raw,
+    soft_walsh,
+    hard_raw,
+    hard_walsh
 )
 from ..packbitstensor import PackBitsTensor
 
@@ -65,7 +69,7 @@ class LogicDense(torch.nn.Module):
         weight_init: str = "residual",  # "residual" or "random"
         parametrization: str = "raw",  # standard or walsh or anf
         temperature: float = 1.0,
-        forward_sampling: str = "sigmoid"  # "sigmoid", "gumbel_soft", "gumbel_hard"
+        forward_sampling: str = "soft"  # "soft", "hard", "gumbel_soft", "gumbel_hard"
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -191,12 +195,15 @@ class LogicDense(torch.nn.Module):
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
         if self.parametrization == "raw":
             if self.training:
-                if self.forward_sampling == "sigmoid":
-                    x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
+                if self.forward_sampling == "soft":
+                    x = soft_raw(self.weight, tau=self.temperature)
+                elif self.forward_sampling == "hard":
+                    x = hard_raw(self.weight, tau=self.temperature)
                 elif self.forward_sampling == "gumbel_soft":
-                    x = bin_op_s(a, b, gumbel_softmax(self.weight, tau=self.temperature, hard=False))
+                    x = gumbel_softmax(self.weight, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "gumbel_hard":
-                    x = bin_op_s(a, b, gumbel_softmax(self.weight, tau=self.temperature, hard=True))
+                    x = gumbel_softmax(self.weight, tau=self.temperature, hard=True)
+                x = bin_op_s(a, b, x)
             else:
                 weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
                     torch.float32
@@ -213,8 +220,10 @@ class LogicDense(torch.nn.Module):
             ], dim=-1)
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
-                if self.forward_sampling == "sigmoid":
-                    x = torch.sigmoid(x / self.temperature)
+                if self.forward_sampling == "soft":
+                    x = soft_walsh(x, tau=self.temperature)
+                elif self.forward_sampling == "hard":
+                    x = hard_walsh(x, tau=self.temperature)
                 elif self.forward_sampling == "gumbel_soft":
                     x = gumbel_sigmoid(x, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "gumbel_hard":

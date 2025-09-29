@@ -301,3 +301,24 @@ def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
         return (y_hard - y_soft).detach() + y_soft
 
     return y_soft
+
+def soft_raw(logits, tau=1.0):
+    return torch.nn.functional.softmax(logits / tau, dim=-1)
+
+def hard_raw(logits, tau=1.0):
+    x = torch.nn.functional.softmax(logits / tau, dim=-1)
+    # Straight through.
+    index = x.max(-1, keepdim=True)[1]
+    x_hard = torch.zeros_like(
+        logits, memory_format=torch.legacy_contiguous_format
+    ).scatter_(-1, index, 1.0)
+    return x_hard - x.detach() + x
+
+def soft_walsh(logits, tau=1.0):
+    return torch.sigmoid(logits / tau)
+
+def hard_walsh(logits, tau=1.0):
+    x = torch.sigmoid(logits / tau)
+    x = (x > 0.5).to(torch.float32) - x.detach() + x
+    return x
+

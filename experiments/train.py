@@ -193,7 +193,7 @@ def main():
     )
 
     parser.add_argument(
-        "--forward-sampling", type=str, default="sigmoid", choices=["sigmoid", "gumbel_soft", "gumbel_hard"],
+        "--forward-sampling", type=str, default="soft", choices=["soft", "hard", "gumbel_soft", "gumbel_hard"],
         help="Sampling method in forward pass during training"
     )
 
