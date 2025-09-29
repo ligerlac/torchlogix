@@ -140,7 +140,7 @@ class ClgnMnistLarge(ClgnMnist):
         super(ClgnMnistLarge, self).__init__(k_num=1024, **llkw)
 
 
-class ClgnCifar10(torch.nn.Module):
+class ClgnCifar10(torch.nn.Sequential):
     """
     An implementation of a logic gate convolutional neural network for CIFAR-10,
     as described in the paper 'convolutional logic gate networks'.
@@ -149,7 +149,6 @@ class ClgnCifar10(torch.nn.Module):
     """
 
     def __init__(self, n_bits: int, k_num: int, tau: float, **llkw):
-        super(ClgnCifar10, self).__init__()
         layers = []
         layers.append(
             LogicConv2d(
