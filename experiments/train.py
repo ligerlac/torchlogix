@@ -2,6 +2,7 @@
 """Training script for TorchLogix models."""
 
 import argparse
+import random
 from pathlib import Path
 from collections import defaultdict
 import numpy as np
@@ -18,17 +19,146 @@ from utils import (
 import torchlogix
 
 
+def get_gate_ids_walsh(model):
+    device = next(model.parameters()).device
+    binary_inputs = torch.tensor([[-1, -1], [-1, 1], [1, -1], [1, 1]], dtype=torch.float32, device=device)
+    truth_tables = (
+        (0,0,0,0), (1,1,1,1), (0,0,0,1), (0,1,1,1), (0,1,1,0), (1,0,0,1), (1,1,1,0), (1,0,0,0), \
+        (0,0,1,0), (0,1,0,0), (0,0,1,1), (1,1,0,0), (0,1,0,1), (1,0,1,0), (1,1,0,1), (1,0,1,1)
+    )
+    truth_tables = torch.tensor(truth_tables, dtype=torch.float32, device=device)  # Shape: (16, 4)
+    gate_ids = []
+    for param in model.parameters():
+        inputs_expanded = binary_inputs.unsqueeze(0)  # Shape: (1, 4, 2)
+
+        # Now the computation will broadcast correctly
+        linear_preds = (param[:, 0].unsqueeze(1) + 
+                        param[:, 1].unsqueeze(1) * inputs_expanded[:, :, 0] + 
+                        param[:, 2].unsqueeze(1) * inputs_expanded[:, :, 1] + 
+                        param[:, 3].unsqueeze(1) * inputs_expanded[:, :, 0] * inputs_expanded[:, :, 1])
+
+        preds = (linear_preds > 0.0).float()
+
+        # Compare preds with all truth tables to find ids
+        dists = ((preds.unsqueeze(1) - truth_tables.unsqueeze(0)).abs().sum(dim=-1)).cpu().numpy()
+        ids = dists.argmin(axis=1)
+
+        # Compute gate outputs based on counts
+        gate_ids.append(ids)
+
+    return np.concatenate(gate_ids)
+
+
+def get_gate_ids_raw(model):
+    gate_ids = []
+    for param in model.parameters():
+        # argmax over all 16 weights
+        ids = param.argmax(dim=-1).cpu().numpy()
+        gate_ids.append(ids)
+
+    return np.concatenate(gate_ids)
+
+
+def analyze_nodes_closest_to_half(model, input_data, top_n=5):
+    """
+    Find nodes with activations closest to 0.5 and print their parameters
+    """
+    activations = {}
+    
+    def get_activation(name):
+        def hook(model, input, output):
+            activations[name] = output.detach()
+        return hook
+    
+    # Register hooks
+    hooks = []
+    for name, module in model.named_modules():
+        if hasattr(module, 'weight'):  # Layers with parameters
+            hook = module.register_forward_hook(get_activation(name))
+            hooks.append(hook)
+    
+    # Forward pass
+    with torch.no_grad():
+        _ = model(input_data)
+    
+    # Collect all nodes closest to 0.5 across all layers
+    all_candidates = []
+    
+    # for layer_name, activation in activations.items():
+    for layer_name, activation in activations.items():
+        module = dict(model.named_modules())[layer_name]
+        activation_np = activation.cpu().numpy()
+
+        batch_size, num_nodes = activation_np.shape
+
+        for node_idx in range(num_nodes):
+            node_activations = activation_np[:, node_idx]                        
+            target_vector = np.full_like(node_activations, 0.5)
+            l2_distance = np.linalg.norm(node_activations - target_vector)
+            mean_activation = node_activations.mean()
+            all_candidates.append({
+                'activations': node_activations,
+                'layer_name': layer_name,
+                'node_idx': node_idx,
+                'mean_activation': mean_activation,
+                'l2_distance': l2_distance,
+                'module': module
+            })
+        # look only at first layer
+        break
+
+    # Sort by distance from 0.5
+    all_candidates.sort(key=lambda x: x['l2_distance'])
+    
+    # Print top N closest nodes
+    print(f"\nTop {top_n} nodes closest to 0.5 across all layers:")
+    print("=" * 60)
+    
+    for i, c in enumerate(all_candidates[:top_n]):
+        print(f"\n{i+1}. Layer {c['layer_name']}, Node {c['node_idx']}")
+        print(f"   Mean Activation: {c['mean_activation']:.6f} (L2 distance from 0.5: {c['l2_distance']:.6f})")
+        print(f"   Weights: {c['module'].weight[c['node_idx']].detach().cpu().numpy()}")
+
+    best_candidate = all_candidates[0]
+    activations = best_candidate['activations']
+    h = hist.Hist.new.Regular(10, 0., 1., name="x").Double()
+    h.fill(activations)
+    print(h)
+
+    # Print top N furthest nodes
+    print(f"\nTop {top_n} nodes furthest from 0.5 across all layers:")
+    print("=" * 60)
+
+    for i, c in enumerate(all_candidates[-top_n:]):
+        print(f"\n{i+1}. Layer {c['layer_name']}, Node {c['node_idx']}")
+        print(f"   Mean Activation: {c['mean_activation']:.6f} (L2 distance from 0.5: {c['l2_distance']:.6f})")
+        print(f"   Weights: {c['module'].weight[c['node_idx']].detach().cpu().numpy()}")
+
+    best_candidate = all_candidates[-1]
+    activations = best_candidate['activations']
+    h = hist.Hist.new.Regular(10, 0., 1., name="x").Double()
+    h.fill(activations)
+    print(h)
+    
+    # Clean up
+    for hook in hooks:
+        hook.remove()
+
+
 def run_training(args):
     """Run the training loop."""
     # Setup experiment
-    device = setup_experiment(args.seed, args.implementation)
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.set_num_threads(1)
 
     # Load data (omit test set during training)
     train_loader, validation_loader, _ = load_dataset(args)
 
     # Get model, loss, and optimizer
     model, loss_fn, optim = get_model(args)
-    model.to(device)
+    model.to(args.device)
 
     # Create evaluation functions
     eval_functions = create_eval_functions(loss_fn)
@@ -39,7 +169,8 @@ def run_training(args):
 
     print(f"Starting training for {args.num_iterations} iterations...")
     print(f"Model: {args.architecture}, Dataset: {args.dataset}")
-    print(f"Device: {device}, Implementation: {args.implementation}")
+    print(f"Device: {args.device}, Implementation: {args.implementation}")
+    save_config(vars(args), args.output, "training_config.json")
 
     pbar = tqdm(
         enumerate(load_n(train_loader, args.num_iterations)),
@@ -47,16 +178,11 @@ def run_training(args):
         total=args.num_iterations,
     )
     for i, (x, y) in pbar:
-        # Move data to device
-        # x = x.bool().float()
-        x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to(device)
-        y = y.to(device)
-
-        # import numpy as np
-        # print(np.unique(x.cpu().numpy()))
+        x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to(args.device)
+        y = y.to(args.device)
 
         # Training step
-        loss = train(model, x, y, loss_fn, optim)
+        loss = train(model, x, y, loss_fn, optim)#, reg_lambda=args.reg_lambda)
         pbar.set_postfix(loss=f"{loss:.4f}")
 
         if args.temp_decay is not None:
@@ -70,8 +196,30 @@ def run_training(args):
         metrics[i + 1] = {"train_loss": loss}
 
         # Evaluation
-        if (i + 1) % args.eval_freq == 0:
+        if ((i + 1) % args.eval_freq == 0) or (i == 0):
+            # if args.reg_lambda > 0.0:
             print(f"\nEvaluation at iteration {i + 1}")
+
+            import hist
+            all_weights = []
+            for param in model.parameters():
+                all_weights.append(param.view(-1).detach().cpu().numpy())
+            all_weights = np.concatenate(all_weights)
+            h = hist.Hist.new.Regular(30, -3, 3, name="x").Double()
+            h.fill(all_weights)
+            print(h)
+
+            if args.parametrization == "walsh":
+                gate_ids = get_gate_ids_walsh(model)
+            elif args.parametrization == "raw":
+                gate_ids = get_gate_ids_raw(model)
+            
+            h = hist.Hist.new.Regular(16, 0, 16, name="x").Double()
+            h.fill(gate_ids)
+            print(h)
+
+            print("Gate counts:", gate_ids)            
+            # analyze_nodes_closest_to_half(model, x, top_n=10)
 
             # with torch.no_grad():
             #     for i, layer in enumerate(model):
@@ -92,10 +240,10 @@ def run_training(args):
 
             # Evaluate on validation set
             eval_metrics = evaluate_model(
-                model, validation_loader, eval_functions, mode="eval", device=device
+                model, validation_loader, eval_functions, mode="eval", device=args.device
             )
             train_metrics = evaluate_model(
-                model, validation_loader, eval_functions, mode="train", device=device
+                model, validation_loader, eval_functions, mode="train", device=args.device
             )
 
             # Update metrics
@@ -117,12 +265,24 @@ def run_training(args):
             # Save intermediate metrics
             save_metrics_csv(metrics, args.output, "training_metrics.csv")
 
+            if args.temp_decay is not None:
+                temperature = np.exp(- i / args.num_iterations * args.temp_decay)
+                for layer in model:
+                    if isinstance(layer, torchlogix.layers.LogicConv2d) or isinstance(layer, torchlogix.layers.LogicDense):
+                        layer.temperature = temperature
+                pbar.set_postfix(loss=f"{loss:.4f}", temp=f"{temperature:.4f}")
+            
+        
+            if args.weight_growth != 0.0:
+                for param in model.parameters():
+                    # draw params closer to 0 or +- 1
+                    param.data *= (1 + args.weight_growth)
+
     # Save final model
     torch.save(model.state_dict(), f"{args.output}/final_model.pt")
 
     # Save final metrics and config
     save_metrics_csv(metrics, args.output, "training_metrics.csv")
-    save_config(vars(args), args.output, "training_config.json")
 
     print(f"\nTraining completed!")
     print(f"Best validation accuracy: {best_val_acc:.4f}")
@@ -138,18 +298,12 @@ def main():
         help="Dataset to train on"
     )
     parser.add_argument(
-        "--architecture", "-a", choices=ARCHITECTURE_CHOICES,
+        "--architecture", "-a", choices=torchlogix.models.__dict__.keys(),
         default="randomly_connected", help="Model architecture"
     )
-
-    # Model parameters
-    parser.add_argument("--num_neurons", "-k", type=int, default=6000, help="Number of neurons")
-    parser.add_argument("--num_layers", "-l", type=int, default=4, help="Number of layers")
-    parser.add_argument("--tau", "-t", type=float, default=10, help="Softmax temperature")
-    parser.add_argument("--grad-factor", type=float, default=1.0, help="Gradient factor")
     parser.add_argument(
-        "--connections", type=str, default="random", choices=["random", "unique"],
-        help="Connection type"
+        "--connections", type=str, choices=["random", "unique"],
+        default="random", help="Model architecture"
     )
 
     # Training parameters
@@ -172,8 +326,14 @@ def main():
         "--implementation", type=str, default="cuda", choices=["cuda", "python"],
         help="Implementation to use (cuda is faster)"
     )
+
     parser.add_argument(
-        "--parametrization", type=str, default="raw", choices=["raw", "walsh"],
+        "--device", type=str, default="cuda", choices=["cuda", "cpu", "mps"],
+        help="Device to use (cuda is faster)"
+    )
+
+    parser.add_argument(
+        "--parametrization", type=str, default="raw", choices=["raw", "walsh", "anf", "walsh2"],
         help="Parametrization to use"
     )
 
@@ -189,9 +349,19 @@ def main():
 
     parser.add_argument(
         "--temperature", type=float, default=1.0,
-        help="Temperature for sampling in forward pass"
+        help="Temperature for sigmoid in walsh parametrization"
     )
 
+    parser.add_argument(
+        "--reg-lambda", type=float, default=0.0,
+        help="Regularization strength"
+    )
+
+    parser.add_argument(
+        "--weight-growth", type=float, default=0.0,
+        help="Weight growth factor per iteration"
+    )
+    
     parser.add_argument(
         "--forward-sampling", type=str, default="soft", choices=["soft", "hard", "gumbel_soft", "gumbel_hard"],
         help="Sampling method in forward pass during training"
