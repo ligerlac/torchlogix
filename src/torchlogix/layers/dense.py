@@ -42,7 +42,7 @@ class LogicDense(torch.nn.Module):
         weight_init: str = "residual",  # "residual" or "random"
         parametrization: str = "raw",  # standard or walsh
         temperature: float = 1.0,
-        walsh_sampling: str = "sigmoid"  # "sigmoid", "gumbel_soft", "gumbel_hard"
+        forward_sampling: str = "sigmoid"  # "sigmoid", "gumbel_soft", "gumbel_hard"
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -56,7 +56,7 @@ class LogicDense(torch.nn.Module):
 
         self.parametrization = parametrization
         self.temperature = temperature
-        self.walsh_sampling = walsh_sampling
+        self.forward_sampling = forward_sampling
         self.weight_init = weight_init
 
         if self.parametrization == "raw":
@@ -166,7 +166,12 @@ class LogicDense(torch.nn.Module):
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
         if self.parametrization == "raw":
             if self.training:
-                x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
+                if self.forward_sampling == "sigmoid":
+                    x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
+                elif self.forward_sampling == "gumbel_soft":
+                    x = bin_op_s(a, b, gumbel_softmax(self.weight, tau=self.temperature, hard=False))
+                elif self.forward_sampling == "gumbel_hard":
+                    x = bin_op_s(a, b, gumbel_softmax(self.weight, tau=self.temperature, hard=True))
             else:
                 weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
                     torch.float32
@@ -183,11 +188,11 @@ class LogicDense(torch.nn.Module):
             ], dim=-1)
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
-                if self.walsh_sampling == "sigmoid":
+                if self.forward_sampling == "sigmoid":
                     x = torch.sigmoid(x / self.temperature)
-                elif self.walsh_sampling == "gumbel_soft":
+                elif self.forward_sampling == "gumbel_soft":
                     x = gumbel_sigmoid(x, tau=self.temperature, hard=False)
-                elif self.walsh_sampling == "gumbel_hard":
+                elif self.forward_sampling == "gumbel_hard":
                     x = gumbel_sigmoid(x, tau=self.temperature, hard=True)
             else:
                 x = (x > 0).to(torch.float32)

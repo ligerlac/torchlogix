@@ -151,7 +151,7 @@ def get_model(args):
         "implementation": args.implementation,
         "device": IMPL_TO_DEVICE[args.implementation],
         "parametrization": args.parametrization,
-        "walsh_sampling": args.walsh_sampling
+        "forward_sampling": args.forward_sampling
     }
     in_dim = input_dim_of_dataset(args.dataset)
     class_count = num_classes_of_dataset(args.dataset)

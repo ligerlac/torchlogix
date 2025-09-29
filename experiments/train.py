@@ -189,12 +189,12 @@ def main():
 
     parser.add_argument(
         "--temperature", type=float, default=1.0,
-        help="Temperature for sigmoid in walsh parametrization"
+        help="Temperature for sampling in forward pass for walsh parametrization"
     )
 
     parser.add_argument(
-        "--walsh-sampling", type=str, default="sigmoid", choices=["sigmoid", "gumbel_soft", "gumbel_hard"],
-        help="Sampling method for walsh parametrization during training"
+        "--forward-sampling", type=str, default="sigmoid", choices=["sigmoid", "gumbel_soft", "gumbel_hard"],
+        help="Sampling method in forward pass during training"
     )
 
     args = parser.parse_args()
