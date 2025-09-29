@@ -33,6 +33,7 @@ class LogicConv2d(nn.Module):
         padding: int = None,
         parametrization: str = "raw", # or 'walsh'
         temperature: float = 1.0,
+        walsh_sampling: str = "sigmoid" # or 'gumbel_soft' or 'gumbel_hard'
     ):
         """Initialize the 2d logic convolutional layer.
 
@@ -54,6 +55,7 @@ class LogicConv2d(nn.Module):
         """
         super().__init__()
         self.parametrization = parametrization
+        self.walsh_sampling = walsh_sampling
 
         # self.tree_weights = []
         assert stride <= receptive_field_size, (
@@ -101,13 +103,17 @@ class LogicConv2d(nn.Module):
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
         current_level = x
+        if self.padding > 0:
+            current_level = torch.nn.functional.pad(
+                current_level,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
+            )
+
         left_indices, right_indices = self.indices[0]
         a_h, a_w, a_c = left_indices[..., 0], left_indices[..., 1], left_indices[..., 2]
-        b_h, b_w, b_c = (
-            right_indices[..., 0],
-            right_indices[..., 1],
-            right_indices[..., 2],
-        )
+        b_h, b_w, b_c = right_indices[..., 0], right_indices[..., 1], right_indices[..., 2]
         a = current_level[:, a_c, a_h, a_w]
         b = current_level[:, b_c, b_h, b_w]
 
@@ -395,6 +401,7 @@ class LogicConv3d(nn.Module):
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
         current_level = x
+        # apply zero padding
         left_indices, right_indices = self.indices[0]
         a_h, a_w, a_d, a_c = (
             left_indices[..., 0],
@@ -612,7 +619,7 @@ class OrPooling(torch.nn.Module):
 
     # create layer that selects max in the kernel
 
-    def __init__(self, kernel_size, stride, padding):
+    def __init__(self, kernel_size, stride, padding=0):
         super(OrPooling, self).__init__()
         self.kernel_size = kernel_size
         self.stride = stride

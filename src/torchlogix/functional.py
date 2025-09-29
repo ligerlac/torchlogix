@@ -239,7 +239,7 @@ class GradFactor(torch.autograd.Function):
 ##########################################################################
 
 
-def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
+def gumbel_sigmoid_old(logits, tau=1.0, hard=False, threshold=0.5):
 
     """
     Samples from the Gumbel-Sigmoid distribution with an optional hard gate at the selected threshold.
@@ -277,4 +277,27 @@ def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
         y_hard = (y_soft > threshold).float()
         return (y_hard - y_soft).detach() + y_soft
     
+    return y_soft
+
+
+
+def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
+    """
+    Fast Gumbel-Sigmoid implementation using logistic noise trick.
+    """
+    if tau <= 0:
+        raise ValueError("Temperature must be positive")
+
+    # Logistic(0,1) noise from uniform: log(U) - log(1-U)
+    U = torch.rand_like(logits)
+    logistic_noise = torch.log(U + 1e-20) - torch.log(1 - U + 1e-20)
+
+    # Soft sample
+    y_soft = torch.sigmoid((logits + logistic_noise) / tau)
+
+    if hard:
+        # Straight-through estimator
+        y_hard = (y_soft > threshold).float()
+        return (y_hard - y_soft).detach() + y_soft
+
     return y_soft
