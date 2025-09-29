@@ -118,26 +118,16 @@ class LogicConv2d(nn.Module):
         b = current_level[:, b_c, b_h, b_w]
 
         if self.parametrization == "raw":
-            if self.forward_sampling == "soft":
-                level_weights = torch.stack(
-                    [soft_raw(w, tau=self.temperature) for w in self.tree_weights[0]],
-                    dim=0,
-                )
-            elif self.forward_sampling == "hard":
-                level_weights = torch.stack(
-                    [hard_raw(w, tau=self.temperature) for w in self.tree_weights[0]],
-                    dim=0,
-                )
-            elif self.forward_sampling == "gumbel_soft":
-                level_weights = torch.stack(
-                    [gumbel_softmax(w, tau=self.temperature, hard=False) for w in self.tree_weights[0]],
-                    dim=0,
-                )
-            elif self.forward_sampling == "gumbel_hard":
-                level_weights = torch.stack(
-                    [gumbel_softmax(w, tau=self.temperature, hard=True) for w in self.tree_weights[0]],
-                    dim=0,
-                )
+            weighting_func = {
+                "soft": soft_raw,
+                "hard": hard_raw,
+                "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
+                "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
+            }[self.forward_sampling]
+
+            level_weights = torch.stack(
+                [weighting_func(w) for w in self.tree_weights[0]], dim=0
+            )
             if not self.training:
                 level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
                     torch.float32
@@ -150,26 +140,9 @@ class LogicConv2d(nn.Module):
                 left_indices, right_indices = self.indices[level]
                 a = current_level[..., left_indices]
                 b = current_level[..., right_indices]
-                if self.forward_sampling == "soft":
-                    level_weights = torch.stack(
-                        [soft_raw(w, tau=self.temperature) for w in self.tree_weights[level]],
-                        dim=0,
-                    )  # Shape: [8, 16, 16]
-                elif self.forward_sampling == "hard":
-                    level_weights = torch.stack(
-                        [hard_raw(w, tau=self.temperature) for w in self.tree_weights[level]],
-                        dim=0,
-                    )  # Shape: [8, 16, 16]
-                elif self.forward_sampling == "gumbel_soft":
-                    level_weights = torch.stack(
-                        [gumbel_softmax(w, tau=self.temperature, hard=False) for w in self.tree_weights[level]],
-                        dim=0,
-                    )  # Shape: [8, 16, 16]
-                elif self.forward_sampling == "gumbel_hard":
-                    level_weights = torch.stack(
-                        [gumbel_softmax(w, tau=self.temperature, hard=True) for w in self.tree_weights[level]],
-                        dim=0,
-                    )  # Shape: [8, 16, 16]
+                level_weights = torch.stack(
+                    [weighting_func(w) for w in self.tree_weights[level]], dim=0
+                )
                 if not self.training:
                     level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
                         torch.float32
