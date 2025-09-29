@@ -189,7 +189,7 @@ def main():
 
     parser.add_argument(
         "--temperature", type=float, default=1.0,
-        help="Temperature for sampling in forward pass for walsh parametrization"
+        help="Temperature for sampling in forward pass"
     )
 
     parser.add_argument(
