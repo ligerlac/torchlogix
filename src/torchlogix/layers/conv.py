@@ -7,7 +7,7 @@ from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 from torch.nn.functional import gumbel_softmax
 
-from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, soft_raw, soft_walsh, hard_raw, hard_walsh
+from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, soft_raw, soft_walsh, hard_raw, hard_walsh, WALSH_COEFFICIENTS
 
 
 class LogicConv2d(nn.Module):
@@ -29,6 +29,7 @@ class LogicConv2d(nn.Module):
         receptive_field_size: int = None,
         implementation: str = None,
         connections: str = "random",  # or 'random-unique'
+        weight_init: str = "residual",  # "residual" or "random"
         stride: int = 1,
         padding: int = None,
         parametrization: str = "raw", # or 'walsh'
@@ -67,18 +68,27 @@ class LogicConv2d(nn.Module):
             level_weights = torch.nn.ParameterList()
             for _ in range(2**i):  # Iterate over nodes at this level
                 if self.parametrization == "raw":
-                    weights = torch.zeros(
-                        num_kernels, 16, device=device
-                    )  # Initialize with zeros
-                    weights[:, 3] = 5  # Set the fourth element (index 3) to 5
-                    # Wrap as a trainable parameter
-                    level_weights.append(torch.nn.Parameter(weights))
+                    if weight_init == "residual":
+                        weights = torch.zeros(
+                            num_kernels, 16, device=device
+                        )  # Initialize with zeros
+                        weights[:, 3] = 5  # Set the fourth element (index 3) to 5
+                    elif weight_init == "random":
+                        weights = torch.randn(num_kernels, 16, device=device)
                 elif self.parametrization == "walsh":
-                    # weights = torch.randn(num_kernels, 4, device=device) - 0.5
-                    # weights[:, 1] = torch.randn(num_kernels, device=device) + 1.0
-                    weights = torch.zeros(num_kernels, 4, device=device)
-                    weights[:, 1] = 1.0
-                    level_weights.append(torch.nn.Parameter(weights))
+                    if weight_init == "residual":
+                        # chose randomly from walsh_coefficients, but prefer id=10
+                        walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
+                        weights = walsh_coefficients_tensor[
+                            torch.randint(0, 16, (num_kernels,), device=device)
+                        ].clone()  # .clone() for safety
+                        n = num_kernels // 2
+                        # set half of weights to id=10 (pick index randomly)
+                        indices = torch.randperm(num_kernels, device=device)
+                        weights[indices[:n]] = walsh_coefficients_tensor[10]
+                    elif weight_init == "random":
+                        weights = torch.randn(num_kernels, 4, device=device) * 0.1
+                level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
         self.in_dim = _pair(in_dim)
         self.device = device
