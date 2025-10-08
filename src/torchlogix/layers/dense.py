@@ -305,6 +305,9 @@ class LogicDense(torch.nn.Module):
         """Computes most-probable gate for each learned set of weights.
         Returns tensor of most-probable gate IDs."""
 
+        assert self.parametrization=="walsh", \
+            f"Cannot compute Walsh gate IDs for parameterization={self.parameterization}"
+
         n_rows = 2**n_inputs
 
         # generate all 2^n input combinations
