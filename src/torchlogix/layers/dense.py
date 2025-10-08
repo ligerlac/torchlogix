@@ -301,59 +301,57 @@ class LogicDense(torch.nn.Module):
         else:
             raise ValueError(connections)
 
-    def get_gate_ids_walsh(self, n_inputs=2, threshold = 0.0):
+    def get_gate_ids(self):
         """Computes most-probable gate for each learned set of weights.
         Returns tensor of most-probable gate IDs."""
 
-        assert self.parametrization=="walsh", \
-            f"Cannot compute Walsh gate IDs for parameterization={self.parameterization}"
+        assert self.parametrization in ["raw", "walsh"], \
+            f"Cannot compute gate IDs for parameterization={self.parameterization}"
 
-        n_rows = 2**n_inputs
+        if self.parametrization=="walsh":
+            n_inputs = 2
+            n_rows = 2**n_inputs
 
-        # generate all 2^n input combinations
-        binary_inputs = torch.tensor(
-            list(product([-1, 1], repeat=n_inputs)),
-            dtype=torch.float32, 
-            device=self.device
-        ) # shape: (n_rows, n_inputs)
+            # generate all 2^n input combinations
+            binary_inputs = torch.tensor(
+                list(product([-1, 1], repeat=n_inputs)),
+                dtype=torch.float32, 
+                device=self.device
+            ) # shape: (4, 2)
 
-        # generate truth tables
-        if n_inputs==2:
+            # generate truth tables
             truth_tables = (
                 (0,0,0,0), (1,1,1,1), (0,0,0,1), (0,1,1,1), (0,1,1,0), (1,0,0,1), (1,1,1,0), (1,0,0,0), \
                 (0,0,1,0), (0,1,0,0), (0,0,1,1), (1,1,0,0), (0,1,0,1), (1,0,1,0), (1,1,0,1), (1,0,1,1)
             )
             truth_tables = torch.tensor(truth_tables, dtype=torch.float32, device=self.device)
-        else:
-            truth_tables = []
-            for i in range(16):
-                bits = [(i >> j) & 1 for j in reversed(range(4))]
-                truth_tables.append(bits)
-            truth_tables = torch.tensor(truth_tables, dtype=torch.float32, device=self.device) # shape: (2**n_rows, n_rows)
 
 
-        num_gates, num_coeffs = self.weight.shape
-        assert num_coeffs == 1 + n_inputs + (n_inputs*(n_inputs-1))//2, \
-            f"Unexpected param shape {self.weight.shape} for n_inputs={n_inputs}"
+            num_gates, num_coeffs = self.weight.shape
+            assert num_coeffs == 1 + n_inputs + (n_inputs*(n_inputs-1))//2, \
+                f"Unexpected param shape {self.weight.shape} for n_inputs={n_inputs}"
+            
+            # bias term
+            linear_preds = self.weight[:, 0].unsqueeze(1).expand(-1, n_rows)  # shape: (16, 4)
+
+            # add linear terms
+            for i in range(n_inputs):
+                linear_preds = linear_preds + self.weight[:, i+1].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0)
+
+            # add pairwise product terms
+            idx = n_inputs+1
+            for i in range(n_inputs):
+                for j in range(i+1, n_inputs):
+                    linear_preds += (self.weight[:, idx].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0) 
+                                    * binary_inputs[:, j].unsqueeze(0))
+                    idx +=1
+
+            preds = (linear_preds > 0.0).float() # shape: (16, 4)
+            dists = (preds.unsqueeze(1) != truth_tables.unsqueeze(0)).sum(dim=-1)
+            ids = dists.argmin(axis=1) # index of closest truth table
         
-        # bias term
-        linear_preds = self.weight[:, 0].unsqueeze(1).expand(-1, n_rows)  # shape: (num_gates, n_rows)
-
-        # add linear terms
-        for i in range(n_inputs):
-            linear_preds = linear_preds + self.weight[:, i+1].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0)
-
-        # add pairwise product terms
-        idx = n_inputs+1
-        for i in range(n_inputs):
-            for j in range(i+1, n_inputs):
-                linear_preds += (self.weight[:, idx].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0) 
-                                 * binary_inputs[:, j].unsqueeze(0))
-                idx +=1
-
-        preds = (linear_preds > threshold).float() # shape: (num_gates, n_rows)
-        dists = (preds.unsqueeze(1) != truth_tables.unsqueeze(0)).sum(dim=-1) # shape: (num_gates, 2**n_rows)
-        ids = dists.argmin(axis=1) # index of closest truth table
+        else: 
+            ids = self.weight.argmax(axis=1)
 
         return ids
 
