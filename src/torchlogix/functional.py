@@ -72,6 +72,7 @@ WALSH_COEFFICIENTS = {
     15: (0.5, 0.5, -0.5, 0.5),
 }
 
+
 def bin_op(a, b, i):
     assert a[0].shape == b[0].shape, (a[0].shape, b[0].shape)
     if a.shape[0] > 1:

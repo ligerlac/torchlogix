@@ -16,7 +16,8 @@ from ..functional import (
     soft_raw,
     soft_walsh,
     hard_raw,
-    hard_walsh
+    hard_walsh,
+    WALSH_COEFFICIENTS,
 )
 from ..packbitstensor import PackBitsTensor
 
@@ -29,30 +30,6 @@ except ImportError:
     )
 
 ##########################################################################
-
-walsh_coefficients = {
-    0: (-1, 0, 0, 0),
-    1: (+1, 0, 0, 0),
-    2: (-0.5, 0.5, 0.5, 0.5),
-    3: (0.5, 0.5, 0.5, -0.5),
-    4: (0, 0, 0, -1),
-    5: (0, 0, 0, +1),
-    6: (0.5, -0.5, -0.5, -0.5),
-    7: (-0.5, -0.5, -0.5, 0.5),
-    8: (-0.5, 0.5, -0.5, -0.5),
-    9: (-0.5, -0.5, 0.5, -0.5),
-    10: (0, 1, 0, 0),
-    11: (0, -1, 0, 0),
-    12: (0, 0, 1, 0),
-    13: (0, 0, -1, 0),
-    14: (0.5, -0.5, 0.5, 0.5),
-    15: (0.5, 0.5, -0.5, 0.5),
-}
-
-walsh_coefficients_tensor = torch.tensor(
-    [walsh_coefficients[i] for i in range(16)], dtype=torch.float32
-)
-
 
 class LogicDense(torch.nn.Module):
     """
@@ -102,6 +79,7 @@ class LogicDense(torch.nn.Module):
         elif self.parametrization in ["walsh", "anf"]:
             if weight_init == "residual":
                 # chose randomly from walsh_coefficients, but prefer id=10
+                walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
                 weights = walsh_coefficients_tensor[
                     torch.randint(0, 16, (out_dim,), device=device)
                 ]
