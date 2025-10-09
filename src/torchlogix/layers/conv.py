@@ -31,7 +31,7 @@ class LogicConv2d(nn.Module):
         connections: str = "random",  # or 'random-unique'
         weight_init: str = "residual",  # "residual" or "random"
         stride: int = 1,
-        padding: int = None,
+        padding: int = 0,
         parametrization: str = "raw", # or 'walsh'
         temperature: float = 1.0,
         forward_sampling: str = "soft" # or "hard", "gumbel_soft", or "gumbel_hard"
