@@ -12,7 +12,7 @@ dependencies:
   - pyg >= 2.3.0
   - tqdm
   - scikit-learn
-  - pytorch > =2
+  - pytorch >= 2
   - torchvision
   - pip
   - pandas

@@ -233,6 +233,72 @@ def test_and_model():
         )
 
 
+def test_and_model_walsh():
+    """Test the AND gate implementation.
+
+    AND is the 1-st gate:
+    - set the weights to 0, except for the 1-st element (set to some high value)
+    - test some possible inputs
+    """
+    layer = LogicConv2d(
+        in_dim=3,
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        implementation="python",
+        connections="random-unique",
+        stride=1,
+        padding=0,
+        parametrization="walsh",
+    )
+
+    kernel_pairs = (
+        torch.tensor([[0, 0, 0], [1, 0, 0]]),
+        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+    )
+    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+
+    # Set weights to select AND operation
+    with torch.no_grad():
+        and_weights = torch.tensor([-100., 50., 50., 50.]).reshape(1, 4)
+        # and_weights[0, 3] = 100.0  # Large value so softmax will make it close to 1
+        layer.tree_weights[0][0].data = and_weights
+        layer.tree_weights[0][1].data = and_weights
+        layer.tree_weights[1][0].data = and_weights
+
+    # only all 1s should produce 1
+    test_cases = [
+        ([[0, 0, 0], 
+          [0, 0, 0], 
+          [0, 0, 0]
+        ], [0, 0, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 0], 
+          [0, 0, 1]]
+        , [1, 0, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 1], 
+          [0, 0, 1]]
+        , [1, 1, 0, 0]),
+        ([[1, 1, 1], 
+          [1, 1, 1], 
+          [1, 1, 1]]
+        , [1, 1, 1, 1]),
+    ]
+
+    for x, y in test_cases:
+        x = torch.tensor([[x]], dtype=torch.float32)
+        output = layer(x)
+        expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
+        print(f"Input:\n{x},\n Output:\n{output},\n Expected:\n{expected}")
+        assert torch.allclose(
+            output, 
+            expected
+        )
+
+
 def test_binary_model():
     layer = LogicConv2d(
         in_dim=2,
