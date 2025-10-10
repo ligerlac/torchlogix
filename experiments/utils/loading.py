@@ -132,6 +132,9 @@ def load_dataset(args):
             "cifar-10-3-thresholds": lambda x: torch.cat(
                 [(x > (i + 1) / 4).float() for i in range(3)], dim=0
             ),
+            "cifar-10-5-thresholds": lambda x: torch.cat(
+                [(x > (i + 1) / 6).float() for i in range(5)], dim=0
+            ),
             "cifar-10-31-thresholds": lambda x: torch.cat(
                 [(x > (i + 1) / 32).float() for i in range(31)], dim=0
             ),
@@ -221,6 +224,7 @@ def input_dim_of_dataset(dataset):
         "cifar-10": 3 * 32 * 32,
         "cifar-10-2-thresholds": 3 * 32 * 32 * 2,
         "cifar-10-3-thresholds": 3 * 32 * 32 * 3,
+        "cifar-10-5-thresholds": 3 * 32 * 32 * 5,
         "cifar-10-31-thresholds": 3 * 32 * 32 * 31,
         "cora": 1433,
         "pubmed": 500,
@@ -242,6 +246,7 @@ def num_classes_of_dataset(dataset):
         "cifar-10": 10,
         "cifar-10-2-thresholds": 10,
         "cifar-10-3-thresholds": 10,
+        "cifar-10-5-thresholds": 10,
         "cifar-10-31-thresholds": 10,
         "cora": 7,
         "pubmed": 3,
