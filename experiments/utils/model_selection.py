@@ -8,12 +8,13 @@ def get_model(args):
     It can be a difflogic model or a baseline model.
     """
     llkw = {
-        "grad_factor": args.grad_factor,
         "connections": args.connections,
         "implementation": args.implementation,
         "device": args.device,
         "parametrization": args.parametrization,
-        "walsh_sampling": args.walsh_sampling
+        "forward_sampling": args.forward_sampling,
+        "temperature": args.temperature,
+        "weight_init": args.weight_init,
     }
     model_cls = torchlogix.models.__dict__[args.architecture]
     model = model_cls(**llkw)
