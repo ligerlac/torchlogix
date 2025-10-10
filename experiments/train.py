@@ -6,6 +6,7 @@ import random
 from pathlib import Path
 from collections import defaultdict
 import numpy as np
+import hist
 
 import torch
 from tqdm import tqdm
@@ -192,22 +193,22 @@ def run_training(args):
                     layer.temperature = temperature
             pbar.set_postfix(loss=f"{loss:.4f}", temp=f"{temperature:.4f}")
 
-        # Log training loss
-        metrics[i + 1] = {"train_loss": loss}
-
         # Evaluation
         if ((i + 1) % args.eval_freq == 0) or (i == 0):
             # if args.reg_lambda > 0.0:
             print(f"\nEvaluation at iteration {i + 1}")
 
-            import hist
-            all_weights = []
-            for param in model.parameters():
-                all_weights.append(param.view(-1).detach().cpu().numpy())
-            all_weights = np.concatenate(all_weights)
-            h = hist.Hist.new.Regular(30, -3, 3, name="x").Double()
-            h.fill(all_weights)
-            print(h)
+            # Log training loss
+            metrics[i + 1] = {"train_loss": loss}
+
+            # import hist
+            # all_weights = []
+            # for param in model.parameters():
+            #     all_weights.append(param.view(-1).detach().cpu().numpy())
+            # all_weights = np.concatenate(all_weights)
+            # h = hist.Hist.new.Regular(30, -3, 3, name="x").Double()
+            # h.fill(all_weights)
+            # print(h)
 
             if args.parametrization == "walsh":
                 gate_ids = get_gate_ids_walsh(model)
@@ -299,11 +300,11 @@ def main():
     )
     parser.add_argument(
         "--architecture", "-a", choices=torchlogix.models.__dict__.keys(),
-        default="randomly_connected", help="Model architecture"
+        default="DlgnMnistSmall", help="Model architecture. Must match dataset"
     )
     parser.add_argument(
         "--connections", type=str, choices=["random", "unique"],
-        default="random", help="Model architecture"
+        default="random", help="Connection strategy"
     )
 
     # Training parameters
@@ -365,6 +366,11 @@ def main():
     parser.add_argument(
         "--forward-sampling", type=str, default="soft", choices=["soft", "hard", "gumbel_soft", "gumbel_hard"],
         help="Sampling method in forward pass during training"
+    )
+
+    parser.add_argument(
+        "--weight-init", type=str, default="residual", choices=["residual", "random"],
+        help="Initialization method for model weights"
     )
 
     args = parser.parse_args()
