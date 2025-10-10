@@ -125,6 +125,10 @@ def load_dataset(args):
         )
     elif "cifar-10" in args.dataset:
         transform = {
+            "cifar-10": lambda x: x,
+            "cifar-10-2-thresholds": lambda x: torch.cat(
+                [(x > (i + 1) / 3).float() for i in range(2)], dim=0
+            ),
             "cifar-10-3-thresholds": lambda x: torch.cat(
                 [(x > (i + 1) / 4).float() for i in range(3)], dim=0
             ),
@@ -214,6 +218,8 @@ def input_dim_of_dataset(dataset):
         "mnist": 784,
         "mnist20x20": 400,
         "cicada": 720,
+        "cifar-10": 3 * 32 * 32,
+        "cifar-10-2-thresholds": 3 * 32 * 32 * 2,
         "cifar-10-3-thresholds": 3 * 32 * 32 * 3,
         "cifar-10-31-thresholds": 3 * 32 * 32 * 31,
         "cora": 1433,
@@ -233,6 +239,8 @@ def num_classes_of_dataset(dataset):
         "mnist": 10,
         "mnist20x20": 10,
         "cicada": 1,
+        "cifar-10": 10,
+        "cifar-10-2-thresholds": 10,
         "cifar-10-3-thresholds": 10,
         "cifar-10-31-thresholds": 10,
         "cora": 7,
