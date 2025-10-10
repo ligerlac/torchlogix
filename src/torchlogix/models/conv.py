@@ -345,3 +345,112 @@ class ClgnCifar10Large2(ClgnCifar10):
 class ClgnCifar10Large4(ClgnCifar10):
     def __init__(self, **llkw):
         super(ClgnCifar10Large4, self).__init__(n_bits=5, k_num=2560, tau=450, **llkw)
+
+
+class ClgnCifar10Tiny(torch.nn.Sequential):
+    """
+    An implementation of a logic gate convolutional neural network for CIFAR-10,
+    Takes 3-bit-thresholded inputs. 
+    """
+
+    def __init__(self, k_num=64, **llkw):
+        n_bits = 3
+        tau = 20
+        layers = []
+        layers.append(
+            LogicConv2d(
+                in_dim=32,
+                num_kernels=k_num,
+                channels=3*n_bits,
+                tree_depth=3,
+                receptive_field_size=5,
+                **llkw,
+            )
+        ) # kx28x28
+        layers.append(OrPooling(kernel_size=2, stride=2)) # kx14x14
+
+        layers.append(
+            LogicConv2d(
+                in_dim=14,
+                channels=k_num,
+                num_kernels=4*k_num,
+                tree_depth=3,
+                receptive_field_size=3,
+                **llkw,
+            )
+        )  # 4kx12x12
+        # layers.append(OrPooling(kernel_size=2, stride=2)) # 4kx6x6
+
+        layers.append(torch.nn.Flatten()) # 4kx6x6=144k
+
+        # layers.append(LogicDense(in_dim=144*k_num, out_dim=1280*k_num, **llkw))
+        layers.append(LogicDense(in_dim=576*k_num, out_dim=1280*k_num, **llkw))
+        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
+        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, **llkw))
+
+        super(ClgnCifar10Tiny, self).__init__(*layers, GroupSum(k=10, tau=tau))
+
+
+class ClgnCifar10Tiny32(ClgnCifar10Tiny):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Tiny32, self).__init__(k_num=32, **llkw)
+
+class ClgnCifar10Tiny64(ClgnCifar10Tiny):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Tiny64, self).__init__(k_num=64, **llkw)
+
+class ClgnCifar10Tiny128(ClgnCifar10Tiny):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Tiny128, self).__init__(k_num=128, **llkw)
+
+class ClgnCifar10Tiny256(ClgnCifar10Tiny):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Tiny256, self).__init__(k_num=256, **llkw)
+
+
+class ClgnCifar10Mini(torch.nn.Sequential):
+    """
+    An implementation of a logic gate convolutional neural network for CIFAR-10,
+    Takes continuous (unthresholded) inputs. Only single conv layer.
+    """
+
+    def __init__(self, k_num=64, tau=10, **llkw):
+        n_bits = 3
+        tau = 20
+        layers = []
+        layers.append(
+            LogicConv2d(
+                in_dim=32,
+                num_kernels=k_num,
+                channels=3*n_bits,
+                tree_depth=3,
+                receptive_field_size=4,
+                **llkw,
+            )
+        ) # kx28x28
+
+        layers.append(torch.nn.Flatten()) # kx29x29=841k
+
+        layers.append(LogicDense(in_dim=841*k_num, out_dim=512*k_num, **llkw))
+        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, **llkw))
+        layers.append(LogicDense(in_dim=256*k_num, out_dim=128*k_num, **llkw))
+        layers.append(LogicDense(in_dim=128*k_num, out_dim=60*k_num, **llkw))
+
+        super(ClgnCifar10Mini, self).__init__(*layers, GroupSum(k=10, tau=tau))
+
+
+class ClgnCifar10Mini32(ClgnCifar10Mini):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Mini32, self).__init__(k_num=32, tau=5., **llkw)
+
+class ClgnCifar10Mini64(ClgnCifar10Mini):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Mini64, self).__init__(k_num=64, tau=10., **llkw)
+
+class ClgnCifar10Mini128(ClgnCifar10Mini):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Mini128, self).__init__(k_num=128, tau=20., **llkw)
+
+class ClgnCifar10Mini256(ClgnCifar10Mini):
+    def __init__(self, **llkw):
+        super(ClgnCifar10Mini256, self).__init__(k_num=256, tau=40., **llkw)
