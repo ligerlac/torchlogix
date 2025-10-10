@@ -315,7 +315,7 @@ class ClgnCifar10Res(torch.nn.Sequential):
         layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
         layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, **llkw))
 
-        super(ClgnCifar10, self).__init__(*layers, GroupSum(k=10, tau=tau))
+        super(ClgnCifar10Res, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
 class ClgnCifar10SmallRes(ClgnCifar10Res):
     def __init__(self, **llkw):
