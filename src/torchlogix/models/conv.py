@@ -270,24 +270,12 @@ class ClgnCifar10Res(torch.nn.Sequential):
 
     def __init__(self, n_bits: int, k_num: int, tau: float, **llkw):
         layers = []
+
         layers.append(
-            LogicConv2d(
+            ResidualLogicBlock(
                 in_dim=32,
-                num_kernels=k_num,
-                channels=3*n_bits,
-                tree_depth=3,
-                receptive_field_size=3,
-                padding=1,
-                **llkw,
-            )
-        )
-        layers.append(OrPooling(kernel_size=2, stride=2)) # kx16x16
-
-        layers.append(
-            ResidualLogicBlock(
-                in_dim=16,
-                in_channels=k_num,
-                out_channels=4*k_num,
+                in_channels=3*n_bits,
+                out_channels=2*k_num,
                 tree_depth=3,
                 receptive_field_size=3,
                 padding=1,
@@ -295,31 +283,18 @@ class ClgnCifar10Res(torch.nn.Sequential):
                 **llkw,
             )
         )
-        
-        layers.append(
-            ResidualLogicBlock(
-                in_dim=8,
-                in_channels=4*k_num,
-                out_channels=16*k_num,
-                tree_depth=3,
-                receptive_field_size=3,
-                padding=1,
-                downsample=True,
-                **llkw,
-            )
-        )
-
+    
         layers.append(torch.nn.Flatten()) # 4x4x16k = 256k
 
-        layers.append(LogicDense(in_dim=256*k_num, out_dim=1280*k_num, **llkw))
-        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
-        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, **llkw))
+        layers.append(LogicDense(in_dim=256*2*k_num, out_dim=512*k_num, **llkw))
+        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, **llkw))
+        layers.append(LogicDense(in_dim=256*k_num, out_dim=320*k_num, **llkw))
 
         super(ClgnCifar10Res, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
 class ClgnCifar10SmallRes(ClgnCifar10Res):
     def __init__(self, **llkw):
-        super(ClgnCifar10SmallRes, self).__init__(n_bits=2, k_num=32, tau=20, **llkw)
+        super(ClgnCifar10SmallRes, self).__init__(n_bits=3, k_num=32, tau=20, **llkw)
 
 
 class ClgnCifar10Small(ClgnCifar10):
@@ -330,6 +305,11 @@ class ClgnCifar10Small(ClgnCifar10):
 class ClgnCifar10Medium(ClgnCifar10):
     def __init__(self, **llkw):
         super(ClgnCifar10Medium, self).__init__(n_bits=3, k_num=256, tau=40, **llkw)
+
+class ClgnCifar10MediumRes(ClgnCifar10Res):
+    def __init__(self, **llkw):
+        super(ClgnCifar10MediumRes, self).__init__(n_bits=3, k_num=256, tau=40, **llkw)
+
 
 
 class ClgnCifar10Large(ClgnCifar10):
