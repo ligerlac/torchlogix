@@ -1,3 +1,7 @@
+# ⚠️ Experiments for the paper "WARP-LUTs - Walsh-Assisted Relaxation for Probabilistic Look Up Tables" can be found in the `experiments/` dir along with documentation ⚠️ 
+
+==============================================================================================================
+
 # torchlogix - Differentiable Logic Gate Networks in PyTorch
 
 ![torchlogix_logo](assets/logo.png)

@@ -1,3 +1,15 @@
+# ⚠️ For the paper "WARP-LUTs - Walsh-Assisted Relaxation for Probabilistic Look Up Tables" ⚠️ 
+
+You can run the experiments for shown in the paper like so
+```
+sh run.sh
+```
+And make the plots:
+```
+python make-paper-plots.py
+```
+
+
 # TorchLogix Experiments
 
 This directory contains scripts for training, evaluating, and compiling TorchLogix models.
