@@ -9,7 +9,6 @@ And make the plots:
 python make-paper-plots.py
 ```
 
-
 # TorchLogix Experiments
 
 This directory contains scripts for training, evaluating, and compiling TorchLogix models.

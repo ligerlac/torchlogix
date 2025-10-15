@@ -198,17 +198,14 @@ def run_training(args):
             # if args.reg_lambda > 0.0:
             print(f"\nEvaluation at iteration {i + 1}")
 
-            # Log training loss
-            metrics[i + 1] = {"train_loss": loss}
-
-            # import hist
-            # all_weights = []
-            # for param in model.parameters():
-            #     all_weights.append(param.view(-1).detach().cpu().numpy())
-            # all_weights = np.concatenate(all_weights)
-            # h = hist.Hist.new.Regular(30, -3, 3, name="x").Double()
-            # h.fill(all_weights)
-            # print(h)
+            import hist
+            all_weights = []
+            for param in model.parameters():
+                all_weights.append(param.view(-1).detach().cpu().numpy())
+            all_weights = np.concatenate(all_weights)
+            h = hist.Hist.new.Regular(30, -3, 3, name="x").Double()
+            h.fill(all_weights)
+            print(h)
 
             if args.parametrization == "walsh":
                 gate_ids = get_gate_ids_walsh(model)
