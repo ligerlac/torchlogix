@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Messages>
+	<Message severity="ERROR" prefix="[SIM 211-100]" key="SIM_100_1589" tag="" content="&apos;csim_design&apos; failed: compilation error(s)." resolution=""/>
+	<Message severity="INFO" prefix="[SIM 211-3]" key="SIM_3_1588" tag="" content="*************** CSIM finish ***************" resolution=""/>
+	<Message severity="INFO" prefix="[HLS 200-111]" key="HLS_111_966" tag="RUNTIME" content="Finished Command csim_design CPU user time: 3222.11 seconds. CPU system time: 79.35 seconds. Elapsed time: 3306.51 seconds; current allocated memory: 250.741 MB." resolution=""/>
+</Messages>

@@ -1,0 +1,1546 @@
+import ctypes
+import math
+import shutil
+import subprocess
+import tempfile
+import time
+from typing import Union, List, Dict, Any, Tuple
+import os
+
+import numpy as np
+import numpy.typing
+import torch
+
+from neurodifflogic.models.difflog_layers.conv import LogicConv2d, LogicConv3d, OrPoolingLayer
+from neurodifflogic.models.difflog_layers.linear import GroupSum, LogicLayer
+from neurodifflogic.models.difflog_layers.quantize import OrderedLearnableThermometer
+
+ALL_OPERATIONS = [
+    "zero", "and", "not_implies", "a", "not_implied_by", "b", "xor", "or",
+    "not_or", "not_xor", "not_b", "implied_by", "not_a", "implies", "not_and", "one",
+]
+
+BITS_TO_DTYPE = {1: "bool", 8: "char", 16: "short", 32: "int", 64: "long long"}
+BITS_TO_ZERO_LITERAL = {1: "0", 8: "(char) 0", 16: "(short) 0", 32: "0", 64: "0LL"}
+BITS_TO_ONE_LITERAL = {1: "1", 8: "(char) 1", 16: "(short) 1", 32: "1", 64: "1LL"}
+BITS_TO_C_DTYPE = {
+    1: ctypes.c_bool, 8: ctypes.c_int8, 16: ctypes.c_int16, 32: ctypes.c_int32, 64: ctypes.c_int64,
+}
+BITS_TO_NP_DTYPE = {1: np.bool_, 8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
+
+
+class CompiledLogicNet(torch.nn.Module):
+    """
+    Unified compiled logic network that handles convolutional, pooling, and linear layers.
+    """
+
+    def __init__(
+        self,
+        model: torch.nn.Sequential = None,
+        device: str = "cpu",
+        num_bits: int = 64,
+        cpu_compiler: str = "gcc",
+        verbose: bool = False,
+        input_shape: tuple = None,
+        apply_thresholding: bool = False,
+        use_bitpacking: bool = False,
+
+    ):
+        super().__init__()
+        self.model = model
+        self.device = device
+        self.num_bits = num_bits
+        self.apply_thresholding = apply_thresholding
+        self.use_bitpacking = use_bitpacking
+        if apply_thresholding:
+            # can't do batch processing if thresholding is applied within the compiled network
+            self.num_bits = 1
+            self.use_bitpacking = False
+        self.cpu_compiler = cpu_compiler
+
+        assert cpu_compiler in ["clang", "gcc"], cpu_compiler
+        assert num_bits in [1, 8, 16, 32, 64]
+
+        # Initialize layer storage
+        self.thresholding_layer = None
+        self.conv_layers = []
+        self.pooling_layers = []
+        self.linear_layers = []
+        self.num_classes = None
+        self.input_shape = input_shape
+        self.layer_order = []
+        self.lib_fn = None
+
+        # GroupSum information
+        self.tau = 1
+        self.beta = 0
+
+        if model is not None:
+            self._parse_model(verbose)
+
+    def _parse_model(self, verbose: bool):
+        """Parse the model structure, handling conv, pooling, and linear layers."""
+        # Find GroupSum layer for num_classes
+        for layer in self.model:
+            if isinstance(layer, GroupSum):
+                self.num_classes = layer.k
+                self.tau = layer.tau
+                self.beta = layer.beta
+                break
+
+        # Parse all layers and track execution order
+        for layer in self.model:
+            if isinstance(layer, OrderedLearnableThermometer):
+                if not self.apply_thresholding:
+                    raise ValueError("If apply_thresholding is False, OrderedLearnableThermometer is not allowed.")
+                if len(self.layer_order)>0:
+                    raise ValueError("OrderedLearnableThermometer layer must appear first in layer order.")
+                if self.input_shape is None:
+                    raise ValueError(("If model begins with a OrderedLearnableThermometer layer, input_shape"
+                                      " must be specified when initializing CompiledLogicNet"))
+                thresholding_info = self._extract_thresholding_layer_info(layer)
+                self.thresholding_layer = thresholding_info # there will only be one thresholding layer
+            elif isinstance(layer, LogicConv2d):
+                conv_info = self._extract_conv_layer_info(layer)
+                self.conv_layers.append(conv_info)
+                self.layer_order.append(('conv', len(self.conv_layers) - 1))
+                if self.input_shape is None:
+                    self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1])
+            elif isinstance(layer, LogicConv3d):
+                conv_info = self._extract_conv_layer_info(layer)
+                self.conv_layers.append(conv_info)
+                self.layer_order.append(('conv', len(self.conv_layers) - 1))
+                if self.input_shape is None:
+                    self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1], layer.in_dim[2])
+            elif isinstance(layer, OrPoolingLayer):
+                pool_info = self._extract_pooling_layer_info(layer)
+                self.pooling_layers.append(pool_info)
+                self.layer_order.append(('pool', len(self.pooling_layers) - 1))
+            elif isinstance(layer, LogicLayer):
+                self.linear_layers.append(
+                    (layer.indices[0], layer.indices[1], layer.weight.argmax(1))
+                )
+                self.layer_order.append(('linear', len(self.linear_layers) - 1))
+            elif isinstance(layer, torch.nn.Flatten):
+                self.layer_order.append(('flatten', 0))
+                if verbose:
+                    print(f"Found Flatten layer")
+            elif isinstance(layer, GroupSum):
+                if verbose:
+                    print(f"Found GroupSum layer (tau={self.tau}, beta={self.beta}) with {layer.k} classes")
+            else:
+                if verbose:
+                    print(f"Warning: Unknown layer type: {type(layer)}")
+
+        if verbose:
+            print((f"Parsed {int(self.thresholding_layer is not None)} thresholding, {len(self.conv_layers)} conv," 
+                   f"{len(self.pooling_layers)} pooling, {len(self.linear_layers)} linear layers"))
+            print(f"Layer execution order: {self.layer_order}")
+
+        # Validate model structure
+        if not self.conv_layers and not self.linear_layers:
+            raise ValueError("Model must contain at least one LogicConv2d, LogicConv3d, or LogicLayer layer.")
+
+        # Set input shape for linear-only models
+        if not self.conv_layers and self.linear_layers:
+            first_linear = None
+            for layer in self.model:
+                if isinstance(layer, LogicLayer):
+                    first_linear = layer
+                    break
+            if first_linear and not self.apply_thresholding:
+                self.input_shape = (first_linear.in_dim,)
+
+    def _extract_thresholding_layer_info(self, layer: OrderedLearnableThermometer) -> Dict[str, Any]:
+        """Extract information from a thresholding layer for compilation."""
+        return {
+            'num_thresholds': layer.num_thresholds,
+            'thresholds': layer.get_thresholds(),
+        }
+
+    def _extract_conv_layer_info(self, layer: Union[LogicConv2d, LogicConv3d]) -> Dict[str, Any]:
+        """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
+        tree_operations = []
+        for level_idx, level_weights in enumerate(layer.tree_weights):
+            level_ops = []
+            for weight_param in level_weights:
+                ops = weight_param.argmax(1).cpu().numpy()
+                level_ops.append(ops)
+            tree_operations.append(level_ops)
+
+        return {
+            'indices': layer.indices,
+            'tree_operations': tree_operations,
+            'tree_depth': layer.tree_depth,
+            'num_kernels': layer.num_kernels,
+            'in_dim': layer.in_dim,
+            'receptive_field_size': layer.receptive_field_size,
+            'stride': layer.stride,
+            'padding': layer.padding,
+            'channels': layer.channels,
+        }
+
+    def _extract_pooling_layer_info(self, layer: OrPoolingLayer) -> Dict[str, Any]:
+        """Extract information from an OrPooling layer for compilation."""
+        return {
+            'kernel_size': layer.kernel_size,
+            'stride': layer.stride,
+            'padding': layer.padding,
+        }
+
+    def get_gate_code(self, var1: str, var2: str, gate_op: int) -> str:
+        """Generate C code for a logic gate operation."""
+        operation_name = ALL_OPERATIONS[gate_op]
+
+        if self.num_bits > 1:
+            if operation_name == "zero":
+                res = BITS_TO_ZERO_LITERAL[self.num_bits]
+            elif operation_name == "and":
+                res = f"{var1} & {var2}"
+            elif operation_name == "not_implies":
+                res = f"{var1} & ~{var2}"
+            elif operation_name == "a":
+                res = f"{var1}"
+            elif operation_name == "not_implied_by":
+                res = f"{var2} & ~{var1}"
+            elif operation_name == "b":
+                res = f"{var2}"
+            elif operation_name == "xor":
+                res = f"{var1} ^ {var2}"
+            elif operation_name == "or":
+                res = f"{var1} | {var2}"
+            elif operation_name == "not_or":
+                res = f"~({var1} | {var2})"
+            elif operation_name == "not_xor":
+                res = f"~({var1} ^ {var2})"
+            elif operation_name == "not_b":
+                res = f"~{var2}"
+            elif operation_name == "implied_by":
+                res = f"~{var2} | {var1}"
+            elif operation_name == "not_a":
+                res = f"~{var1}"
+            elif operation_name == "implies":
+                res = f"~{var1} | {var2}"
+            elif operation_name == "not_and":
+                res = f"~({var1} & {var2})"
+            elif operation_name == "one":
+                res = f"~{BITS_TO_ZERO_LITERAL[self.num_bits]}"
+            else:
+                raise ValueError(f"Operator {operation_name} unknown.")
+
+            if self.num_bits == 8:
+                res = f"(char) ({res})"
+            elif self.num_bits == 16:
+                res = f"(short) ({res})"
+
+        else:
+            if operation_name == "zero":
+                res = BITS_TO_ZERO_LITERAL[self.num_bits]
+            elif operation_name == "and":
+                res = f"{var1} && {var2}"
+            elif operation_name == "not_implies":
+                res = f"{var1} && !{var2}"
+            elif operation_name == "a":
+                res = f"{var1}"
+            elif operation_name == "not_implied_by":
+                res = f"{var2} && !{var1}"
+            elif operation_name == "b":
+                res = f"{var2}"
+            elif operation_name == "xor":
+                res = f"{var1} != {var2}"
+            elif operation_name == "or":
+                res = f"{var1} || {var2}"
+            elif operation_name == "not_or":
+                res = f"!({var1} || {var2})"
+            elif operation_name == "not_xor":
+                res = f"({var1} == {var2})"
+            elif operation_name == "not_b":
+                res = f"!{var2}"
+            elif operation_name == "implied_by":
+                res = f"(!{var2}) || {var1}"
+            elif operation_name == "not_a":
+                res = f"!{var1}"
+            elif operation_name == "implies":
+                res = f"(!{var1}) || {var2}"
+            elif operation_name == "not_and":
+                res = f"!({var1} && {var2})"
+            elif operation_name == "one":
+                res = f"~{BITS_TO_ZERO_LITERAL[self.num_bits]}"
+            else:
+                raise ValueError(f"Operator {operation_name} unknown.")
+
+        return res
+
+    def _calculate_layer_output_sizes_and_shapes(self) -> List[tuple]:
+        """Calculate output sizes and shapes for all layers in execution order."""
+        layer_info = []
+        if self.thresholding_layer is None:
+            current_shape = self.input_shape
+        else:
+            thresholding_info = self.thresholding_layer
+            if len(self.input_shape)==2:
+                current_shape = (thresholding_info['num_thresholds'], self.input_shape[0], self.input_shape[1])
+            elif len(self.input_shape)==3:
+                if self.input_shape[0]!=1:
+                    raise ValueError("If the input tensor is rank 3, index 0 must be a dummy index.")
+                current_shape = (thresholding_info['num_thresholds'], self.input_shape[1], self.input_shape[2])
+            else:
+                raise ValueError("The thresholding layer can only accept input tensors of rank 2 or 3.")
+
+        for layer_type, layer_idx in self.layer_order:
+            if layer_type == 'conv':
+                conv_info = self.conv_layers[layer_idx]
+                if len(current_shape) == 3:  # (C, H, W)
+                    c, h, w = current_shape
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                             // conv_info['stride']) + 1
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                             // conv_info['stride']) + 1
+                    output_shape = (conv_info['num_kernels'], h_out, w_out)
+                    output_size = conv_info['num_kernels'] * h_out * w_out
+                elif len(current_shape) == 4: # (C, H, W, D)
+                    c, h, w, d = current_shape
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+                             // conv_info['stride']) + 1
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+                             // conv_info['stride']) + 1
+                    d_out = ((d + 2 * conv_info['padding'] - conv_info['receptive_field_size'][2])
+                             // conv_info['stride']) + 1
+                    output_shape = (conv_info['num_kernels'], h_out, w_out, d_out)
+                    output_size = conv_info['num_kernels'] * h_out * w_out * d_out
+                else:
+                    raise ValueError(f"Conv layer expects 3D or 4D input, got {len(current_shape)}D")
+
+            elif layer_type == 'pool':
+                pool_info = self.pooling_layers[layer_idx]
+                if len(current_shape) == 3:  # (C, H, W)
+                    c, h, w = current_shape
+                    h_out = ((h + 2 * pool_info['padding'] - pool_info['kernel_size']) 
+                             // pool_info['stride']) + 1
+                    w_out = ((w + 2 * pool_info['padding'] - pool_info['kernel_size']) 
+                             // pool_info['stride']) + 1
+                    output_shape = (c, h_out, w_out)
+                    output_size = c * h_out * w_out
+                elif len(current_shape) == 4: # (C, H, W, D)
+                    c, h, w, d = current_shape
+                    h_out = ((h + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                             // pool_info['stride']) + 1
+                    w_out = ((w + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                             // pool_info['stride']) + 1
+                    d_out = ((d + 2 * pool_info['padding'] - pool_info['kernel_size'])
+                             // pool_info['stride']) + 1
+                    output_shape = (c, h_out, w_out, d_out)
+                    output_size = c * h_out * w_out * d_out
+                else:
+                    raise ValueError(f"Pool layer expects 3D or 4D input, got {len(current_shape)}D")
+
+            elif layer_type == 'flatten':
+                if (len(current_shape) == 3) or (len(current_shape)==4):
+                    output_size = np.prod(current_shape)
+                    output_shape = (output_size,)
+                else:
+                    output_size = current_shape[0]
+                    output_shape = current_shape
+
+            elif layer_type == 'linear':
+                layer_a, layer_b, layer_op = self.linear_layers[layer_idx]
+                output_size = len(layer_a)
+                output_shape = (output_size,)
+
+            layer_info.append((layer_type, layer_idx, output_shape, output_size))
+            current_shape = output_shape
+
+        return layer_info
+
+    def _get_conv_layer_code(self, conv_info: Dict[str, Any], layer_name: str, include_dir= "./") -> Tuple[List[str], List[str], List[str]]:
+        """Generate C code for a convolutional layer."""
+        
+        print("INCLUDE_DIR = ", include_dir)
+
+        helper_code = []
+        include_code = []
+        call_code = []
+
+        indices = conv_info['indices']
+        tree_ops = conv_info['tree_operations']
+        num_gates = [len(indices[0][0][0][0])]
+        num_gates.extend([len(indices[lvl][0]) for lvl in range(1, len(indices))])
+
+        helper_code.extend(self._get_apply_gate_function_code())
+        helper_code.append("\n")
+
+        # write the above to header files
+        include_code.append("\n")
+        self.export_indices_to_header(indices, conv_info, layer_name, f"{include_dir}/conv_{layer_name}_indices.h")
+        include_code.append(f'#include \"conv_{layer_name}_indices.h\"')
+        self.export_treeops_to_header(tree_ops, layer_name, f"{include_dir}/conv_{layer_name}_treeops.h")
+        include_code.append(f'#include \"conv_{layer_name}_treeops.h\"\n')
+
+        if len(conv_info['in_dim']) == 2:
+            conv_dim = 2
+            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    // conv_info['stride']) + 1
+            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    // conv_info['stride']) + 1
+            conv_inp_size = conv_info['channels'] * conv_info['in_dim'][0] * conv_info['in_dim'][1]
+        elif len(conv_info['in_dim']) == 3:
+            conv_dim = 3
+            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+                    // conv_info['stride']) + 1
+            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+                    // conv_info['stride']) + 1
+            d_out = ((conv_info['in_dim'][2] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][2])
+                    // conv_info['stride']) + 1
+            conv_inp_size = conv_info['channels'] * conv_info['in_dim'][0] * conv_info['in_dim'][1] * conv_info['in_dim'][2]
+        else:
+            raise ValueError(f"Conv layer expects 3D or 4D input, got {len(conv_info['in_dim'])}")
+
+        
+        prev_layer_name = self._get_previous_layer_name(layer_name)
+        call_code.append(f"\n")
+        call_code.append(f"    // Applying conv layer {layer_name}")
+        if prev_layer_name == "inp":
+            call_code.append(f"    conv_{layer_name}(inp, layer_{layer_name}_out);")
+        else:
+            call_code.append(f"    conv_{layer_name}(layer_{prev_layer_name}_out, layer_{layer_name}_out);")
+        call_code.append(f"\n")
+
+
+        helper_code.append(f"// Convolutional layer {layer_name}")
+        helper_code.append(f"void conv_{layer_name}(")
+        helper_code.append(f"    const {BITS_TO_DTYPE[self.num_bits]} inp[{conv_inp_size}],")
+        helper_code.append(f"    {BITS_TO_DTYPE[self.num_bits]} layer_{layer_name}_out[{conv_info['num_kernels'] * h_out * w_out}]) {{")
+        
+        # Temporary arrays for intermediate gates
+        helper_code.append("")
+        for i in range(len(num_gates)):
+            helper_code.append(
+                f"    {BITS_TO_DTYPE[self.num_bits]} conv_tree_{i}[{conv_info['num_kernels']}][{h_out} * {w_out}][{num_gates[i]}];"
+            )
+
+        # Array for number of gates per level
+        helper_code.append("")
+        helper_code.append(
+            f"    static const int num_gates[{len(num_gates)}] = "
+            f"{{{', '.join(str(g) for g in num_gates)}}};"
+        )
+
+        helper_code.append("")
+        for lvl in range(conv_info['tree_depth']+1):
+            helper_code.append(f"    for (int k = 0; k < {conv_info['num_kernels']}; k++) {{")
+            helper_code.append(f"        for (int p = 0; p < {h_out * w_out}; p++) {{")
+            helper_code.append(f"            for (int g = 0; g < num_gates[{lvl}]; g++) {{")
+            helper_code.append(f"                {BITS_TO_DTYPE[self.num_bits]} left_val, right_val;")
+            if lvl==0:
+                helper_code.append(f"                // Base level: read from input feature map")
+                helper_code.append(f"                int lh = left_indices_{layer_name}_{lvl}[k][p][g][0];")
+                helper_code.append(f"                int lw = left_indices_{layer_name}_{lvl}[k][p][g][1];")
+                helper_code.append(f"                int lc = left_indices_{layer_name}_{lvl}[k][p][g][2];")
+                helper_code.append(f"                int rh = right_indices_{layer_name}_{lvl}[k][p][g][0];")
+                helper_code.append(f"                int rw = right_indices_{layer_name}_{lvl}[k][p][g][1];")
+                helper_code.append(f"                int rc = right_indices_{layer_name}_{lvl}[k][p][g][2];")
+                helper_code.append(f"                left_val  = inp[lc * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + lh * {conv_info['in_dim'][1]} + lw];")
+                helper_code.append(f"                right_val = inp[rc * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + rh * {conv_info['in_dim'][1]} + rw];")
+            else:
+                helper_code.append(f"                // Higher levels: read from previous tree level")
+                helper_code.append(f"                int lidx = left_indices_{layer_name}_{lvl}[g];")
+                helper_code.append(f"                int ridx = right_indices_{layer_name}_{lvl}[g];")
+                helper_code.append(f"                left_val  = conv_tree_{lvl-1}[k][p][lidx];")
+                helper_code.append(f"                right_val = conv_tree_{lvl-1}[k][p][ridx];")
+            helper_code.append(f"                {BITS_TO_DTYPE[self.num_bits]} result = apply_gate(left_val, right_val, conv_{layer_name}_treeops_d{lvl}[g][k]);")
+            if lvl == conv_info['tree_depth']:
+                helper_code.append(f"                int out_idx = k * {h_out * w_out} + p;")
+                helper_code.append(f"                layer_{layer_name}_out[out_idx] = result;")
+            else:
+                helper_code.append(f"                conv_tree_{lvl}[k][p][g] = result;")
+
+            helper_code.append(f"            }}")  # g loop
+            helper_code.append(f"        }}")      # p loop
+            helper_code.append(f"    }}")          # k loop
+
+        helper_code.append("}")  # function end
+
+        return helper_code, include_code, call_code
+    
+    def export_indices_to_header_flat(self, indices, conv_info, layer_name, out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
+        h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                // conv_info['stride']) + 1
+        w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                // conv_info['stride']) + 1
+        num_kernels = conv_info['num_kernels']
+
+        master_header = os.path.join(out_dir, f"{layer_name}_indices.h")
+
+        with open(master_header, "w") as master_f:
+            master_f.write(f"// Auto-generated master header for {layer_name}\n\n")
+
+            for lvl, (left, right) in enumerate(indices):
+                if lvl == 0:
+                    num_gates = len(left[0][0])
+                    for k in range(num_kernels):
+                        for pos in range(h_out * w_out):
+                            # Extract h, w, c separately
+                            h_array = [triplet[0] for triplet in left[k, pos]]
+                            w_array = [triplet[1] for triplet in left[k, pos]]
+                            c_array = [triplet[2] for triplet in left[k, pos]]
+
+                            for arr_name, arr_data in zip(
+                                ['h', 'w', 'c'], [h_array, w_array, c_array]
+                            ):
+                                # filenames
+                                header_file = os.path.join(out_dir,
+                                    f"{layer_name}_lvl{lvl}_k{k}_p{pos}_{arr_name}.h")
+                                txt_file = os.path.join(out_dir,
+                                    f"{layer_name}_lvl{lvl}_k{k}_p{pos}_{arr_name}.txt")
+
+                                # Write header
+                                guard = f"{layer_name.upper()}_LVL{lvl}_K{k}_P{pos}_{arr_name.upper()}_H"
+                                with open(header_file, "w") as f:
+                                    f.write(f"#ifndef __SYNTHESIS__\n")
+                                    f.write(f"// {arr_name}-indices for layer {layer_name}, kernel {k}, pos {pos}\n")
+                                    f.write(f"int {arr_name}_indices_{layer_name}_lvl{lvl}_k{k}_p{pos}[{num_gates}] = {{")
+                                    f.write(", ".join(str(int(x)) for x in arr_data))
+                                    f.write("};\n")
+                                    f.write("#else\n")
+                                    f.write(f"static const int {arr_name}_indices_{layer_name}_lvl{lvl}_k{k}_p{pos}[{num_gates}] = {{")
+                                    f.write(", ".join(str(int(x)) for x in arr_data))
+                                    f.write("};\n")
+                                    f.write("#endif\n")
+
+                                # Write text file
+                                np.savetxt(txt_file, arr_data, fmt="%d")
+
+                                # Include in master header
+                                master_f.write(f'#include "{os.path.basename(header_file)}"\n')
+
+                else:
+                    # Higher levels: simple indices, flattened
+                    num_gates = len(left)
+                    for side, arr in zip(['left', 'right'], [left, right]):
+                        header_file = os.path.join(out_dir,
+                                                f"{layer_name}_lvl{lvl}_{side}.h")
+                        txt_file = os.path.join(out_dir,
+                                                f"{layer_name}_lvl{lvl}_{side}.txt")
+                        guard = f"{layer_name.upper()}_LVL{lvl}_{side.upper()}_H"
+                        with open(header_file, "w") as f:
+                            f.write(f"#ifndef __SYNTHESIS__\n")
+                            f.write(f"int {side}_indices_{layer_name}_lvl{lvl}[{num_gates}] = {{")
+                            f.write(", ".join(str(int(x)) for x in arr))
+                            f.write("};\n")
+                            f.write("#else\n")
+                            f.write(f"static const int {side}_indices_{layer_name}_lvl{lvl}[{num_gates}] = {{")
+                            f.write(", ".join(str(int(x)) for x in arr))
+                            f.write("};\n")
+                            f.write("#endif\n")
+                        np.savetxt(txt_file, arr, fmt="%d")
+                        master_f.write(f'#include "{os.path.basename(header_file)}"\n')
+
+
+    def export_indices_to_header(self, indices, conv_info, layer_name, filename):
+        """Export indices to a C header file."""
+        h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                // conv_info['stride']) + 1
+        w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                // conv_info['stride']) + 1
+        num_kernels = conv_info['num_kernels']
+        tree_depth = conv_info['tree_depth']
+
+        guard = f"CONV_{layer_name.upper()}_INDICES_H"
+
+        print("FILENAME = ", filename)
+        with open(filename, "w") as f:
+            f.write("// Auto-generated indices header\n")
+            f.write(f"#ifndef {guard}\n")
+            f.write(f"#define {guard}\n\n")
+
+            for lvl, (left, right) in enumerate(indices):
+                if lvl == 0:
+                    # Level 0: triplets (h, w, c)
+                    num_gates = len(left[0][0])  # gates per kernel/pos
+                    f.write(f"// Level {lvl} (triplets h,w,c)\n")
+                    f.write(
+                        f"static const int left_indices_{layer_name}_{lvl}[{num_kernels}][{h_out}*{w_out}][{num_gates}][3] = {{\n"
+                    )
+                    for k in range(num_kernels):
+                        f.write("  {\n")
+                        for p in range(h_out * w_out):
+                            triplets = ", ".join("{" + f"{h},{w},{c}" + "}" for (h, w, c) in left[k, p])
+                            f.write(f"    {{{triplets}}},\n")
+                        f.write("  },\n")
+                    f.write("};\n\n")
+
+                    f.write(
+                        f"static const int right_indices_{layer_name}_{lvl}[{num_kernels}][{h_out}*{w_out}][{num_gates}][3] = {{\n"
+                    )
+                    for k in range(num_kernels):
+                        f.write("  {\n")
+                        for p in range(h_out * w_out):
+                            triplets = ", ".join("{" + f"{h},{w},{c}" + "}" for (h, w, c) in right[k, p])
+                            f.write(f"    {{{triplets}}},\n")
+                        f.write("  },\n")
+                    f.write("};\n\n")
+
+                else:
+                    # Higher levels: simple indices
+                    num_gates = len(left)
+                    f.write(f"// Level {lvl} (gate indices)\n")
+                    f.write(f"static const int left_indices_{layer_name}_{lvl}[{num_gates}] = {{")
+                    f.write(", ".join(str(int(idx)) for idx in left))
+                    f.write("};\n")
+
+                    f.write(f"static const int right_indices_{layer_name}_{lvl}[{num_gates}] = {{")
+                    f.write(", ".join(str(int(idx)) for idx in right))
+                    f.write("};\n\n")
+
+            f.write(f"#endif // {guard}\n")
+
+            
+    def export_treeops_to_header(self, tree_ops, layer_name: str, filename: str):
+        """
+        Export tree_ops to a C header file.
+
+        tree_ops: list/array shaped [depth][num_gates][num_kernels]
+                values are ints indexing ALL_OPERATIONS
+        layer_name: str, used for symbol names
+        filename: path to output header
+        """
+        depth = len(tree_ops)
+        num_kernels = len(tree_ops[0][0])
+
+        guard = f"CONV_{layer_name.upper()}_TREEOPS_H"
+
+        with open(filename, "w") as f:
+            f.write(f"#ifndef {guard}\n")
+            f.write(f"#define {guard}\n\n")
+
+            # export each depth as its own array
+            for d in range(depth):
+                num_gates = len(tree_ops[d])
+                array_name = f"conv_{layer_name}_treeops_d{d}"
+                f.write(
+                    f"static const int {array_name}[{num_gates}][{num_kernels}] = {{\n"
+                )
+                for g in range(num_gates):
+                    row = ", ".join(str(op) for op in tree_ops[d][g])
+                    f.write(f"    {{ {row} }},\n")
+                f.write("};\n\n")
+
+            f.write(f"#endif // {guard}\n")
+
+    
+    def _get_apply_gate_function_code(self):
+
+        code = []
+        dtype = BITS_TO_DTYPE[self.num_bits]
+        code.append(f"static inline {dtype} apply_gate({dtype} a, {dtype} b, int op) {{")
+        code.append(f"    switch(op) {{")
+        if self.num_bits==1:
+            code.append(f"        case 0: return 0;              // zero")
+            code.append(f"        case 1: return a && b;         // and")
+            code.append(f"        case 2: return a && !b;        // not_implies")
+            code.append(f"        case 3: return a;              // a")
+            code.append(f"        case 4: return b && !a;        // not_implied_by")
+            code.append(f"        case 5: return b;              // b")
+            code.append(f"        case 6: return a != b;         // xor")
+            code.append(f"        case 7: return a || b;         // or")
+            code.append(f"        case 8: return !(a || b);      // not_or")
+            code.append(f"        case 9: return (a == b);       // not_xor")
+            code.append(f"        case 10: return !b;            // not_b")
+            code.append(f"        case 11: return (!b) || a;     // implied_by")
+            code.append(f"        case 12: return !a;            // not_a")
+            code.append(f"        case 13: return (!a) || b;     // implies")
+            code.append(f"        case 14: return !(a && b);     // not_and")
+            code.append(f"        case 15: return 1;             // one")
+        else:
+            code.append(f"        case 0: return 0;              // zero")
+            code.append(f"        case 1: return a & b;          // and")
+            code.append(f"        case 2: return a & ~b;         // not_implies")
+            code.append(f"        case 3: return a;              // a")
+            code.append(f"        case 4: return b & ~a;         // not_implied_by")
+            code.append(f"        case 5: return b;              // b")
+            code.append(f"        case 6: return a ^ b;          // xor")
+            code.append(f"        case 7: return a | b;          // or")
+            code.append(f"        case 8: return ~(a | b);       // not_or")
+            code.append(f"        case 9: return ~(a ^ b);       // not_xor")
+            code.append(f"        case 10: return ~b;            // not_b")
+            code.append(f"        case 11: return (~b) | a;      // implied_by")
+            code.append(f"        case 12: return ~a;            // not_a")
+            code.append(f"        case 13: return (~a) | b;      // implies")
+            code.append(f"        case 14: return ~(a & b);      // not_and")
+            code.append(f"        case 15: return 1;             // one")
+        code.append(f"    }}")
+        code.append(f"}}")
+
+        return code
+
+
+    # def _get_conv_layer_code(self, conv_info: Dict[str, Any], layer_name: str) -> List[str]:
+    #     """Generate C code for a convolutional layer."""
+    #     code = []
+    #     indices = conv_info['indices']
+    #     tree_ops = conv_info['tree_operations']
+
+    #     os.makedirs('include/', exist_ok=True)
+    #     self.export_indices_to_header(indices, conv_info, layer_name, f"include/conv_{layer_name}_indices.h")
+    #     self.export_treeops_to_header(tree_ops, layer_name, f"include/conv_{layer_name}_treeops.h")
+
+    #     if len(conv_info['in_dim']) == 2:
+    #         conv_dim = 2
+    #         h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+    #                 // conv_info['stride']) + 1
+    #         w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+    #                 // conv_info['stride']) + 1
+    #     elif len(conv_info['in_dim']) == 3:
+    #         conv_dim = 3
+    #         h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+    #                 // conv_info['stride']) + 1
+    #         w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+    #                 // conv_info['stride']) + 1
+    #         d_out = ((conv_info['in_dim'][2] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][2])
+    #                 // conv_info['stride']) + 1
+    #     else:
+    #         raise ValueError(f"Conv layer expects 3D or 4D input, got {len(conv_info['in_dim'])}")
+
+    #     code.append(f"\t// Convolutional layer {layer_name}")
+
+    #     for kernel_idx in range(conv_info['num_kernels']):
+    #         iter_range = h_out * w_out
+    #         if conv_dim == 3:
+    #             iter_range *= d_out
+    #         for pos_idx in range(iter_range):
+    #             # First level: process receptive field positions
+    #             level_0_indices = indices[0]
+    #             left_indices = level_0_indices[0][kernel_idx, pos_idx]
+    #             right_indices = level_0_indices[1][kernel_idx, pos_idx]
+
+    #             # Generate variables for the first level
+    #             for gate_idx in range(2**conv_info['tree_depth']):
+    #                 if conv_dim == 2:
+    #                     left_h, left_w, left_c = left_indices[gate_idx]
+    #                     right_h, right_w, right_c = right_indices[gate_idx]
+    #                 else:
+    #                     left_h, left_w, left_d, left_c = left_indices[gate_idx]
+    #                     right_h, right_w, right_d, right_c = right_indices[gate_idx]
+
+    #                 gate_op = tree_ops[0][gate_idx][kernel_idx]
+
+    #                 # Determine input source
+    #                 prev_layer_name = self._get_previous_layer_name(layer_name)
+    #                 if prev_layer_name == "inp":
+    #                     if conv_dim==2:
+    #                         left_var = (
+    #                             f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+    #                             f"{left_h} * {conv_info['in_dim'][1]} + {left_w}]"
+    #                         )
+    #                         right_var = (
+    #                             f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+    #                             f"{right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+    #                         )
+    #                     else:
+    #                         left_var = (
+    #                             f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
+    #                         )
+    #                         right_var = (
+    #                             f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
+    #                         )
+    #                 else:
+    #                     if conv_dim == 2:
+    #                         left_var = (
+    #                             f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+    #                             f"{left_h} * {conv_info['in_dim'][1]} + {left_w}]"
+    #                         )
+    #                         right_var = (
+    #                             f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
+    #                             f"{right_h} * {conv_info['in_dim'][1]} + {right_w}]"
+    #                         )
+    #                     else:
+    #                         left_var = (
+    #                             f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
+    #                         )
+    #                         right_var = (
+    #                             f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+    #                             f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
+    #                         )
+
+
+    #                 var_name = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l0_g{gate_idx}"
+    #                 code.append(
+    #                     f"\tconst {BITS_TO_DTYPE[self.num_bits]} {var_name} = "
+    #                     f"{self.get_gate_code(left_var, right_var, gate_op)};"
+    #                 )
+
+    #             # Process remaining tree levels
+    #             for level in range(1, conv_info['tree_depth'] + 1):
+    #                 level_indices = indices[level]
+    #                 left_gate_indices = level_indices[0]
+    #                 right_gate_indices = level_indices[1]
+
+    #                 num_gates = len(left_gate_indices)
+    #                 for gate_idx in range(num_gates):
+    #                     left_idx = left_gate_indices[gate_idx]
+    #                     right_idx = right_gate_indices[gate_idx]
+
+    #                     gate_op = tree_ops[level][gate_idx][kernel_idx]
+
+    #                     left_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{left_idx}"
+    #                     right_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{right_idx}"
+
+    #                     if level == conv_info['tree_depth']:
+    #                         if conv_dim == 2:
+    #                             output_idx = (kernel_idx * h_out * w_out + pos_idx)
+    #                         else:
+    #                             output_idx = (kernel_idx * h_out * w_out * d_out + pos_idx)
+    #                         code.append(
+    #                             f"\tlayer_{layer_name}_out[{output_idx}] = "
+    #                             f"{self.get_gate_code(left_var, right_var, gate_op)};"
+    #                         )
+    #                     else:
+    #                         var_name = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level}_g{gate_idx}"
+    #                         code.append(
+    #                             f"\tconst {BITS_TO_DTYPE[self.num_bits]} {var_name} = "
+    #                             f"{self.get_gate_code(left_var, right_var, gate_op)};"
+    #                         )
+
+    #     return code
+
+    def _get_pooling_layer_code(self, pool_info: Dict[str, Any], layer_name: str, input_shape: tuple) -> List[str]:
+        """Generate C code for an OrPoolingLayer (max pooling) layer."""
+        code = []
+
+        if len(input_shape) == 3:
+            pool_dim = 2
+            channels, in_h, in_w = input_shape
+        elif len(input_shape) == 4:
+            pool_dim = 3
+            channels, in_h, in_w, in_d = input_shape
+        else:
+            raise ValueError(f"Pool layer expects 3D or 4D input, got {len(input_shape)}D")
+
+        kernel_size = pool_info['kernel_size']
+        stride = pool_info['stride']
+        padding = pool_info['padding']
+
+        # Calculate output dimensions
+        out_h = ((in_h + 2 * padding - kernel_size) // stride) + 1
+        out_w = ((in_w + 2 * padding - kernel_size) // stride) + 1
+        if pool_dim==3:
+            out_d = ((in_d + 2 * padding - kernel_size) // stride) + 1
+
+        code.append(f"\t// Max pooling layer {layer_name}")
+        if pool_dim==2:
+            code.append(f"\t// Input: {channels}x{in_h}x{in_w}, Output: {channels}x{out_h}x{out_w}")
+        else:
+            code.append(f"\t// Input: {channels}x{in_h}x{in_w}x{in_d}, Output: {channels}x{out_h}x{out_w}x{out_d}")
+
+        # Generate pooling code for each channel and output position
+        prev_layer_name = self._get_previous_layer_name(layer_name)
+
+        for c in range(channels):
+            if pool_dim==2:
+                for out_y in range(out_h):
+                    for out_x in range(out_w):
+                        # Calculate input region for this output position
+                        in_y_start = out_y * stride - padding
+                        in_x_start = out_x * stride - padding
+                        in_y_end = min(in_y_start + kernel_size, in_h)
+                        in_x_end = min(in_x_start + kernel_size, in_w)
+                        in_y_start = max(in_y_start, 0)
+                        in_x_start = max(in_x_start, 0)
+
+                        output_idx = c * out_h * out_w + out_y * out_w + out_x
+
+                        # Initialize with first valid input
+                        first_input_idx = c * in_h * in_w + in_y_start * in_w + in_x_start
+                        if prev_layer_name == "inp":
+                            code.append(f"\tlayer_{layer_name}_out[{output_idx}] = inp[{first_input_idx}];")
+                        else:
+                            code.append(f"\tlayer_{layer_name}_out[{output_idx}] = layer_{prev_layer_name}_out[{first_input_idx}];")
+
+                        # Compare with remaining inputs in the kernel window (max pooling using OR)
+                        for ky in range(in_y_start, in_y_end):
+                            for kx in range(in_x_start, in_x_end):
+                                if ky == in_y_start and kx == in_x_start:
+                                    continue  # Skip first element (already initialized)
+
+                                input_idx = c * in_h * in_w + ky * in_w + kx
+                                if prev_layer_name == "inp":
+                                    input_var = f"inp[{input_idx}]"
+                                else:
+                                    input_var = f"layer_{prev_layer_name}_out[{input_idx}]"
+
+                                # Max operation using bitwise OR (since we're working with binary values)
+                                code.append(f"\tlayer_{layer_name}_out[{output_idx}] |= {input_var};")
+            else:
+                for out_z in range(out_h):
+                    for out_y in range(out_w):
+                        for out_x in range(out_d):
+                            # Calculate input region for this output position
+                            in_z_start = out_z * stride - padding
+                            in_y_start = out_y * stride - padding
+                            in_x_start = out_x * stride - padding
+                            in_z_end = min(in_z_start + kernel_size, in_h)
+                            in_y_end = min(in_y_start + kernel_size, in_w)
+                            in_x_end = min(in_x_start + kernel_size, in_d)
+                            in_z_start = max(in_z_start, 0)
+                            in_y_start = max(in_y_start, 0)
+                            in_x_start = max(in_x_start, 0)
+
+                            output_idx = (
+                                c * out_h * out_w * out_d
+                                + out_z * out_w * out_d
+                                + out_y * out_d
+                                + out_x
+                             )
+
+                            # Initialize with first valid input
+                            first_input_idx = (
+                                c * in_h * in_w * in_d
+                                + in_z_start * in_w * in_d
+                                + in_y_start * in_d
+                                + in_x_start
+                            )
+                            if prev_layer_name == "inp":
+                                code.append(f"\tlayer_{layer_name}_out[{output_idx}] = inp[{first_input_idx}];")
+                            else:
+                                code.append(f"\tlayer_{layer_name}_out[{output_idx}] = layer_{prev_layer_name}_out[{first_input_idx}];")
+
+                            # Compare with remaining inputs in the kernel window (max pooling using OR)
+                            for kz in range(in_z_start, in_z_end):
+                                for ky in range(in_y_start, in_y_end):
+                                    for kx in range(in_x_start, in_x_end):
+                                        if (ky == in_y_start and kx == in_x_start) and kz == in_z_start:
+                                            continue  # Skip first element (already initialized)
+
+                                        input_idx = (
+                                            c * in_h * in_w * in_d
+                                            + kz * in_w * in_d
+                                            + ky * in_d
+                                            + kx
+                                        )
+                                        if prev_layer_name == "inp":
+                                            input_var = f"inp[{input_idx}]"
+                                        else:
+                                            input_var = f"layer_{prev_layer_name}_out[{input_idx}]"
+
+                                        # Max operation using bitwise OR (since we're working with binary values)
+                                        code.append(f"\tlayer_{layer_name}_out[{output_idx}] |= {input_var};")
+
+        return code
+
+    def _get_previous_layer_name(self, current_layer_name: str) -> str:
+        """Get the name of the previous layer in execution order."""
+        layer_info = self._calculate_layer_output_sizes_and_shapes()
+
+        # Find current layer in execution order
+        current_idx = None
+        for i, (layer_type, layer_idx, _, _) in enumerate(layer_info):
+            if f"{layer_type}_{layer_idx}" == current_layer_name:
+                current_idx = i
+                break
+
+        if current_idx is None or current_idx == 0:
+            return "inp"  # First layer uses input
+
+        # Get previous layer info
+        prev_layer_type, prev_layer_idx, _, _ = layer_info[current_idx - 1]
+
+        if prev_layer_type == 'flatten':
+            # Flatten doesn't create output, so go one more layer back
+            if current_idx >= 2:
+                prev_prev_layer_type, prev_prev_layer_idx, _, _ = layer_info[current_idx - 2]
+                return f"{prev_prev_layer_type}_{prev_prev_layer_idx}"
+            else:
+                return "inp"
+
+        return f"{prev_layer_type}_{prev_layer_idx}"
+
+    def _get_linear_layer_code(self, layer_a, layer_b, layer_op, layer_id: int, is_final: bool, has_non_linear_layers: bool) -> List[str]:
+        """Generate C code for a linear layer."""
+        code = []
+
+        has_flatten = any(lt == 'flatten' for lt, _, _, _ in self._calculate_layer_output_sizes_and_shapes())
+
+        # Determine input source based on layer position and model structure
+        if has_non_linear_layers or has_flatten:
+            # Mixed model or model with flatten: first layer uses linear_input, subsequent layers alternate
+            if layer_id == 0:
+                input_var = "linear_input"
+            else:
+                # Alternate between linear_input and linear_buf_temp
+                if layer_id % 2 == 1:
+                    input_var = "linear_buf_temp"
+                else:
+                    input_var = "linear_input"
+        elif layer_id == 0:
+            # First layer in linear-only model: use direct input
+            input_var = "inp"
+        else:
+            # Subsequent layers in linear-only model: alternate between buffers
+            if layer_id % 2 == 1:
+                input_var = "linear_buf_a"
+            else:
+                input_var = "linear_buf_b"
+
+        # Determine output destination
+        if is_final:
+            output_var = "out"
+        elif has_non_linear_layers or has_flatten:
+            # Mixed model or flatten model: alternate between buffers
+            if layer_id % 2 == 0:
+                output_var = "linear_buf_temp"
+            else:
+                output_var = "linear_input"
+        elif layer_id < len(self.linear_layers) - 1:
+            # Multi-layer linear model: alternate between buffers
+            if layer_id % 2 == 0:
+                output_var = "linear_buf_a"
+            else:
+                output_var = "linear_buf_b"
+        else:
+            output_var = "out"
+
+        for var_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
+            a = f"{input_var}[{gate_a}]"
+            b = f"{input_var}[{gate_b}]"
+            code.append(f"\t{output_var}[{var_id}] = {self.get_gate_code(a, b, gate_op)};")
+
+        return code
+
+    def get_c_code(self, include_dir="./") -> str:
+        """Generate the complete C code for the network and write any needed header files to include_dir"""
+        
+        print("INCLUDE_DIR = ", include_dir)
+
+        code_include = [
+            "#include <stddef.h>",
+            "#include <stdlib.h>",
+            "#include <stdbool.h>",
+            "#include <string.h>",
+            "#include <stdio.h>",
+        ]
+
+        if self.use_bitpacking:
+            dtype = BITS_TO_DTYPE[self.num_bits]
+        else:
+            dtype = "bool"
+
+        # Calculate sizes and shapes for all layers
+        layer_info = self._calculate_layer_output_sizes_and_shapes()
+        logic_net_inp_size = self._get_input_size()
+
+        if self.apply_thresholding:
+            if self.thresholding_layer is None:
+                raise ValueError("If the inputs are not boolean then the first layer must be a thresholding layer.")
+            logic_net_inp_size *= self.thresholding_layer['num_thresholds']
+
+        code_helpers = []
+        code_logic_net = []
+        if self.use_bitpacking:
+            code_logic_net.extend([
+                "",
+                f"void logic_net("
+                f"{dtype} const *inp, "
+                f"{dtype} *out);",
+                "",
+                f"void logic_net("
+                f"{dtype} const *inp, "
+                f"{dtype} *out) {{",
+            ])
+
+        else: # processing one event at a time
+            code_helpers.insert(
+                0,
+                ""
+                f"void logic_net("
+                f"bool const inp[{logic_net_inp_size}], "
+                f"bool out[{self._get_output_size()}]);\n"
+                ""
+            )
+            code_logic_net.append(
+                ""
+                f"void logic_net("
+                f"bool const inp[{logic_net_inp_size}], "
+                f"bool out[{self._get_output_size()}]) {{",
+            )
+
+        # Allocate intermediate buffers for non-linear layers
+        for layer_type, layer_idx, output_shape, output_size in layer_info:
+            if layer_type in ['conv', 'pool']:
+                code_logic_net.append(f"\t{BITS_TO_DTYPE[self.num_bits]} layer_{layer_type}_{layer_idx}_out[{output_size}];")
+
+        # Allocate buffers for linear layers if needed
+        linear_layer_count = len(self.linear_layers)
+        has_non_linear_layers = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
+        has_flatten = any(lt == 'flatten' for lt, _, _, _ in layer_info)
+
+        if linear_layer_count > 0:
+            if has_non_linear_layers or has_flatten:
+                # Mixed model or model with flatten: need buffer to transfer data to linear layers
+                # Find the size after flattening or from conv/pool layers
+                flatten_size = None
+                for layer_type, layer_idx, output_shape, output_size in layer_info:
+                    if layer_type == 'flatten':
+                        flatten_size = output_size
+                        break
+                
+                # If no explicit flatten but we have conv/pool, use the last conv/pool output size
+                if flatten_size is None and has_non_linear_layers:
+                    for layer_type, layer_idx, output_shape, output_size in reversed(layer_info):
+                        if layer_type in ['conv', 'pool']:
+                            flatten_size = output_size
+                            break
+
+                if flatten_size:
+                    # For multi-layer linear networks, we need the buffer to be large enough
+                    # for the largest intermediate layer size
+                    max_linear_input_size = flatten_size
+                    if linear_layer_count > 1:
+                        # Check all linear layer input sizes
+                        for i, (layer_a, layer_b, layer_op) in enumerate(self.linear_layers[:-1]):
+                            layer_output_size = len(layer_a)  # This layer's output size
+                            max_linear_input_size = max(max_linear_input_size, layer_output_size)
+
+                    code_logic_net.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_input[{max_linear_input_size}];")
+
+            # For multi-layer linear networks, use ping-pong buffers
+            if linear_layer_count > 1:
+                if has_non_linear_layers or has_flatten:
+                    # Mixed model or flatten model: use one additional buffer for ping-ponging
+                    max_linear_size = max(len(layer[0]) for layer in self.linear_layers)
+                    code_logic_net.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_temp[{max_linear_size}];")
+                else:
+                    # Linear-only model: use two ping-pong buffers
+                    max_linear_size = max(len(layer[0]) for layer in self.linear_layers)
+                    code_logic_net.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_a[{max_linear_size}];")
+                    code_logic_net.append(f"\t{BITS_TO_DTYPE[self.num_bits]} linear_buf_b[{max_linear_size}];")
+
+        # Check if we need a flatten buffer when no linear layers follow (for GroupSum only)
+        if has_flatten and linear_layer_count == 0:
+            # Need buffer for flatten → GroupSum case
+            flatten_size = None
+            for layer_type, layer_idx, output_shape, output_size in layer_info:
+                if layer_type == 'flatten':
+                    flatten_size = output_size
+                    break
+            if flatten_size:
+                code_logic_net.append(f"\t{BITS_TO_DTYPE[self.num_bits]} flattened_output[{flatten_size}];")
+
+        code_logic_net.append("")
+
+        # Generate code for all layers in execution order
+        linear_layer_counter = 0
+        current_shape = self.input_shape
+
+        for layer_type, layer_idx, output_shape, output_size in layer_info:
+            if layer_type == 'conv':
+                layer_name = f"{layer_type}_{layer_idx}"
+                conv_code, incl_code, call_code = self._get_conv_layer_code(
+                    self.conv_layers[layer_idx], 
+                    layer_name, 
+                    include_dir
+                )
+                code_helpers.extend(conv_code)
+                code_helpers.append("")
+                code_include.extend(incl_code)
+                code_include.append("")
+                code_logic_net.extend(call_code)
+
+            elif layer_type == 'pool':
+                layer_name = f"{layer_type}_{layer_idx}"
+                code_logic_net.extend(self._get_pooling_layer_code(self.pooling_layers[layer_idx], layer_name, current_shape))
+                code_logic_net.append("")
+
+            elif layer_type == 'flatten':
+                # Handle flattening: copy from input or previous layer to appropriate buffer
+                current_layer_idx = layer_info.index((layer_type, layer_idx, output_shape, output_size))
+                
+                if current_layer_idx == 0:
+                    # First layer is flatten: copy directly from input
+                    if linear_layer_count > 0:
+                        code_logic_net.append(f"\t// Flatten layer: copy from input to linear_input")
+                        code_logic_net.append(f"\tmemcpy(linear_input, inp, "
+                                   f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                    else:
+                        code_logic_net.append(f"\t// Flatten layer: copy from input to flattened_output")
+                        code_logic_net.append(f"\tmemcpy(flattened_output, inp, "
+                                   f"{output_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                else:
+                    # Flatten follows other layers: copy from previous layer
+                    prev_layer_info = layer_info[current_layer_idx - 1]
+                    prev_layer_type, prev_layer_idx, prev_shape, prev_size = prev_layer_info
+
+                    if linear_layer_count > 0:
+                        # Flatten → Linear case: copy to linear_input
+                        code_logic_net.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to linear_input")
+                        code_logic_net.append(f"\tmemcpy(linear_input, layer_{prev_layer_type}_{prev_layer_idx}_out, "
+                                   f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                    else:
+                        # Flatten → GroupSum case: copy to flattened_output buffer
+                        code_logic_net.append(f"\t// Flatten layer: copy from layer_{prev_layer_type}_{prev_layer_idx}_out to flattened_output")
+                        code_logic_net.append(f"\tmemcpy(flattened_output, layer_{prev_layer_type}_{prev_layer_idx}_out, "
+                                   f"{prev_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+                code_logic_net.append("")
+            elif layer_type == 'linear':
+                layer_a, layer_b, layer_op = self.linear_layers[layer_idx]
+                is_final = (linear_layer_counter == linear_layer_count - 1)
+                has_non_linear = any(lt in ['conv', 'pool'] for lt, _, _, _ in layer_info)
+                code_logic_net.extend(self._get_linear_layer_code(layer_a, layer_b, layer_op, linear_layer_counter, is_final, has_non_linear))
+                linear_layer_counter += 1
+
+            current_shape = output_shape
+
+        # Handle case where we only have conv/pool layers (no linear layers)
+        if linear_layer_count == 0 and layer_info:
+            final_layer_type, final_layer_idx, _, final_size = layer_info[-1]
+            if final_layer_type in ['conv', 'pool']:
+                code_logic_net.append(f"\t// Copy final layer output to result")
+                code_logic_net.append(f"\tmemcpy(out, layer_{final_layer_type}_{final_layer_idx}_out, "
+                           f"{final_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+            elif final_layer_type == 'flatten':
+                # Flatten is the final operation, copy from flattened_output to out
+                code_logic_net.append(f"\t// Copy flattened output to result")
+                code_logic_net.append(f"\tmemcpy(out, flattened_output, "
+                           f"{final_size} * sizeof({BITS_TO_DTYPE[self.num_bits]}));")
+
+        code_logic_net.append("}")
+
+        # Add processing function if needed
+        if self.num_classes or not self.use_bitpacking:
+            if self.use_bitpacking:
+                code_helpers.extend(self._generate_batch_processing_function())
+            else:
+                code_helpers.extend(self._generate_single_processing_function())
+
+        code = []
+        code.extend(code_include)
+        code.extend(code_helpers)
+        code.extend(code_logic_net)
+
+        return "\n".join(code)
+
+    def _generate_batch_processing_function(self) -> List[str]:
+        """Generate the batch processing function for GroupSum."""
+        input_size = self._get_input_size()
+        output_size = self._get_output_size()
+
+        num_neurons_ll = output_size
+        log2_of_num_neurons_per_class_ll = math.ceil(
+            math.log2(num_neurons_ll / self.num_classes + 1)
+        )
+
+        return [
+            f"""
+void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
+    {BITS_TO_DTYPE[self.num_bits]} *inp_temp = malloc({input_size}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
+    {BITS_TO_DTYPE[self.num_bits]} *out_temp = malloc({num_neurons_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
+    {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
+
+    for(size_t i = 0; i < len; ++i) {{
+
+        // Converting the bool array into a bitpacked array
+        for(size_t d = 0; d < {input_size}; ++d) {{
+            {BITS_TO_DTYPE[self.num_bits]} res = {BITS_TO_ZERO_LITERAL[self.num_bits]};
+            for(size_t b = 0; b < {self.num_bits}; ++b) {{
+                res <<= 1;
+                res += !!(inp[i * {input_size} * {self.num_bits} + ({self.num_bits} - b - 1) * {input_size} + d]);
+            }}
+            inp_temp[d] = res;
+        }}
+
+        // Applying the logic net
+        logic_net(inp_temp, out_temp);
+
+        // GroupSum of the results via logic gate networks
+        for(size_t c = 0; c < {self.num_classes}; ++c) {{  // for each class
+            // Initialize the output bits
+            for(size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
+                out_temp_o[d] = {BITS_TO_ZERO_LITERAL[self.num_bits]};
+            }}
+
+            // Apply the adder logic gate network
+            for(size_t a = 0; a < {num_neurons_ll // self.num_classes}; ++a) {{
+                {BITS_TO_DTYPE[self.num_bits]} carry = out_temp[c * {num_neurons_ll // self.num_classes} + a];
+                {BITS_TO_DTYPE[self.num_bits]} out_temp_o_d;
+                for(int d = {log2_of_num_neurons_per_class_ll} - 1; d >= 0; --d) {{
+                    out_temp_o_d  = out_temp_o[d];
+                    out_temp_o[d] = carry ^ out_temp_o_d;
+                    carry         = carry & out_temp_o_d;
+                }}
+            }}
+
+            // Unpack the result bits
+            for(size_t b = 0; b < {self.num_bits}; ++b) {{
+                const {BITS_TO_DTYPE[self.num_bits]} bit_mask = {BITS_TO_ONE_LITERAL[self.num_bits]} << b;
+                {BITS_TO_DTYPE[32]} res = 0;
+                for(size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
+                    res <<= 1;
+                    res += !!(out_temp_o[d] & bit_mask);
+                }}
+                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = (res + {self.beta}) / {self.tau};
+            }}
+        }}
+    }}
+    free(inp_temp);
+    free(out_temp);
+    free(out_temp_o);
+}}
+"""
+        ]
+
+    def _generate_single_processing_function(self) -> List[str]:
+        """Generate the processing function for the case where we want to process one event at a time.
+        Includes thresholding if apply_thresholding is set to True. Also includes GroupSum. 
+        This method is meant to be the top-level method for HLS synthesis."""
+
+        input_size = self._get_input_size()
+        num_neurons_ll = self._get_output_size()
+
+        if self.apply_thresholding:
+            thresholding_info = self.thresholding_layer
+            num_thresholds = thresholding_info["num_thresholds"]
+            thresholds = thresholding_info["thresholds"].tolist()
+            thresholds_str = ", ".join(str(int(x)) for x in thresholds)
+            thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+        
+        inp_dtype = BITS_TO_DTYPE[32] if self.apply_thresholding else "bool"
+        out_len = self.num_classes if self.num_classes else num_neurons_ll
+        logic_net_out_arg = "out_temp" if self.num_classes else "out"
+        out_dtype = BITS_TO_DTYPE[32] if self.num_classes else "bool"
+
+        code = [
+            f"void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{out_len}]) {{"
+        ]
+
+        if self.num_classes:
+            code.append(f"    bool out_temp[{num_neurons_ll}];")
+
+        if self.apply_thresholding:
+            code.append(f"""    bool inp_temp[{input_size * num_thresholds}];
+    {thresholds_c_def}
+
+    // Convert the inputs into boolean
+    for (size_t t = 0; t < {num_thresholds}; t++) {{
+        for (size_t in_idx = 0; in_idx < {input_size}; in_idx++){{
+            size_t out_idx = t * {input_size} + in_idx;
+            inp_temp[out_idx] = (inp[in_idx] > thresholds[t])? 1 : 0;
+        }}
+    }}
+    
+    //run logic net
+    logic_net(inp_temp, {logic_net_out_arg});
+""")
+        else:
+            code.append(f"""
+    //run logic net
+    logic_net(inp, {logic_net_out_arg});
+""")
+
+        if self.num_classes:    
+            code.append(f"""
+    //apply GroupSum
+    for (size_t c = 0; c < {self.num_classes}; c++) {{
+        {BITS_TO_DTYPE[32]} sum = 0;
+        for(size_t a = 0; a < {num_neurons_ll} / {self.num_classes}; a++) {{
+            sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
+        }}""")
+
+            if (self.beta!=0) or (self.tau!=1):
+                code.append(f"""
+        out[c] = (sum + {self.beta}) / {self.tau};
+    }}
+}}
+""")
+            else:
+                code.append(f"""
+        out[c] = sum;
+    }}
+}}
+""")
+
+        code.append(
+            f"""
+    
+void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
+    {inp_dtype} *inp_temp = malloc({input_size}*sizeof({inp_dtype}));
+    {out_dtype} *out_temp = malloc({out_len}*sizeof({out_dtype}));
+
+    // run inference one event at a time
+    for (size_t i = 0; i < len; ++i) {{
+        for (size_t j = 0; j < {input_size}; ++j) {{
+            inp_temp[j] = inp[i * {input_size} + j];
+        }}
+        apply_logic_net_one_event(inp_temp, out_temp);
+        for (size_t k = 0; k < {out_len}; ++k) {{
+            out[i * {out_len} + k] = out_temp[k];
+        }}
+    }}
+    free(inp_temp);
+    free(out_temp);
+}}
+
+""")
+        return code
+    
+
+    def _get_input_size(self) -> int:
+        """Get the total input size."""
+        if self.input_shape is None:
+            raise ValueError("Input shape not set")
+        return np.prod(self.input_shape)
+
+    def _get_output_size(self) -> int:
+        """Get the total output size."""
+        if self.linear_layers:
+            return len(self.linear_layers[-1][0])
+        else:
+            # Get the final layer info
+            layer_info = self._calculate_layer_output_sizes_and_shapes()
+            if layer_info:
+                return layer_info[-1][3]  # output_size
+            else:
+                raise ValueError("No layers found")
+
+    def compile(self, opt_level: int = 1, save_lib_path: str = None, verbose: bool = False):
+        """Compile the network to a shared library."""
+        with tempfile.TemporaryDirectory() as build_dir:
+            os.makedirs(os.path.join(build_dir, "include"), exist_ok=True)
+
+            # Write C file
+            c_path = os.path.join(build_dir, "logicnet.c")
+            with open(c_path, "w") as c_file:
+                code = self.get_c_code(include_dir = os.path.join(build_dir, "include"))
+                c_file.write(code)
+
+            if verbose:
+                n_lines = len(code.split("\n"))
+                print(f"C code created with {n_lines} lines. (temp location {c_path})")
+
+            lib_file = os.path.join(build_dir, "liblogicnet.so")
+
+            # Compile while temp files still exist
+            t_s = time.time()
+            compiler_out = subprocess.run([
+                self.cpu_compiler, "-shared", "-fPIC", f"-O{opt_level}",
+                "-I", os.path.join(build_dir, "include"),
+                "-o", lib_file, c_path,
+            ])
+
+            if compiler_out.returncode != 0:
+                raise RuntimeError(f"compilation exited with error code {compiler_out.returncode}")
+
+            print(f"Compiling finished in {time.time() - t_s:.3f} seconds.")
+
+            # Copy compiled library if requested
+            if save_lib_path is not None:
+                os.makedirs(os.path.dirname(save_lib_path), exist_ok=True)
+                shutil.copy(lib_file, save_lib_path)
+                if verbose:
+                    print(f"lib_file copied from {lib_file} to {save_lib_path}")
+
+            # Load library
+            lib = ctypes.cdll.LoadLibrary(lib_file)
+            self._setup_library_function(lib)
+
+
+
+    def _setup_library_function(self, lib):
+        """Setup the library function with appropriate signatures."""
+        if self.num_classes or self.apply_thresholding:
+            inp_type = BITS_TO_C_DTYPE[32] if self.apply_thresholding else ctypes.c_bool
+            out_type = BITS_TO_C_DTYPE[32] if self.num_classes else ctypes.c_bool
+
+            lib_fn = lib.apply_logic_net
+            lib_fn.restype = None
+            lib_fn.argtypes = [
+                np.ctypeslib.ndpointer(inp_type, flags="C_CONTIGUOUS"),
+                np.ctypeslib.ndpointer(out_type, flags="C_CONTIGUOUS"),
+                ctypes.c_size_t,
+            ]
+        else:
+            lib_fn = lib.logic_net
+            lib_fn.restype = None
+            lib_fn.argtypes = [
+                np.ctypeslib.ndpointer(BITS_TO_C_DTYPE[self.num_bits], flags="C_CONTIGUOUS"),
+                np.ctypeslib.ndpointer(BITS_TO_C_DTYPE[self.num_bits], flags="C_CONTIGUOUS"),
+            ]
+        self.lib_fn = lib_fn
+
+    def forward(
+        self,
+        x: Union[torch.BoolTensor, numpy.typing.NDArray[np.bool_]],
+        verbose: bool = False,
+    ) -> torch.IntTensor:
+        """Forward pass through the compiled network."""
+        if isinstance(x, torch.Tensor):
+            x = x.numpy()
+
+        if self.num_classes:
+            return self._forward_with_groupsum(x, verbose)
+        else:
+            return self._forward_direct(x, verbose)
+
+    def _forward_with_groupsum(self, x: np.ndarray, verbose: bool) -> torch.IntTensor:
+        """Forward pass with GroupSum (batch processing)."""
+        if self.use_bitpacking:
+            batch_size_div_bits = math.ceil(x.shape[0] / self.num_bits)
+            pad_len = batch_size_div_bits * self.num_bits - x.shape[0]
+            x = np.concatenate([x, np.zeros_like(x[:pad_len])])
+            n_iter = batch_size_div_bits
+        else:
+            pad_len = 0
+            n_iter = x.shape[0]
+
+        if verbose:
+            print("x.shape", x.shape)
+
+        out = np.zeros(x.shape[0] * self.num_classes, dtype=BITS_TO_NP_DTYPE[32])
+        x = x.reshape(-1)
+
+        self.lib_fn(x, out, n_iter)
+
+        if self.use_bitpacking:
+            out = torch.tensor(out).view(batch_size_div_bits * self.num_bits, self.num_classes)
+        else:
+            out = torch.tensor(out).view(n_iter, self.num_classes)
+
+        if pad_len > 0:
+            out = out[:-pad_len]
+
+        if verbose:
+            print("out.shape", out.shape)
+
+        return out
+
+    def _forward_direct(self, x: np.ndarray, verbose: bool) -> torch.IntTensor:
+        """Direct forward pass without GroupSum."""
+        batch_size = x.shape[0]
+        input_size = self._get_input_size()
+        x_flat = x.reshape(batch_size, input_size).astype(BITS_TO_NP_DTYPE[self.num_bits])
+
+        output_size = self._get_output_size()
+        out = np.zeros((batch_size, output_size), dtype=BITS_TO_NP_DTYPE[self.num_bits])
+
+        for i in range(batch_size):
+            self.lib_fn(x_flat[i], out[i])
+
+        return torch.tensor(out)
+
+    @staticmethod
+    def load(save_lib_path: str, input_shape: tuple, num_classes: int = None, num_bits: int = 64):
+        """Load a compiled network from a shared library."""
+        self = CompiledLogicNet(None, num_bits=num_bits)
+        self.input_shape = input_shape
+        self.num_classes = num_classes
+
+        lib = ctypes.cdll.LoadLibrary(save_lib_path)
+        self._setup_library_function(lib)
+        return self

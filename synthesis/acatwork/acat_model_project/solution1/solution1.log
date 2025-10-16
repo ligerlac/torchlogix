@@ -1,0 +1,122 @@
+==============================================================
+Vitis HLS - High-Level Synthesis from C, C++ and OpenCL v2021.1 (64-bit)
+Copyright 1986-2021 Xilinx, Inc. All Rights Reserved.
+==============================================================
+INFO: [HLS 200-1505] Using default flow_target 'vivado'
+INFO: [HLS 200-1510] Running: set_part virtex7 
+INFO: [HLS 200-1510] Running: create_clock -period 6.25 -name default 
+INFO: [SYN 201-201] Setting up clock 'default' with a period of 6.25ns.
+INFO: [HLS 200-1510] Running: csynth_design 
+WARNING: [HLS 200-40] Skipped source file 'y_val_ref.txt'. Source files must have extensions .c, .C, .cc, .cpp, .c++, .cp, or .cxx.
+WARNING: [HLS 200-40] Skipped source file 'x_val.txt'. Source files must have extensions .c, .C, .cc, .cpp, .c++, .cp, or .cxx.
+INFO: [HLS 200-111] Finished File checks and directory preparation: CPU user time: 0.01 seconds. CPU system time: 0 seconds. Elapsed time: 0.12 seconds; current allocated memory: 569.476 MB.
+INFO: [HLS 200-10] Analyzing design file 'acat_model.cpp' ... 
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:55:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:56:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:57:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:58:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:59:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:60:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:61:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:62:57
+WARNING: [HLS 207-5528] Ignore interface attribute or pragma which is not used in top function: acat_model.cpp:156:9
+WARNING: [HLS 207-5301] unused parameter 'print': /afs/hep.wisc.edu/cms/sw/Xilinx/Vitis_HLS/2021.1/common/technology/autopilot/ap_int_base.h:792:16
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:55:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:56:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:57:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:58:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:59:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:60:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:61:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:62:57
+INFO: [HLS 200-111] Finished Source Code Analysis and Preprocessing: CPU user time: 1825.59 seconds. CPU system time: 40.31 seconds. Elapsed time: 1869.32 seconds; current allocated memory: 569.647 MB.
+INFO: [HLS 200-777] Using interface defaults for 'Vivado' flow target.
+INFO: [HLS 214-279] Initial Interval estimation mode is set into default.
+INFO: [HLS 214-284] Auto array partition mode is set into default.
+WARNING: [HLS 214-287] Basic block in function __cxx_global_var_init has more than 200000 instructions. (./conv_conv_0_indices.h:10:7)
+WARNING: [HLS 214-287] Basic block in function __cxx_global_var_init.1 has more than 200000 instructions. (./conv_conv_0_indices.h:18189:7)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:145:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:129:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:113:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:97:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:81:33)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_184_3' (acat_model.cpp:184:23) in function 'apply_logic_net_one_event' partially with a factor of 64 (acat_model.cpp:153:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_165_1' (acat_model.cpp:165:20) in function 'apply_logic_net_one_event' completely with a factor of 6 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_135_14' (acat_model.cpp:135:28) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_119_11' (acat_model.cpp:119:28) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_103_8' (acat_model.cpp:103:27) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_87_5' (acat_model.cpp:87:26) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_67_2' (acat_model.cpp:67:26) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-241] Aggregating maxi variable 'out' with non-compact mode in 16-bits (acat_model.cpp:153:0)
+INFO: [HLS 214-270] Starting automatic array partition analysis...
+INFO: [HLS 214-131] Inlining function '_llvm.fpga.pack.none.i16.s_struct.ap_ufixeds' into 'apply_logic_net_one_event(ap_uint<10> const*, ap_ufixed<16, 8, (ap_q_mode)5, (ap_o_mode)3, 0>*)' (acat_model.cpp:196:9)
+INFO: [HLS 200-111] Finished Compiling Optimization and Transform: CPU user time: 1162.51 seconds. CPU system time: 56.4 seconds. Elapsed time: 1222.55 seconds; current allocated memory: 569.972 MB.
+INFO: [HLS 200-111] Finished Checking Pragmas: CPU user time: 0.01 seconds. CPU system time: 0 seconds. Elapsed time: 0.01 seconds; current allocated memory: 569.974 MB.
+INFO: [HLS 200-10] Starting code transformations ...
+INFO: [HLS 200-111] Finished Standard Transforms: CPU user time: 510.13 seconds. CPU system time: 1.97 seconds. Elapsed time: 512.28 seconds; current allocated memory: 729.472 MB.
+INFO: [HLS 200-10] Checking synthesizability ...
+INFO: [HLS 200-111] Finished Checking Synthesizability: CPU user time: 66.81 seconds. CPU system time: 0.69 seconds. Elapsed time: 67.57 seconds; current allocated memory: 701.397 MB.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_87_5' (acat_model.cpp:87) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_103_8' (acat_model.cpp:103) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_119_11' (acat_model.cpp:119) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_135_14' (acat_model.cpp:135) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_184_3' (acat_model.cpp:183) in function 'apply_logic_net_one_event' automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d4.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d3.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d2.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d1.V' in dimension 1 automatically.
+INFO: [XFORM 203-101] Partitioning array 'out_temp.V' (acat_model.cpp:159) in dimension 1 with a cyclic factor 32.
+INFO: [XFORM 203-101] Partitioning array 'layer_conv_0_out.V' (acat_model.cpp:223) in dimension 1 with a cyclic factor 32.
+INFO: [XFORM 203-101] Partitioning array 'linear_buf_temp.V' (acat_model.cpp:224) in dimension 1 with a cyclic factor 32.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_0.V' (acat_model.cpp:46) accessed through non-constant indices on dimension 1 (acat_model.cpp:96:29), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_0.V' (acat_model.cpp:46) in dimension 1 completely.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_1.V' (acat_model.cpp:47) accessed through non-constant indices on dimension 1 (acat_model.cpp:98:17), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_1.V' (acat_model.cpp:47) in dimension 1 completely.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_2.V' (acat_model.cpp:48) accessed through non-constant indices on dimension 1 (acat_model.cpp:114:17), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_2.V' (acat_model.cpp:48) in dimension 1 completely.

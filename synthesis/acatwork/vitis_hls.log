@@ -1,0 +1,314 @@
+
+****** Vitis HLS - High-Level Synthesis from C, C++ and OpenCL v2021.1 (64-bit)
+  **** SW Build 3247384 on Thu Jun 10 19:36:07 MDT 2021
+  **** IP Build 3246043 on Fri Jun 11 00:30:35 MDT 2021
+    ** Copyright 1986-2021 Xilinx, Inc. All Rights Reserved.
+
+source /afs/hep.wisc.edu/cms/sw/Xilinx/Vitis_HLS/2021.1/scripts/vitis_hls/hls.tcl -notrace
+INFO: [HLS 200-10] Running '/afs/hep.wisc.edu/cms/sw/Xilinx/Vitis_HLS/2021.1/bin/unwrapped/lnx64.o/vitis_hls'
+INFO: [HLS 200-10] For user 'ekauffma' on host 'login05.hep.wisc.edu' (Linux_x86_64 version 6.1.154-1.el9.elrepo.x86_64) on Tue Oct 07 07:17:39 CDT 2025
+INFO: [HLS 200-10] On os "AlmaLinux release 9.6 (Sage Margay)"
+INFO: [HLS 200-10] In directory '/afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork'
+[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> [11C
+[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> s[12C[2Kvitis_hls> so[13C[2Kvitis_hls> sou[14C[2Kvitis_hls> sour[15C[2Kvitis_hls> sou[14C[2Kvitis_hls> so[13C[2Kvitis_hls> s[12C[2Kvitis_hls> [11C[2Kvitis_hls> [11C[2Kvitis_hls> v[12C[2Kvitis_hls> vi[13C[2Kvitis_hls> vi [14C[2Kvitis_hls> vi r[15C[2Kvitis_hls> vi ru[16C[2Kvitis_hls> vi run_hls.tcl[25C
+Vim: Warning: Output is not to a terminal
+[24m[0m[?1000h[?1049h[?1h=[1;67r[23m[24m[0m[38;5;252m[48;5;234m[?25l[67;1H"run_hls.tcl"                                                                                                                                                                                                                      [67;15H46L, 968B[1;1H[38;5;252m[48;5;235m 1 run_hls.tcl [0m[38;5;252m[48;5;234m[38;5;235m[48;5;238m [0m[38;5;252m[48;5;234m[38;5;248m[48;5;238m                                                                                                                                                                                                               [0m[38;5;252m[48;5;234m[38;5;242m[48;5;238m [0m[38;5;252m[48;5;234m[38;5;248m[48;5;242m X [0m[38;5;252m[48;5;234m[2;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Create a project[0m[38;5;252m[48;5;234m                                                                                                                                                                                                                [3;1H[38;5;242m [0m[38;5;252m[48;5;234mopen_project -reset acat_model_project                                                                                                                                                                                            [4;1H[38;5;242m [0m[3   Compiling ../../../../acat_model_tb.cpp in debug mode
+   Compiling ../../../../acat_model.cpp in debug mode
+gcc: internal compiler error: Segmentation fault (program cc1plus)
+Please submit a full bug report,
+with preprocessed source if appropriate.
+See <http://gcc.gnu.org/bugs.html> for instructions.
+make: *** [csim.mk:78: obj/acat_model.o] Error 4
+ERROR: [SIM 211-100] 'csim_design' failed: compilation error(s).
+INFO: [SIM 211-3] *************** CSIM finish ***************
+INFO: [HLS 200-111] Finished Command csim_design CPU user time: 3222.11 seconds. CPU system time: 79.35 seconds. Elapsed time: 3306.51 seconds; current allocated memory: 250.741 MB.
+4
+[2Kvitis_hls> [11C[2Kvitis_hls> source run_hls.tcl[29C[2Kvitis_hls> [11C                                                                     [7;1H[38;5;242m [0m[38;5;252m[48;5;234madd_files acat_model.h                                                                                                                                                                                                            [8;1H[38;5;242m [0m[38;5;252m[48;5;234madd_files x_val.txt                                                                                                                                                                                                               [9;1H[38;5;242m [0m[38;5;252m[48;5;234madd_files y_val_ref.txt                                                                                                                                                                                                           [10;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Add test bench & files[0m[38;5;252m[48;5;234m                                                                                                                                                                                                          [11;1H[38;5;242m [0m[38;5;252m[48;5;234madd_files -tb acat_model_tb.cpp                                                                                                                                                                                                   [12;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [13;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Set the top-level function[0m[38;5;252m[48;5;234m                                                                                                                                                                                                      [14;1H[38;5;242m [0m[38;5;252m[48;5;234mset_top apply_logic_net_one_event                                                                                                                                                                                                 [15;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [16;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# ########################################################[0m[38;5;252m[48;5;234m                                                                                                                                                                        [17;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Create a solution[0m[38;5;252m[48;5;234m                                                                                                                                                                                                               [18;1H[38;5;242m [0m[38;5;252m[48;5;234mopen_solution -reset [97m[41msolution1[0m[38;5;252m[48;5;234m                                                                                                                                                                                                    [19;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Define technology and clock rate[0m[38;5;252m[48;5;234m                                                                                                                                                                                                [20;1H[38;5;242m [0m[38;5;252m[48;5;234mset_part  virtex7                                                                                                                                                                                                                 [21;1H[38;5;242m [0m[38;5;252m[48;5;234mcreate_clock -period [38;5;179m6.25[0m[38;5;252m[48;5;234m -name [38;5;153mdefault[0m[38;5;252m[48;5;234m                                                                                                                                                                                           [22;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [23;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Source x_hls.tcl to determine which steps to execute[0m[38;5;252m[48;5;234m                                                                                                                                                                            [24;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;153msource[0m[38;5;252m[48;5;234m x_hls.tcl                                                                                                                                                                                                                  [25;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m#csim_design[0m[38;5;252m[48;5;234m                                                                                                                                                                                                                      [26;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [27;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# Set any optimization directives[0m[38;5;252m[48;5;234m                                                                                                                                                                                                 [28;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m# End of directives[0m[38;5;252m[48;5;234m                                                                                                                                                                                                               [29;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [30;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;153mif[0m[38;5;252m[48;5;234m {[38;5;219m$hls_exec[0m[38;5;252m[48;5;234m == [38;5;179m1[0m[38;5;252m[48;5;234m} {                                                                                                                                                                                                             [31;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m    # Run Synthesis and Exit[0m[38;5;252m[48;5;234m                                                                                                                                                                                                      [32;1H[38;5;242m [0m[38;5;252m[48;5;234m    csynth_design                                                                                                                                                                                                                 [33;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [34;1H[38;5;242m [0m[38;5;252m[48;5;234m} [38;5;153melseif[0m[38;5;252m[48;5;234m {[38;5;219m$hls_exec[0m[38;5;252m[48;5;234m == [38;5;179m2[0m[38;5;252m[48;5;234m} {                                                                                                                                                                                                       [35;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m    # Run Synthesis, RTL Simulation and Exit[0m[38;5;252m[48;5;234m                                                                                                                                                                                      [36;1H[38;5;242m [0m[38;5;252m[48;5;234m    csynth_design                                                                                                                                                                                                                 [37;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [38;1H[38;5;242m [0m[38;5;252m[48;5;234m    cosim_design                                                                                                                                                                                                                  [39;1H[38;5;242m [0m[38;5;252m[48;5;234m} [38;5;153melseif[0m[38;5;252m[48;5;234m {[38;5;219m$hls_exec[0m[38;5;252m[48;5;234m == [38;5;179m3[0m[38;5;252m[48;5;234m} {                                                                                                                                                                                                       [40;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;186m    # Run Synthesis, RTL Simulation, RTL implementation and Exit[0m[38;5;252m[48;5;234m                                                                                                                                                                  [41;1H[38;5;242m [0m[38;5;252m[48;5;234m    csynth_design                                                                                                                                                                                                                 [42;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [43;1H[38;5;242m [0m[38;5;252m[48;5;234m    cosim_design                                                                                                                                                                                                                  [44;1H[38;5;242m [0m[38;5;252m[48;5;234m    export_design -[38;5;153mformat[0m[38;5;252m[48;5;234m ip_catalog                                                                                                                                                                                              [45;1H[38;5;242m [0m[38;5;252m[48;5;234m}                                                                                                                                                                                                                                 [46;1H[38;5;242m [0m[38;5;252m[48;5;234m                                                                                                                                                                                                                                  [47;1H[38;5;242m [0m[38;5;252m[48;5;234m[38;5;153mexit[0m[38;5;252m[48;5;234m                                                                                                                                                                                                                              [48;1H[38;5;69m[48;5;233m~                                                                                                                                                                                                                                  [49;1H~                                                                                                                                                                                                                                  [50;1H~                                                                                                                                                                                                                                  [51;1H~                                                                                                                                                                                                                                  [52;1H~                                                                                                                                                                                                                                  [53;1H~                                                                                                                                                                                                                                  [54;1H~                                                                                                                                                                                                                                  [55;1H~                                                                                                                                                                                                                                  [56;1H~                                                                                                                                                                                                                                  [57;1H~                                                                                                                                                                                                                                  [58;1H~                                                                                                                                                                                                                                  [59;1H~                                                                                                                                                                                                                                  [60;1H~                                                                                                                                                                                                                                  [61;1H~                                                                                                                                                                                                                                  [62;1H~                                                                                                                                                                                                                                  [63;1H~                                                                                                                                                                                                                                  [64;1H~                                                                                                                                                                                                                                  [65;1H~                                                                                                                                                                                                                                  [0m[38;5;252m[48;5;234m[66;1H[38;5;238m[48;5;117m NORMAL [0m[38;5;252m[48;5;234m[38;5;117m[48;5;240m [0m[38;5;252m[48;5;234m[38;5;252m[48;5;240m main   run_hls.tcl [0m[38;5;252m[48;5;234m[38;5;240m[48;5;238m [0m[38;5;252m[48;5;234m[38;5;248m[48;5;238m                                                                                                                                                                                     [0m[38;5;252m[48;5;234m[38;5;240m[48;5;238m [0m[38;5;252m[48;5;234m[38;5;247m[48;5;240m  52% [0m[38;5;252m[48;5;234m[38;5;244m[48;5;240m [0m[38;5;252m[48;5;234m[38;5;238m[48;5;244m  24:1  [0m[38;5;252m[48;5;234m[67;1H                       [25;2H[34h[?25h[?25l[34h[?25h[?25l[67;217H:[25;2H[67;217H :[34h[?25hwq[?25l[?1000l"run_hls.tcl" 46L, 968B written
+[39;49m[?1l>[34h[?25h[?1049l[2Kvitis_hls> [11C[2Kvitis_hls> s[12C[2Kvitis_hls> so[13C[2Kvitis_hls> sou[14C[2Kvitis_hls> sour[15C[2Kvitis_hls> sourc[16C[2Kvitis_hls> sourc [17C[2Kvitis_hls> sourc[16C[2Kvitis_hls> source[17C[2Kvitis_hls> source [18C[2Kvitis_hls> source r[19C[2Kvitis_hls> source ru[20C[2Kvitis_hls> source run_hls.tcl[29C
+INFO: [HLS 200-1510] Running: open_project -reset acat_model_project 
+INFO: [HLS 200-10] Opening and resetting project '/afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project'.
+WARNING: [HLS 200-40] No /afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project/solution1/solution1.aps file found.
+INFO: [HLS 200-1510] Running: add_files acat_model.cpp 
+INFO: [HLS 200-10] Adding design file 'acat_model.cpp' to the project
+INFO: [HLS 200-1510] Running: add_files acat_model.h 
+INFO: [HLS 200-10] Adding design file 'acat_model.h' to the project
+INFO: [HLS 200-1510] Running: add_files x_val.txt 
+INFO: [HLS 200-10] Adding design file 'x_val.txt' to the project
+INFO: [HLS 200-1510] Running: add_files y_val_ref.txt 
+INFO: [HLS 200-10] Adding design file 'y_val_ref.txt' to the project
+INFO: [HLS 200-1510] Running: add_files -tb acat_model_tb.cpp 
+INFO: [HLS 200-10] Adding test bench file 'acat_model_tb.cpp' to the project
+INFO: [HLS 200-1510] Running: set_top apply_logic_net_one_event 
+INFO: [HLS 200-1510] Running: open_solution -reset solution1 
+INFO: [HLS 200-10] Creating and opening solution '/afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project/solution1'.
+INFO: [HLS 200-10] Cleaning up the solution database.
+WARNING: [HLS 200-40] No /afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project/solution1/solution1.aps file found.
+INFO: [HLS 200-1505] Using default flow_target 'vivado'
+Resolution: For help on HLS 200-1505 see www.xilinx.com/cgi-bin/docs/rdoc?v=2021.1;t=hls+guidance;d=200-1505.html
+INFO: [HLS 200-1510] Running: set_part virtex7 
+INFO: [HLS 200-1611] Setting target device to 'xc7v585t-ffg1761-2'
+INFO: [HLS 200-1510] Running: create_clock -period 6.25 -name default 
+INFO: [SYN 201-201] Setting up clock 'default' with a period of 6.25ns.
+INFO: [HLS 200-1510] Running: csynth_design 
+WARNING: [HLS 200-40] Skipped source file 'y_val_ref.txt'. Source files must have extensions .c, .C, .cc, .cpp, .c++, .cp, or .cxx.
+WARNING: [HLS 200-40] Skipped source file 'x_val.txt'. Source files must have extensions .c, .C, .cc, .cpp, .c++, .cp, or .cxx.
+INFO: [HLS 200-111] Finished File checks and directory preparation: CPU user time: 0.01 seconds. CPU system time: 0.01 seconds. Elapsed time: 0.01 seconds; current allocated memory: 250.551 MB.
+INFO: [HLS 200-10] Analyzing design file 'acat_model.cpp' ... 
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:55:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:56:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:57:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:58:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:59:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:60:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:61:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:62:57
+WARNING: [HLS 207-5528] Ignore interface attribute or pragma which is not used in top function: acat_model.cpp:156:9
+WARNING: [HLS 207-5301] unused parameter 'print': /afs/hep.wisc.edu/cms/sw/Xilinx/Vitis_HLS/2021.1/common/technology/autopilot/ap_int_base.h:792:16
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:55:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:56:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:57:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:58:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:59:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:60:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:61:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:62:57
+INFO: [HLS 200-111] Finished Source Code Analysis and Preprocessing: CPU user time: 1911.24 seconds. CPU system time: 41.11 seconds. Elapsed time: 1956.73 seconds; current allocated memory: 252.835 MB.
+INFO: [HLS 200-777] Using interface defaults for 'Vivado' flow target.
+INFO: [HLS 214-279] Initial Interval estimation mode is set into default.
+INFO: [HLS 214-284] Auto array partition mode is set into default.
+WARNING: [HLS 214-287] Basic block in function __cxx_global_var_init has more than 200000 instructions. (./conv_conv_0_indices.h:10:7)
+WARNING: [HLS 214-287] Basic block in function __cxx_global_var_init.1 has more than 200000 instructions. (./conv_conv_0_indices.h:18189:7)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:145:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:129:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:113:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:97:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:81:33)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_185_3' (acat_model.cpp:185:23) in function 'apply_logic_net_one_event' partially with a factor of 64 (acat_model.cpp:153:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_166_1' (acat_model.cpp:166:20) in function 'apply_logic_net_one_event' completely with a factor of 6 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_168_2' (acat_model.cpp:168:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_168_2' (acat_model.cpp:168:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_168_2' (acat_model.cpp:168:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_168_2' (acat_model.cpp:168:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_168_2' (acat_model.cpp:168:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_168_2' (acat_model.cpp:168:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_135_14' (acat_model.cpp:135:28) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_119_11' (acat_model.cpp:119:28) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_103_8' (acat_model.cpp:103:27) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_87_5' (acat_model.cpp:87:26) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_67_2' (acat_model.cpp:67:26) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-241] Aggregating maxi variable 'out' with non-compact mode in 16-bits (acat_model.cpp:153:0)
+INFO: [HLS 214-270] Starting automatic array partition analysis...
+INFO: [HLS 214-131] Inlining function '_llvm.fpga.pack.none.i16.s_struct.ap_ufixeds' into 'apply_logic_net_one_event(ap_uint<10> const*, ap_ufixed<16, 8, (ap_q_mode)5, (ap_o_mode)3, 0>*)' (acat_model.cpp:197:9)
+INFO: [HLS 200-111] Finished Compiling Optimization and Transform: CPU user time: 1159.59 seconds. CPU system time: 56.49 seconds. Elapsed time: 1227.53 seconds; current allocated memory: 254.781 MB.
+INFO: [HLS 200-111] Finished Checking Pragmas: CPU user time: 0 seconds. CPU system time: 0.01 seconds. Elapsed time: 0 seconds; current allocated memory: 254.783 MB.
+INFO: [HLS 200-10] Starting code transformations ...
+INFO: [HLS 200-111] Finished Standard Transforms: CPU user time: 496 seconds. CPU system time: 1.8 seconds. Elapsed time: 499.32 seconds; current allocated memory: 540.519 MB.
+INFO: [HLS 200-10] Checking synthesizability ...
+INFO: [HLS 200-111] Finished Checking Synthesizability: CPU user time: 65.76 seconds. CPU system time: 0.5 seconds. Elapsed time: 66.39 seconds; current allocated memory: 525.696 MB.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_87_5' (acat_model.cpp:87) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_103_8' (acat_model.cpp:103) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_119_11' (acat_model.cpp:119) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_135_14' (acat_model.cpp:135) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_185_3' (acat_model.cpp:184) in function 'apply_logic_net_one_event' automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d4.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d3.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d2.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d1.V' in dimension 1 automatically.
+ERROR: [HLS 200-904] Found conflicting partition directives, please remove or resolve them:
+ERROR: [XFORM 203-103] Cannot partition array 'out_temp.V' (acat_model.cpp:159): array partition cyclic factor=32 dim=1array partition cyclic factor=64 dim=1Please remove one of the directives to continue synthesis.
+ERROR: [HLS 200-1715] Encountered problem during source synthesis
+ERROR: [HLS 200-70] Pre-synthesis failed.
+INFO: [HLS 200-111] Finished Command csynth_design CPU user time: 4259.41 seconds. CPU system time: 101.19 seconds. Elapsed time: 4378.31 seconds; current allocated memory: 636.228 MB.
+command 'ap_source' returned error code
+[2Kvitis_hls> [11C[2Kvitis_hls> source run_hls.tcl[29C
+INFO: [HLS 200-1510] Running: open_project -reset acat_model_project 
+INFO: [HLS 200-10] Opening and resetting project '/afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project'.
+WARNING: [HLS 200-40] No /afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project/solution1/solution1.aps file found.
+INFO: [HLS 200-1510] Running: add_files acat_model.cpp 
+INFO: [HLS 200-10] Adding design file 'acat_model.cpp' to the project
+INFO: [HLS 200-1510] Running: add_files acat_model.h 
+INFO: [HLS 200-10] Adding design file 'acat_model.h' to the project
+INFO: [HLS 200-1510] Running: add_files x_val.txt 
+INFO: [HLS 200-10] Adding design file 'x_val.txt' to the project
+INFO: [HLS 200-1510] Running: add_files y_val_ref.txt 
+INFO: [HLS 200-10] Adding design file 'y_val_ref.txt' to the project
+INFO: [HLS 200-1510] Running: add_files -tb acat_model_tb.cpp 
+INFO: [HLS 200-10] Adding test bench file 'acat_model_tb.cpp' to the project
+INFO: [HLS 200-1510] Running: set_top apply_logic_net_one_event 
+INFO: [HLS 200-1510] Running: open_solution -reset solution1 
+INFO: [HLS 200-10] Creating and opening solution '/afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project/solution1'.
+INFO: [HLS 200-10] Cleaning up the solution database.
+WARNING: [HLS 200-40] No /afs/hep.wisc.edu/user/ekauffma/LGN_work/ml4physics-paper-plots/acatwork/acat_model_project/solution1/solution1.aps file found.
+INFO: [HLS 200-1505] Using default flow_target 'vivado'
+Resolution: For help on HLS 200-1505 see www.xilinx.com/cgi-bin/docs/rdoc?v=2021.1;t=hls+guidance;d=200-1505.html
+INFO: [HLS 200-1510] Running: set_part virtex7 
+INFO: [HLS 200-1510] Running: create_clock -period 6.25 -name default 
+INFO: [SYN 201-201] Setting up clock 'default' with a period of 6.25ns.
+INFO: [HLS 200-1510] Running: csynth_design 
+WARNING: [HLS 200-40] Skipped source file 'y_val_ref.txt'. Source files must have extensions .c, .C, .cc, .cpp, .c++, .cp, or .cxx.
+WARNING: [HLS 200-40] Skipped source file 'x_val.txt'. Source files must have extensions .c, .C, .cc, .cpp, .c++, .cp, or .cxx.
+INFO: [HLS 200-111] Finished File checks and directory preparation: CPU user time: 0.01 seconds. CPU system time: 0 seconds. Elapsed time: 0.12 seconds; current allocated memory: 569.476 MB.
+INFO: [HLS 200-10] Analyzing design file 'acat_model.cpp' ... 
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:55:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:56:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:57:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:58:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:59:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:60:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:61:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:62:57
+WARNING: [HLS 207-5528] Ignore interface attribute or pragma which is not used in top function: acat_model.cpp:156:9
+WARNING: [HLS 207-5301] unused parameter 'print': /afs/hep.wisc.edu/cms/sw/Xilinx/Vitis_HLS/2021.1/common/technology/autopilot/ap_int_base.h:792:16
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:55:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:56:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:57:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:58:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:59:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:60:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:61:57
+WARNING: [HLS 207-5516] 'factor' in '#pragma HLS array_partition' is ignored: acat_model.cpp:62:57
+INFO: [HLS 200-111] Finished Source Code Analysis and Preprocessing: CPU user time: 1825.59 seconds. CPU system time: 40.31 seconds. Elapsed time: 1869.32 seconds; current allocated memory: 569.647 MB.
+INFO: [HLS 200-777] Using interface defaults for 'Vivado' flow target.
+INFO: [HLS 214-279] Initial Interval estimation mode is set into default.
+INFO: [HLS 214-284] Auto array partition mode is set into default.
+WARNING: [HLS 214-287] Basic block in function __cxx_global_var_init has more than 200000 instructions. (./conv_conv_0_indices.h:10:7)
+WARNING: [HLS 214-287] Basic block in function __cxx_global_var_init.1 has more than 200000 instructions. (./conv_conv_0_indices.h:18189:7)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:145:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:129:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:113:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:97:33)
+INFO: [HLS 214-131] Inlining function 'apply_gate(ap_uint<1>, ap_uint<1>, ap_uint<4>)' into 'conv_conv_0(ap_uint<1> const*, ap_uint<1>*)' (acat_model.cpp:81:33)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_184_3' (acat_model.cpp:184:23) in function 'apply_logic_net_one_event' partially with a factor of 64 (acat_model.cpp:153:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_165_1' (acat_model.cpp:165:20) in function 'apply_logic_net_one_event' completely with a factor of 6 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_167_2' (acat_model.cpp:167:20) in function 'apply_logic_net_one_event' partially with a factor of 14 (acat_model.cpp:153:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_135_14' (acat_model.cpp:135:28) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_137_15' (acat_model.cpp:137:21) in function 'conv_conv_0' completely with a factor of 1 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_119_11' (acat_model.cpp:119:28) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_121_12' (acat_model.cpp:121:21) in function 'conv_conv_0' completely with a factor of 2 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_103_8' (acat_model.cpp:103:27) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_105_9' (acat_model.cpp:105:20) in function 'conv_conv_0' completely with a factor of 4 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_87_5' (acat_model.cpp:87:26) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-186] Unrolling loop 'VITIS_LOOP_89_6' (acat_model.cpp:89:19) in function 'conv_conv_0' completely with a factor of 8 (acat_model.cpp:44:0)
+INFO: [HLS 214-188] Unrolling loop 'VITIS_LOOP_67_2' (acat_model.cpp:67:26) in function 'conv_conv_0' partially with a factor of 10 (acat_model.cpp:44:0)
+INFO: [HLS 214-241] Aggregating maxi variable 'out' with non-compact mode in 16-bits (acat_model.cpp:153:0)
+INFO: [HLS 214-270] Starting automatic array partition analysis...
+INFO: [HLS 214-131] Inlining function '_llvm.fpga.pack.none.i16.s_struct.ap_ufixeds' into 'apply_logic_net_one_event(ap_uint<10> const*, ap_ufixed<16, 8, (ap_q_mode)5, (ap_o_mode)3, 0>*)' (acat_model.cpp:196:9)
+INFO: [HLS 200-111] Finished Compiling Optimization and Transform: CPU user time: 1162.51 seconds. CPU system time: 56.4 seconds. Elapsed time: 1222.55 seconds; current allocated memory: 569.972 MB.
+INFO: [HLS 200-111] Finished Checking Pragmas: CPU user time: 0.01 seconds. CPU system time: 0 seconds. Elapsed time: 0.01 seconds; current allocated memory: 569.974 MB.
+INFO: [HLS 200-10] Starting code transformations ...
+INFO: [HLS 200-111] Finished Standard Transforms: CPU user time: 510.13 seconds. CPU system time: 1.97 seconds. Elapsed time: 512.28 seconds; current allocated memory: 729.472 MB.
+INFO: [HLS 200-10] Checking synthesizability ...
+INFO: [HLS 200-111] Finished Checking Synthesizability: CPU user time: 66.81 seconds. CPU system time: 0.69 seconds. Elapsed time: 67.57 seconds; current allocated memory: 701.397 MB.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_87_5' (acat_model.cpp:87) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_103_8' (acat_model.cpp:103) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_119_11' (acat_model.cpp:119) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_135_14' (acat_model.cpp:135) in function 'conv_conv_0' automatically.
+INFO: [XFORM 203-510] Pipelining loop 'VITIS_LOOP_184_3' (acat_model.cpp:183) in function 'apply_logic_net_one_event' automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d4.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d3.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d2.V' in dimension 1 automatically.
+INFO: [XFORM 203-102] Partitioning array 'conv_conv_0_treeops_d1.V' in dimension 1 automatically.
+INFO: [XFORM 203-101] Partitioning array 'out_temp.V' (acat_model.cpp:159) in dimension 1 with a cyclic factor 32.
+INFO: [XFORM 203-101] Partitioning array 'layer_conv_0_out.V' (acat_model.cpp:223) in dimension 1 with a cyclic factor 32.
+INFO: [XFORM 203-101] Partitioning array 'linear_buf_temp.V' (acat_model.cpp:224) in dimension 1 with a cyclic factor 32.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_0.V' (acat_model.cpp:46) accessed through non-constant indices on dimension 1 (acat_model.cpp:96:29), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+Resolution: For help on HLS 200-914 see www.xilinx.com/cgi-bin/docs/rdoc?v=2021.1;t=hls+guidance;d=200-914.html
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_0.V' (acat_model.cpp:46) in dimension 1 completely.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_1.V' (acat_model.cpp:47) accessed through non-constant indices on dimension 1 (acat_model.cpp:98:17), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+Resolution: For help on HLS 200-914 see www.xilinx.com/cgi-bin/docs/rdoc?v=2021.1;t=hls+guidance;d=200-914.html
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_1.V' (acat_model.cpp:47) in dimension 1 completely.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_2.V' (acat_model.cpp:48) accessed through non-constant indices on dimension 1 (acat_model.cpp:114:17), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+Resolution: For help on HLS 200-914 see www.xilinx.com/cgi-bin/docs/rdoc?v=2021.1;t=hls+guidance;d=200-914.html
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_2.V' (acat_model.cpp:48) in dimension 1 completely.
+WARNING: [HLS 200-914] Completely partitioning array 'conv_tree_3.V' (acat_model.cpp:49) accessed through non-constant indices on dimension 1 (acat_model.cpp:130:17), which may result in long runtime and suboptimal QoR due to large multiplexers. Please consider wrapping the array access into a function or using a register file core instead.
+Resolution: For help on HLS 200-914 see www.xilinx.com/cgi-bin/docs/rdoc?v=2021.1;t=hls+guidance;d=200-914.html
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_3.V' (acat_model.cpp:49) in dimension 1 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_0.V' (acat_model.cpp:46) in dimension 2 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_1.V' (acat_model.cpp:47) in dimension 2 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_2.V' (acat_model.cpp:48) in dimension 2 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_3.V' (acat_model.cpp:49) in dimension 2 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_0.V' (acat_model.cpp:46) in dimension 3 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_1.V' (acat_model.cpp:47) in dimension 3 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_2.V' (acat_model.cpp:48) in dimension 3 completely.
+INFO: [XFORM 203-101] Partitioning array 'conv_tree_3.V' (acat_model.cpp:49) in dimension 3 completely.
