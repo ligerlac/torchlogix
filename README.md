@@ -1,3 +1,8 @@
+
+# torchlogix - Differentiable Logic Gate Networks in PyTorch
+
+![torchlogix_logo](assets/logo.png)
+
 # torchlogix - Differentiable Logic Gate Networks in PyTorch
 
 ![torchlogix_logo](assets/logo.png)

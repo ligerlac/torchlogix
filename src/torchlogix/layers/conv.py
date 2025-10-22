@@ -5,8 +5,9 @@ import torch
 import torch.nn as nn
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
+from torch.nn.functional import gumbel_softmax
 
-from ..functional import bin_op_cnn
+from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, soft_raw, soft_walsh, hard_raw, hard_walsh, WALSH_COEFFICIENTS
 
 
 class LogicConv2d(nn.Module):
@@ -28,8 +29,12 @@ class LogicConv2d(nn.Module):
         receptive_field_size: int = None,
         implementation: str = None,
         connections: str = "random",  # or 'random-unique'
+        weight_init: str = "residual",  # "residual" or "random"
         stride: int = 1,
-        padding: int = None,
+        padding: int = 0,
+        parametrization: str = "raw", # or 'walsh'
+        temperature: float = 1.0,
+        forward_sampling: str = "soft" # or "hard", "gumbel_soft", or "gumbel_hard"
     ):
         """Initialize the 2d logic convolutional layer.
 
@@ -47,9 +52,11 @@ class LogicConv2d(nn.Module):
                 within the receptive field.
             stride: Stride of the convolution
             padding: Padding of the convolution
+            parametrization: Parametrization to use ("raw" or "walsh")
         """
         super().__init__()
-        # residual weights
+        self.parametrization = parametrization
+        self.forward_sampling = forward_sampling
 
         # self.tree_weights = []
         assert stride <= receptive_field_size, (
@@ -60,11 +67,27 @@ class LogicConv2d(nn.Module):
         for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
             for _ in range(2**i):  # Iterate over nodes at this level
-                weights = torch.zeros(
-                    num_kernels, 16, device=device
-                )  # Initialize with zeros
-                weights[:, 3] = 5  # Set the fourth element (index 3) to 5
-                # Wrap as a trainable parameter
+                if self.parametrization == "raw":
+                    if weight_init == "residual":
+                        weights = torch.zeros(
+                            num_kernels, 16, device=device
+                        )  # Initialize with zeros
+                        weights[:, 3] = 5  # Set the fourth element (index 3) to 5
+                    elif weight_init == "random":
+                        weights = torch.randn(num_kernels, 16, device=device)
+                elif self.parametrization == "walsh":
+                    if weight_init == "residual":
+                        # chose randomly from walsh_coefficients, but prefer id=10
+                        walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
+                        weights = walsh_coefficients_tensor[
+                            torch.randint(0, 16, (num_kernels,), device=device)
+                        ].clone()  # .clone() for safety
+                        n = num_kernels // 2
+                        # set half of weights to id=10 (pick index randomly)
+                        indices = torch.randperm(num_kernels, device=device)
+                        weights[indices[:n]] = walsh_coefficients_tensor[10]
+                    elif weight_init == "random":
+                        weights = torch.randn(num_kernels, 4, device=device) * 0.1
                 level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
         self.in_dim = _pair(in_dim)
@@ -84,51 +107,86 @@ class LogicConv2d(nn.Module):
         else:
             raise ValueError(f"Unknown connections type: {connections}")
         self.indices = self.get_indices_from_kernel_pairs(self.kernel_pairs)
+        self.temperature = temperature
 
 
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
         current_level = x
-        left_indices, right_indices = self.indices[0]
-        a_h, a_w, a_c = left_indices[..., 0], left_indices[..., 1], left_indices[..., 2]
-        b_h, b_w, b_c = (
-            right_indices[..., 0],
-            right_indices[..., 1],
-            right_indices[..., 2],
-        )
-        a = current_level[:, a_c, a_h, a_w]
-        b = current_level[:, b_c, b_h, b_w]
-        # Process first level
-        level_weights = torch.stack(
-            [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
-            dim=0,
-        )  # Shape: [8, 16, 16]
-        if not self.training:
-            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                torch.float32
+        if self.padding > 0:
+            current_level = torch.nn.functional.pad(
+                current_level,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
             )
 
-        current_level = bin_op_cnn(a, b, level_weights)  # Shape: [100, 16, 576, 8]
+        left_indices, right_indices = self.indices[0]
+        a_h, a_w, a_c = left_indices[..., 0], left_indices[..., 1], left_indices[..., 2]
+        b_h, b_w, b_c = right_indices[..., 0], right_indices[..., 1], right_indices[..., 2]
+        a = current_level[:, a_c, a_h, a_w]
+        b = current_level[:, b_c, b_h, b_w]
 
-        # Process remaining levels
-        for level in range(1, self.tree_depth + 1):
-            left_indices, right_indices = self.indices[level]
-            a = current_level[..., left_indices]
-            b = current_level[..., right_indices]
+        if self.parametrization == "raw":
+            weighting_func = {
+                "soft": soft_raw,
+                "hard": hard_raw,
+                "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
+                "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
+            }[self.forward_sampling]
+
             level_weights = torch.stack(
-                [
-                    torch.nn.functional.softmax(w, dim=-1)
-                    for w in self.tree_weights[level]
-                ],
-                dim=0,
-            )  # Shape: [8, 16, 16]
-
+                [weighting_func(w) for w in self.tree_weights[0]], dim=0
+            )
             if not self.training:
                 level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
                     torch.float32
                 )
 
             current_level = bin_op_cnn(a, b, level_weights)
+
+            # Process remaining levels
+            for level in range(1, self.tree_depth + 1):
+                left_indices, right_indices = self.indices[level]
+                a = current_level[..., left_indices]
+                b = current_level[..., right_indices]
+                level_weights = torch.stack(
+                    [weighting_func(w) for w in self.tree_weights[level]], dim=0
+                )
+                if not self.training:
+                    level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+                        torch.float32
+                    )
+
+                current_level = bin_op_cnn(a, b, level_weights)
+
+        elif self.parametrization == "walsh":
+            level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
+            current_level = bin_op_cnn_walsh(a, b, level_weights)
+            if self.training:
+                if self.forward_sampling == "soft":
+                    current_level = soft_walsh(current_level, tau=self.temperature)
+                elif self.forward_sampling == "hard":
+                    current_level = hard_walsh(current_level, tau=self.temperature)
+                elif self.forward_sampling == "gumbel_soft":
+                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=False)
+                elif self.forward_sampling == "gumbel_hard":
+                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=True)
+            else:
+                current_level = (current_level > 0).to(torch.float32)
+
+            # Process remaining levels
+            for level in range(1, self.tree_depth + 1):
+                left_indices, right_indices = self.indices[level]
+                a = current_level[..., left_indices]
+                b = current_level[..., right_indices]
+                # level_weights = self.tree_weights[level]
+                level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
+                current_level = bin_op_cnn_walsh(a, b, level_weights)
+                if self.training:
+                    current_level = torch.sigmoid(current_level / self.temperature)
+                else:
+                    current_level = (current_level > 0).to(torch.float32)
 
         # Reshape flattened output
         reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
@@ -357,6 +415,7 @@ class LogicConv3d(nn.Module):
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
         current_level = x
+        # apply zero padding
         left_indices, right_indices = self.indices[0]
         a_h, a_w, a_d, a_c = (
             left_indices[..., 0],
@@ -574,7 +633,7 @@ class OrPooling(torch.nn.Module):
 
     # create layer that selects max in the kernel
 
-    def __init__(self, kernel_size, stride, padding):
+    def __init__(self, kernel_size, stride, padding=0):
         super(OrPooling, self).__init__()
         self.kernel_size = kernel_size
         self.stride = stride

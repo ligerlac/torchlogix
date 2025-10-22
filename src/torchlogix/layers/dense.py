@@ -5,11 +5,19 @@ import torch
 from rich import print
 from torch.nn.common_types import _size_2_t
 from torch.nn.modules.utils import _pair
+from torch.nn.functional import gumbel_softmax, softmax
+from itertools import product
 
 from ..functional import (
     GradFactor,
     bin_op_s,
     get_unique_connections,
+    gumbel_sigmoid,
+    soft_raw,
+    soft_walsh,
+    hard_raw,
+    hard_walsh,
+    WALSH_COEFFICIENTS,
 )
 from ..packbitstensor import PackBitsTensor
 
@@ -22,7 +30,6 @@ except ImportError:
     )
 
 ##########################################################################
-
 
 class LogicDense(torch.nn.Module):
     """
@@ -38,6 +45,9 @@ class LogicDense(torch.nn.Module):
         implementation: str = None,
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
+        parametrization: str = "raw",  # standard or walsh or anf
+        temperature: float = 1.0,
+        forward_sampling: str = "soft"  # "soft", "hard", "gumbel_soft", "gumbel_hard"
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -49,17 +59,43 @@ class LogicDense(torch.nn.Module):
         """
         super().__init__()
 
-        if weight_init == "residual":
-            # all weights to 0 except for weight number 3, which is set to 5
-            weights = torch.zeros((out_dim, 16), device=device)
-            weights[:, 3] = 5.0
-            self.weight = torch.nn.parameter.Parameter(weights)
-        elif weight_init == "random":
-            self.weight = torch.nn.parameter.Parameter(
-                torch.randn(out_dim, 16, device=device)
-            )
+        self.parametrization = parametrization
+        self.temperature = temperature
+        self.forward_sampling = forward_sampling
+        self.weight_init = weight_init
+
+        if self.parametrization == "raw":
+            if weight_init == "residual":
+                # all weights to 0 except for weight number 3, which is set to 5
+                weights = torch.zeros((out_dim, 16), device=device)
+                weights[:, 3] = 5.0
+                self.weight = torch.nn.parameter.Parameter(weights)
+            elif weight_init == "random":
+                self.weight = torch.nn.parameter.Parameter(
+                    torch.randn(out_dim, 16, device=device)
+                )
+            else:
+                raise ValueError(weight_init)
+        elif self.parametrization in ["walsh", "anf"]:
+            if weight_init == "residual":
+                # chose randomly from walsh_coefficients, but prefer id=10
+                walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
+                weights = walsh_coefficients_tensor[
+                    torch.randint(0, 16, (out_dim,), device=device)
+                ]
+                n = out_dim // 2
+                # set half of weights to id=10 (pick index randomly)
+                indices = torch.randperm(out_dim, device=device)
+                weights[indices[:n]] = walsh_coefficients_tensor[10]
+                self.weight = torch.nn.parameter.Parameter(weights)
+            elif weight_init == "random":
+                self.weight = torch.nn.parameter.Parameter(
+                    torch.randn(out_dim, 4, device=device) * 0.1
+                )
+            else:
+                raise ValueError(weight_init)
         else:
-            raise ValueError(weight_init)
+            raise ValueError(self.parametrization)
         
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -128,7 +164,6 @@ class LogicDense(torch.nn.Module):
             return self.forward_cuda(x)
         elif self.implementation == "python":
             return self.forward_python(x)
-
         else:
             raise ValueError(self.implementation)
 
@@ -137,14 +172,43 @@ class LogicDense(torch.nn.Module):
         if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
             self.indices = self.indices[0].long(), self.indices[1].long()
         a, b = x[..., self.indices[0]], x[..., self.indices[1]]
-        if self.training:
-            x = bin_op_s(a, b, torch.nn.functional.softmax(self.weight, dim=-1))
-        else:
-            weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
-                torch.float32
-            )
-            x = bin_op_s(a, b, weights)
-
+        if self.parametrization == "raw":
+            if self.training:
+                if self.forward_sampling == "soft":
+                    x = soft_raw(self.weight, tau=self.temperature)
+                elif self.forward_sampling == "hard":
+                    x = hard_raw(self.weight, tau=self.temperature)
+                elif self.forward_sampling == "gumbel_soft":
+                    x = gumbel_softmax(self.weight, tau=self.temperature, hard=False)
+                elif self.forward_sampling == "gumbel_hard":
+                    x = gumbel_softmax(self.weight, tau=self.temperature, hard=True)
+                x = bin_op_s(a, b, x)
+            else:
+                weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
+                    torch.float32
+                )
+                x = bin_op_s(a, b, weights)
+        elif self.parametrization == "walsh":
+            A = 2 * a -1
+            B = 2 * b -1
+            basis = torch.stack([
+                torch.ones_like(A),
+                A,
+                B,
+                A*B
+            ], dim=-1)
+            x = (self.weight * basis).sum(dim=-1)
+            if self.training:
+                if self.forward_sampling == "soft":
+                    x = soft_walsh(x, tau=self.temperature)
+                elif self.forward_sampling == "hard":
+                    x = hard_walsh(x, tau=self.temperature)
+                elif self.forward_sampling == "gumbel_soft":
+                    x = gumbel_sigmoid(x, tau=self.temperature, hard=False)
+                elif self.forward_sampling == "gumbel_hard":
+                    x = gumbel_sigmoid(x, tau=self.temperature, hard=True)
+            else:
+                x = (x > 0).to(torch.float32)
         return x
 
     def forward_cuda(self, x):
@@ -214,6 +278,61 @@ class LogicDense(torch.nn.Module):
             return get_unique_connections(self.in_dim, self.out_dim, device)
         else:
             raise ValueError(connections)
+
+    def get_gate_ids(self):
+        """Computes most-probable gate for each learned set of weights.
+        Returns tensor of most-probable gate IDs."""
+
+        assert self.parametrization in ["raw", "walsh"], \
+            f"Cannot compute gate IDs for parameterization={self.parameterization}"
+
+        if self.parametrization=="walsh":
+            n_inputs = 2
+            n_rows = 2**n_inputs
+
+            # generate all 2^n input combinations
+            binary_inputs = torch.tensor(
+                list(product([-1, 1], repeat=n_inputs)),
+                dtype=torch.float32, 
+                device=self.device
+            ) # shape: (4, 2)
+
+            # generate truth tables
+            truth_tables = (
+                (0,0,0,0), (0,0,0,1), (0,0,1,0), (0,0,1,1), (0,1,0,0), (0,1,0,1), (0,1,1,0), (0,1,1,1),
+                (1,0,0,0), (1,0,0,1), (1,0,1,0), (1,0,1,1), (1,1,0,0), (1,1,0,1), (1,1,1,0), (1,1,1,1)
+            )
+            truth_tables = torch.tensor(truth_tables, dtype=torch.float32, device=self.device)
+
+
+            num_gates, num_coeffs = self.weight.shape
+            assert num_coeffs == 1 + n_inputs + (n_inputs*(n_inputs-1))//2, \
+                f"Unexpected param shape {self.weight.shape} for n_inputs={n_inputs}"
+            
+            # bias term
+            linear_preds = self.weight[:, 0].unsqueeze(1).expand(-1, n_rows)  # shape: (16, 4)
+
+            # add linear terms
+            for i in range(n_inputs):
+                linear_preds = linear_preds + self.weight[:, i+1].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0)
+
+            # add pairwise product terms
+            idx = n_inputs+1
+            for i in range(n_inputs):
+                for j in range(i+1, n_inputs):
+                    linear_preds += (self.weight[:, idx].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0) 
+                                    * binary_inputs[:, j].unsqueeze(0))
+                    idx +=1
+
+            preds = (linear_preds > 0.0).float() # shape: (16, 4)
+            dists = (preds.unsqueeze(1) != truth_tables.unsqueeze(0)).sum(dim=-1)
+            ids = dists.argmin(axis=1) # index of closest truth table
+        
+        else: 
+            ids = self.weight.argmax(axis=1)
+
+        return ids
+
 
 
 ##########################################################################

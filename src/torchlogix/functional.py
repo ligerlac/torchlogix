@@ -8,6 +8,7 @@ gate networks.
 
 import numpy as np
 import torch
+from torch.distributions.gumbel import Gumbel
 
 BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
@@ -49,6 +50,26 @@ ID_TO_OP = {
     13: lambda a, b: 1 - a + a * b,
     14: lambda a, b: 1 - a * b,
     15: lambda a, b: torch.ones_like(a),
+}
+
+# Attention: these use a different ordering of the operations!
+WALSH_COEFFICIENTS = {
+    0: (-1, 0, 0, 0),
+    1: (+1, 0, 0, 0),
+    2: (-0.5, 0.5, 0.5, 0.5),
+    3: (0.5, 0.5, 0.5, -0.5),
+    4: (0, 0, 0, -1),
+    5: (0, 0, 0, +1),
+    6: (0.5, -0.5, -0.5, -0.5),
+    7: (-0.5, -0.5, -0.5, 0.5),
+    8: (-0.5, 0.5, -0.5, -0.5),
+    9: (-0.5, -0.5, 0.5, -0.5),
+    10: (0, 1, 0, 0),
+    11: (0, -1, 0, 0),
+    12: (0, 0, 1, 0),
+    13: (0, 0, -1, 0),
+    14: (0.5, -0.5, 0.5, 0.5),
+    15: (0.5, 0.5, -0.5, 0.5),
 }
 
 
@@ -141,6 +162,25 @@ def bin_op_cnn(a, b, i_s):
     return torch.einsum('bchdn,dcn->bchd', r, i_s)
 
 
+def bin_op_cnn_walsh(a, b, i_s):
+    assert a.shape == b.shape, f"Mismatched shapes: {a.shape}, {b.shape}"
+
+    A = 2 * a - 1  # Convert to {-1, 1}
+    B = 2 * b - 1  # Convert to {-1, 1}
+
+    r = torch.stack([
+        torch.ones_like(A),  # 0: 1
+        A,                   # 1: A
+        B,                   # 2: B
+        A * B                # 3: A and B in Walsh basis
+    ], dim=-1)
+
+    i_s = i_s.unsqueeze(0).unsqueeze(2)
+    i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
+    i_s = i_s.permute(0, 3, 2, 1, 4)
+    return (r * i_s).sum(dim=-1)
+
+
 ##########################################################################
 
 
@@ -217,3 +257,88 @@ class GradFactor(torch.autograd.Function):
 
 
 ##########################################################################
+
+
+def gumbel_sigmoid_old(logits, tau=1.0, hard=False, threshold=0.5):
+
+    """
+    Samples from the Gumbel-Sigmoid distribution with an optional hard gate at the selected threshold.
+    
+    Gumbel Sigmoid is equivalent to gumbel softmax for two classes with one class being 0
+    i.e. gumbel_sigmoid = e^([a+gumbel1]/t) / [e^([a+gumbel1]/t) + e^(gumbel2/t)] = sigm([a+gumbel1-gumbel2]/t)
+
+    Args:
+      logits: `[..., num_features]` unnormalized log probabilities
+      temp: non-negative scalar temperature
+      hard: if ``True``, the returned samples will be discretized,
+            but will be differentiated as if it is the soft sample in autograd
+     threshold: threshold for the discretization,
+                values greater than this will be set to 1 and the rest to 0
+
+    Returns:
+      Sampled tensor of same shape as `logits` from the Gumbel-Sigmoid distribution.
+      If ``hard=True``, the returned samples are descretized according to `threshold`, otherwise they will
+      be probability distributions.
+
+    """
+    # Temperature must be positive.
+    if tau <= 0:
+        raise ValueError("Temperature must be positive")
+
+    # Sample Gumbel noise. The difference of two Gumbels is equivalent to a Logistic distribution.
+    gumbel_noise = Gumbel(0, 1).sample(logits.shape).to(logits.device) - \
+                   Gumbel(0, 1).sample(logits.shape).to(logits.device)
+    
+    # Apply the reparameterization trick
+    y_soft = torch.sigmoid((logits + gumbel_noise) / tau)
+
+    if hard:
+        # Straight-Through Estimator
+        y_hard = (y_soft > threshold).float()
+        return (y_hard - y_soft).detach() + y_soft
+    
+    return y_soft
+
+
+
+def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
+    """
+    Fast Gumbel-Sigmoid implementation using logistic noise trick.
+    """
+    if tau <= 0:
+        raise ValueError("Temperature must be positive")
+
+    # Logistic(0,1) noise from uniform: log(U) - log(1-U)
+    U = torch.rand_like(logits)
+    logistic_noise = torch.log(U + 1e-20) - torch.log(1 - U + 1e-20)
+
+    # Soft sample
+    y_soft = torch.sigmoid((logits + logistic_noise) / tau)
+
+    if hard:
+        # Straight-through estimator
+        y_hard = (y_soft > threshold).float()
+        return (y_hard - y_soft).detach() + y_soft
+
+    return y_soft
+
+def soft_raw(logits, tau=1.0):
+    return torch.nn.functional.softmax(logits / tau, dim=-1)
+
+def hard_raw(logits, tau=1.0):
+    x = torch.nn.functional.softmax(logits / tau, dim=-1)
+    # Straight through.
+    index = x.max(-1, keepdim=True)[1]
+    x_hard = torch.zeros_like(
+        logits, memory_format=torch.legacy_contiguous_format
+    ).scatter_(-1, index, 1.0)
+    return x_hard - x.detach() + x
+
+def soft_walsh(logits, tau=1.0):
+    return torch.sigmoid(logits / tau)
+
+def hard_walsh(logits, tau=1.0):
+    x = torch.sigmoid(logits / tau)
+    x = (x > 0.5).to(torch.float32) - x.detach() + x
+    return x
+
