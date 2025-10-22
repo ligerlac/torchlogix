@@ -25,7 +25,7 @@ class GroupSum(torch.nn.Module):
         if isinstance(x, PackBitsTensor):
             return x.group_sum(self.k)
 
-        assert x.shape[-1] % self.k == 0, (x.shape, self.k)
+        assert x.shape[-1] % self.k == 0, "The number of input features must be divisible by k."
 
         # # Handle both batched and non-batched inputs
         # if len(x.shape) == 2:  # Shape is [N, features]

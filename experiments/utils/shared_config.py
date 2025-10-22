@@ -21,7 +21,10 @@ DATASET_CHOICES = [
     "monk3",
     "mnist",
     "mnist20x20",
+    "cifar-10",
+    "cifar-10-2-thresholds",
     "cifar-10-3-thresholds",
+    "cifar-10-5-thresholds",
     "cifar-10-31-thresholds",
     "cora",
     "pubmed",
@@ -33,6 +36,9 @@ ARCHITECTURE_CHOICES = [
     "randomly_connected",
     "fully_connected",
     "cnn",
+    "tiny",
+    "small",
+    "paper",
 ]
 
 def setup_experiment(seed: int, implementation: str):

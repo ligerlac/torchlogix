@@ -29,6 +29,11 @@ BITS_TO_TORCH_FLOATING_POINT_TYPE = {
 }
 
 IMPL_TO_DEVICE = {"cuda": "cuda", "python": "cpu"}
+    
+
+class BooleanTransform:
+    def __call__(self, sample):
+        return sample.bool().float()
 
 
 def load_dataset(args):
@@ -73,14 +78,21 @@ def load_dataset(args):
             test_set, batch_size=int(1e6), shuffle=False
         )
     elif args.dataset in ["mnist", "mnist20x20"]:
+        transforms = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                BooleanTransform(),  # Binarize the input
+            ]
+        )        
         train_set = mnist_dataset.MNIST(
             "./data-mnist",
             train=True,
             download=True,
             remove_border=args.dataset == "mnist20x20",
+            transform=transforms
         )
         test_set = mnist_dataset.MNIST(
-            "./data-mnist", train=False, remove_border=args.dataset == "mnist20x20"
+            "./data-mnist", train=False, remove_border=args.dataset == "mnist20x20", transform=transforms
         )
 
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
@@ -113,8 +125,15 @@ def load_dataset(args):
         )
     elif "cifar-10" in args.dataset:
         transform = {
+            "cifar-10": lambda x: x,
+            "cifar-10-2-thresholds": lambda x: torch.cat(
+                [(x > (i + 1) / 3).float() for i in range(2)], dim=0
+            ),
             "cifar-10-3-thresholds": lambda x: torch.cat(
                 [(x > (i + 1) / 4).float() for i in range(3)], dim=0
+            ),
+            "cifar-10-5-thresholds": lambda x: torch.cat(
+                [(x > (i + 1) / 6).float() for i in range(5)], dim=0
             ),
             "cifar-10-31-thresholds": lambda x: torch.cat(
                 [(x > (i + 1) / 32).float() for i in range(31)], dim=0
@@ -202,7 +221,10 @@ def input_dim_of_dataset(dataset):
         "mnist": 784,
         "mnist20x20": 400,
         "cicada": 720,
+        "cifar-10": 3 * 32 * 32,
+        "cifar-10-2-thresholds": 3 * 32 * 32 * 2,
         "cifar-10-3-thresholds": 3 * 32 * 32 * 3,
+        "cifar-10-5-thresholds": 3 * 32 * 32 * 5,
         "cifar-10-31-thresholds": 3 * 32 * 32 * 31,
         "cora": 1433,
         "pubmed": 500,
@@ -221,7 +243,10 @@ def num_classes_of_dataset(dataset):
         "mnist": 10,
         "mnist20x20": 10,
         "cicada": 1,
+        "cifar-10": 10,
+        "cifar-10-2-thresholds": 10,
         "cifar-10-3-thresholds": 10,
+        "cifar-10-5-thresholds": 10,
         "cifar-10-31-thresholds": 10,
         "cora": 7,
         "pubmed": 3,
