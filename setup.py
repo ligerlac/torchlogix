@@ -22,10 +22,10 @@ if build_cuda_ext:
         from torch.utils.cpp_extension import BuildExtension, CUDAExtension
         ext_modules = [
             CUDAExtension(
-                "torchlogix.difflogic_cuda",
+                "torchlogix.torchlogix_cuda",
                 [
-                    "src/torchlogix/difflogic/cuda/difflogic.cpp",
-                    "src/torchlogix/difflogic/cuda/difflogic_kernel.cu",
+                    "src/torchlogix/cuda/torchlogix.cpp",
+                    "src/torchlogix/cuda/torchlogix_kernel.cu",
                 ],
                 extra_compile_args={"nvcc": ["-lineinfo"]},
             )

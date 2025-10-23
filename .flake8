@@ -2,12 +2,7 @@
 max-line-length = 88
 extend-ignore = E203, W503, D100, D107, D105
 # excluding files that weren't authored by me
-exclude = .git,__pycache__,build,dist,*.egg-info,src/neurodifflogic/difflogic/,src/neurodifflogic/experiments/mnist_dataset.py
+exclude = .git,__pycache__,build,dist,*.egg-info,experiments
 per-file-ignores =
     __init__.py: F401
-    src/neurodifflogic/utils/loading.py: D103, D102
-    src/neurodifflogic/utils/base_train.py: D103
-    src/neurodifflogic/utils/args.py: D103
-    # this one should be fixed
-    src/neurodifflogic/experiments/main.py: C901
 max-complexity = 10
