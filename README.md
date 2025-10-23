@@ -16,29 +16,16 @@ million images of MNIST per second on a single CPU core.
 
 ## Installation
 
-**Basic installation (CPU-only):**
 ```shell
-pip install torchlogix
+pip install torchlogix                 # basic
+pip install "torchlogix[dev]"          # with dev tools
 ```
-
-**With CUDA support (for GPU acceleration):**
-```shell
-pip install "torchlogix[cuda]"
-```
-
-**For development:**
-```shell
-pip install "torchlogix[dev]"          # CPU-only with dev tools
-pip install "torchlogix[cuda,dev]"     # CUDA + dev tools
-```
-
-> ⚠️ **CUDA Note:** CUDA extensions are optional but provide significant performance improvements. They require CUDA Toolkit and `torch>=1.9.0` (matching CUDA version). The default installation uses pure Python implementation.
 
 ## 📚 Documentation
 
 **Full documentation is available at:** [TorchLogix Documentation](docs/_build/html/index.html)
 
-- **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions with CUDA support
+- **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions
 - **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
 - **[Logic Gates Guide](docs/guides/logic_gates.md)** - Understanding the 16 Boolean operations
 - **[Examples](docs/guides/examples.md)** - Complete training examples and tutorials
@@ -87,7 +74,6 @@ layer = DenseLogic(
     in_dim=784,               # number of inputs
     out_dim=16_000,           # number of outputs
     device='cuda',            # the device (cuda / cpu)
-    implementation='python',  # the implementation to be used (native cuda / vanilla pytorch)
     connections='random',     # the method for the initialization of the connections
     parametrization='raw',    # classic 16 weights per node (one per gate) one of two 4-weight parametrizations ('anf' or 'walsh')
     weight_init="residual",   # weight initialization scheme ("random" or "residual")
@@ -108,9 +94,7 @@ At this point, it is important to discuss the options for `device` and the provi
 `torchlogix` provides two implementations (both of which work with PyTorch):
 
 * **`python`** the Python implementation is a substantially slower implementation that is easy to understand as it is implemented directly in Python with PyTorch and does not require any C++ / CUDA extensions. It is compatible with `device='cpu'` and `device='cuda'`.
-* **`cuda`** is a well-optimized implementation that runs natively on CUDA via custom extensions. This implementation is around 50 to 100 times faster than the python implementation (for large models). It only supports `device='cuda'`.
 
-To choose cpu, add ```--implementation=python``` to the command line arguments. The default is cuda.
 To aggregate output neurons into a lower dimensional output space, we can use `GroupSum`, which aggregates a number of output neurons into
 a `k` dimensional output, e.g., `k=10` for a 10-dimensional classification setting.
 It is important to set the parameter `tau`, which the sum of neurons is divided by to keep the range reasonable.
