@@ -22,7 +22,7 @@ from ..functional import (
 from ..packbitstensor import PackBitsTensor
 
 # try:
-from torchlogix import torchlogix_cuda
+from .. import torchlogix_cuda
 # except ImportError:
 #     warnings.warn(
 #         "failed to import torchlogix_cuda. no cuda features will be available",
