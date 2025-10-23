@@ -84,22 +84,24 @@ To go into details, for each of these modules, in the following we provide more 
 
 ```python
 layer = DenseLogic(
-    in_dim=784,             # number of inputs
-    out_dim=16_000,         # number of outputs
-    device='cuda',          # the device (cuda / cpu)
-    implementation='cuda',  # the implementation to be used (native cuda / vanilla pytorch)
-    connections='random',   # the method for the random initialization of the connections
-    grad_factor=1.1,        # for deep models (>6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients
+    in_dim=784,               # number of inputs
+    out_dim=16_000,           # number of outputs
+    device='cuda',            # the device (cuda / cpu)
+    implementation='python',  # the implementation to be used (native cuda / vanilla pytorch)
+    connections='random',     # the method for the initialization of the connections
+    parametrization='raw',    # classic 16 weights per node (one per gate) one of two 4-weight parametrizations ('anf' or 'walsh')
+    weight_init="residual",   # weight initialization scheme ("random" or "residual")
+    forward_sampling="soft"   # Method for the foward pass: "soft", "hard", "gumbel_soft", or "gumbel_hard"
 )
 layer = LogicConv2d(
-    in_dim=28,              # dimension of input (can be two-tuple for non-quadratic shapes)
-    channels=1,             # number of channels of the input (1 for grey-scale)
-    num_kernels: int = 16,  # number of convolutional kernels (filters)
-    tree_depth: int = 3,    # depth of the binary logic tree that make up each kernel
-    receptive_field_size: int = None, # comparable to kernel size in ordinary convolutional kernels
-    padding: int = None,
+    in_dim=28,               # dimension of input (can be two-tuple for non-quadratic shapes)
+    channels=3,              # number of channels of the input (1 for grey-scale)
+    num_kernels=32,          # number of convolutional kernels (filters)
+    tree_depth=3,            # depth of the binary logic tree that make up each kernel
+    receptive_field_size=3,  # comparable to kernel size in ordinary convolutional kernels (can be two-tuple for non-quadratic shapes)
+    padding=0,
+    ... # all other keyword arguments like dense layer above
 )
-layer = 
 ```
 
 At this point, it is important to discuss the options for `device` and the provided implementations. Specifically,
