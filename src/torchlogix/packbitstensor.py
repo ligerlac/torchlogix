@@ -4,10 +4,10 @@ import numpy as np
 import torch
 
 try:
-    import difflogic_cuda
+    import torchlogix_cuda
 except ImportError:
     warnings.warn(
-        "failed to import difflogic_cuda. no cuda features will be available",
+        "failed to import torchlogix_cuda. no cuda features will be available",
         ImportWarning,
     )
 
@@ -21,7 +21,7 @@ class PackBitsTensor:
 
         if device == "cuda":
             t = t.to(device).T.contiguous()
-            self.t, self.pad_len = difflogic_cuda.tensor_packbits_cuda(
+            self.t, self.pad_len = torchlogix_cuda.tensor_packbits_cuda(
                 t, self.bit_count
             )
         else:
@@ -29,7 +29,7 @@ class PackBitsTensor:
 
     def group_sum(self, k):
         assert self.device == "cuda", self.device
-        return difflogic_cuda.groupbitsum(self.t, self.pad_len, k)
+        return torchlogix_cuda.groupbitsum(self.t, self.pad_len, k)
 
     def flatten(self, start_dim=0, end_dim=-1, **kwargs):
         """
