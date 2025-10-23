@@ -21,13 +21,13 @@ from ..functional import (
 )
 from ..packbitstensor import PackBitsTensor
 
-try:
-    from neurodifflogic import difflogic_cuda
-except ImportError:
-    warnings.warn(
-        "failed to import difflogic_cuda. no cuda features will be available",
-        ImportWarning,
-    )
+# try:
+from torchlogix import torchlogix_cuda
+# except ImportError:
+#     warnings.warn(
+#         "failed to import difflogic_cuda. no cuda features will be available",
+#         ImportWarning,
+#     )
 
 ##########################################################################
 
