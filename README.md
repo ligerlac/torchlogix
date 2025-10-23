@@ -169,35 +169,7 @@ implementations over publishing a plethora of different competing implementation
 
 ## 🧪 Experiments
 
-In the following, we present a few example experiments which are contained in the `experiments` directory.
-`main.py` executes the experiments for torchlogix or baselines.
-
-### ☄️ Adult / Breast Cancer
-
-```shell
-python experiments/main.py  -eid 526010           -bs 100 -t 20 --dataset adult         -ni 100_000 -ef 1_000 -k 256 -l 5 --compile_model
-python experiments/main.py  -eid 526020 -lr 0.001 -bs 100 -t 20 --dataset breast_cancer -ni 100_000 -ef 1_000 -k 128 -l 5 --compile_model
-```
-
-### 🔢 MNIST
-
-```shell
-python experiments/main.py  -bs 100 -t  10 --dataset mnist20x20 -ni 200_000 -ef 1_000 -k  8_000 -l 6 --compile_model
-python experiments/main.py  -bs 100 -t  30 --dataset mnist      -ni 200_000 -ef 1_000 -k 64_000 -l 6 --compile_model
-# Baselines:
-python experiments/main.py  -bs 100 --dataset mnist    -ni 200_000 -ef 1_000 -k  128 -l 3 --arch=fully_connected
-python experiments/main.py  -bs 100 --dataset mnist    -ni 200_000 -ef 1_000 -k 2048 -l 7 --arch=fully_connected
-```
-
-### 🐶 CIFAR-10
-
-```shell
-python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-3-thresholds  -ni 200_000 -ef 1_000 -k    12_000 -l 4 --compile_model
-python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-3-thresholds  -ni 200_000 -ef 1_000 -k   128_000 -l 4 --compile_model
-python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 200_000 -ef 1_000 -k   256_000 -l 5
-python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 200_000 -ef 1_000 -k   512_000 -l 5
-python experiments/main.py  -bs 100 -t 100 --dataset cifar-10-31-thresholds -ni 200_000 -ef 1_000 -k 1_024_000 -l 5
-```
+There are experiments on CIFAR-10 in the `experiments` directory. We will add more soon.
 
 ## 📜 License
 

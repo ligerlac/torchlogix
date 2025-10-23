@@ -8,33 +8,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 
-# Check if we should build CUDA extensions
-# Only build when explicitly requested via pip install .[cuda]
-build_cuda_ext = False
 
-# Check if 'cuda' is in the extras being installed
-import sys
-if any('cuda' in arg for arg in sys.argv if '[' in arg and ']' in arg):
-    build_cuda_ext = True
-
-if build_cuda_ext:
-    try:
-        from torch.utils.cpp_extension import BuildExtension, CUDAExtension
-        ext_modules = [
-            CUDAExtension(
-                "torchlogix.torchlogix_cuda",
-                [
-                    "src/torchlogix/cuda/torchlogix.cpp",
-                    "src/torchlogix/cuda/torchlogix_kernel.cu",
-                ],
-                extra_compile_args={"nvcc": ["-lineinfo"]},
-            )
-        ]
-    except ImportError:
-        print("Warning: CUDA extension requested but torch.utils.cpp_extension not available")
-        ext_modules = []
-else:
-    ext_modules = []
+ext_modules = []
 
 
 setup(

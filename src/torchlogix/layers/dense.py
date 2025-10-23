@@ -21,13 +21,6 @@ from ..functional import (
 )
 from ..packbitstensor import PackBitsTensor
 
-# try:
-from .. import torchlogix_cuda
-# except ImportError:
-#     warnings.warn(
-#         "failed to import torchlogix_cuda. no cuda features will be available",
-#         ImportWarning,
-#     )
 
 ##########################################################################
 
@@ -54,7 +47,7 @@ class LogicDense(torch.nn.Module):
         :param out_dim:     output dimensionality of the layer
         :param device:      device (options: 'cuda' / 'cpu')
         :param grad_factor: for deep models (>6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients
-        :param implementation: implementation to use (options: 'cuda' / 'python'). cuda is around 100x faster than python
+        :param implementation: implementation to use (options: 'cuda' / 'python').
         :param connections: method for initializing the connectivity of the logic gate net
         """
         super().__init__()
