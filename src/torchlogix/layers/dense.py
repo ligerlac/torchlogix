@@ -21,13 +21,13 @@ from ..functional import (
 )
 from ..packbitstensor import PackBitsTensor
 
-try:
-    from neurodifflogic import difflogic_cuda
-except ImportError:
-    warnings.warn(
-        "failed to import difflogic_cuda. no cuda features will be available",
-        ImportWarning,
-    )
+# try:
+from .. import torchlogix_cuda
+# except ImportError:
+#     warnings.warn(
+#         "failed to import torchlogix_cuda. no cuda features will be available",
+#         ImportWarning,
+#     )
 
 ##########################################################################
 
@@ -253,7 +253,7 @@ class LogicDense(torch.nn.Module):
 
         a, b = self.indices
         w = self.weight.argmax(-1).to(torch.uint8)
-        x.t = difflogic_cuda.eval(x.t, a, b, w)
+        x.t = torchlogix_cuda.eval(x.t, a, b, w)
 
         return x
 
@@ -344,7 +344,7 @@ class LogicDenseCudaFunction(torch.autograd.Function):
         ctx.save_for_backward(
             x, a, b, w, given_x_indices_of_y_start, given_x_indices_of_y
         )
-        return difflogic_cuda.forward(x, a, b, w)
+        return torchlogix_cuda.forward(x, a, b, w)
 
     @staticmethod
     def backward(ctx, grad_y):
@@ -353,9 +353,9 @@ class LogicDenseCudaFunction(torch.autograd.Function):
 
         grad_w = grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = difflogic_cuda.backward_x(
+            grad_x = torchlogix_cuda.backward_x(
                 x, a, b, w, grad_y, given_x_indices_of_y_start, given_x_indices_of_y
             )
         if ctx.needs_input_grad[3]:
-            grad_w = difflogic_cuda.backward_w(x, a, b, grad_y)
+            grad_w = torchlogix_cuda.backward_w(x, a, b, grad_y)
         return grad_x, None, None, grad_w, None, None, None
