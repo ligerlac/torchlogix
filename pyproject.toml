@@ -54,9 +54,6 @@ dev = [
     "sphinx>=4.0.0",
     "sphinx-rtd-theme>=1.0.0",
 ]
-geometric = [
-    "torch-geometric>=2.0.0",
-]
 
 [project.urls]
 Homepage = "https://github.com/ligerlac/torchlogix"

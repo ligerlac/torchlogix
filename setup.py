@@ -64,8 +64,8 @@ setup(
             "sphinx>=4.0.0",
             "sphinx-rtd-theme>=1.0.0",
         ],
-        "geometric": [
-            "torch-geometric>=2.0.0",
+        "cuda": [
+            # No additional dependencies needed, just triggers CUDA extension build
         ],
     },
     keywords="deep-learning pytorch logic-gates neural-networks machine-learning",
