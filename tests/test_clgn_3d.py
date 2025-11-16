@@ -194,8 +194,8 @@ def test_and_model():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0, 0], [0, 1, 0, 0]]),
-        torch.tensor([[0, 0, 1, 0], [0, 1, 1, 0]]),
+        torch.tensor([[[0, 0, 0, 0], [0, 1, 0, 0]]]),
+        torch.tensor([[[0, 0, 1, 0], [0, 1, 1, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -257,8 +257,8 @@ def test_binary_model():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0, 0], [1, 0, 0, 0]]),
-        torch.tensor([[0, 1, 0, 0], [1, 1, 0, 0]]),
+        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
+        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -307,8 +307,8 @@ def test_conv_model():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0, 0], [1, 0, 0, 0]]),
-        torch.tensor([[0, 1, 0, 0], [1, 1, 0, 0]]),
+        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
+        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -380,8 +380,8 @@ def test_conv_model_rect():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0, 0], [1, 0, 0, 0]]),
-        torch.tensor([[0, 1, 0, 0], [1, 1, 0, 0]]),
+        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
+        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 

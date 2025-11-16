@@ -3,7 +3,10 @@ name: Documentation
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   docs:
