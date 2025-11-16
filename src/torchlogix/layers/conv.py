@@ -203,29 +203,38 @@ class LogicConv2d(nn.Module):
 
 
     def get_random_receptive_field_pairs(self):
-        """Generate random index pairs within the receptive field.
+        """Generate random index pairs within the receptive field for each kernel.
         May contain self connections and duplicate connections.
         """
         c, h_k, w_k = self.channels, self.receptive_field_size, self.receptive_field_size
         sample_size = 2**self.tree_depth
 
-        # Randomly select positions within the receptive field
-        h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
-        w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
-        c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
+        all_pairs_a = []
+        all_pairs_b = []
 
-        # Stack the indices
-        indices = torch.stack([h_indices, w_indices, c_indices], dim=-1)
+        # Generate different random pairs for each kernel
+        for _ in range(self.num_kernels):
+            # Randomly select positions within the receptive field
+            h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
+            w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
+            c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
 
-        # Split for binary tree (split the random connections)
-        pairs_a = indices[:sample_size]
-        pairs_b = indices[sample_size:]
+            # Stack the indices
+            indices = torch.stack([h_indices, w_indices, c_indices], dim=-1)
 
-        return pairs_a, pairs_b
+            # Split for binary tree (split the random connections)
+            pairs_a = indices[:sample_size]
+            pairs_b = indices[sample_size:]
+
+            all_pairs_a.append(pairs_a)
+            all_pairs_b.append(pairs_b)
+
+        # Stack all kernel pairs: shape (num_kernels, sample_size, 3)
+        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
 
 
     def get_random_unique_receptive_field_pairs(self):
-        """Generate random unique index pairs within the receptive field.
+        """Generate random unique index pairs within the receptive field for each kernel.
         No self-connections or duplicate pairs.
         """
         c, h_k, w_k = self.channels, self.receptive_field_size, self.receptive_field_size
@@ -254,20 +263,29 @@ class LogicConv2d(nn.Module):
         triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=self.device)
         total_pairs = triu_indices.shape[1]
 
-        # Randomly select sample_size pairs
-        selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
-        selected_i = triu_indices[0, selected_pair_indices]
-        selected_j = triu_indices[1, selected_pair_indices]
+        all_pairs_a = []
+        all_pairs_b = []
 
-        pairs_a = all_positions[selected_i]
-        pairs_b = all_positions[selected_j]
+        # Generate different unique pairs for each kernel
+        for _ in range(self.num_kernels):
+            # Randomly select sample_size pairs
+            selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
+            selected_i = triu_indices[0, selected_pair_indices]
+            selected_j = triu_indices[1, selected_pair_indices]
 
-        return pairs_a, pairs_b
+            pairs_a = all_positions[selected_i]
+            pairs_b = all_positions[selected_j]
+
+            all_pairs_a.append(pairs_a)
+            all_pairs_b.append(pairs_b)
+
+        # Stack all kernel pairs: shape (num_kernels, sample_size, 3)
+        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
 
 
     def apply_sliding_window(self, pairs_tuple):
         """Apply sliding window to the receptive field pairs across all kernel positions."""
-        pairs_a, pairs_b = pairs_tuple
+        pairs_a, pairs_b = pairs_tuple  # Shape: (num_kernels, sample_size, 3)
         h, w = self.in_dim[0], self.in_dim[1]
         h_k, w_k = self.receptive_field_size, self.receptive_field_size
 
@@ -290,24 +308,28 @@ class LogicConv2d(nn.Module):
         all_stacked_as = []
         all_stacked_bs = []
 
-        # Process for each kernel
+        # Process for each kernel with its unique pairs
         for kernel_idx in range(self.num_kernels):
             stacked_as = []
             stacked_bs = []
+
+            # Get the pairs for this specific kernel
+            kernel_pairs_a = pairs_a[kernel_idx]  # Shape: (sample_size, 3)
+            kernel_pairs_b = pairs_b[kernel_idx]  # Shape: (sample_size, 3)
 
             # Slide the kernel over the image (across all positions)
             for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
                 # Apply sliding window offset
                 indices_a = torch.stack([
-                    pairs_a[:, 0] + h_start,
-                    pairs_a[:, 1] + w_start,
-                    pairs_a[:, 2]
+                    kernel_pairs_a[:, 0] + h_start,
+                    kernel_pairs_a[:, 1] + w_start,
+                    kernel_pairs_a[:, 2]
                 ], dim=-1)
 
                 indices_b = torch.stack([
-                    pairs_b[:, 0] + h_start,
-                    pairs_b[:, 1] + w_start,
-                    pairs_b[:, 2]
+                    kernel_pairs_b[:, 0] + h_start,
+                    kernel_pairs_b[:, 1] + w_start,
+                    kernel_pairs_b[:, 2]
                 ], dim=-1)
 
                 stacked_as.append(indices_a)
@@ -481,7 +503,7 @@ class LogicConv3d(nn.Module):
 
 
     def get_random_receptive_field_pairs(self):
-        """Generate random index pairs within the receptive field.
+        """Generate random index pairs within the receptive field for each kernel.
         May contain self connections and duplicate connections.
         """
         c, h_k, w_k, d_k = (
@@ -492,24 +514,33 @@ class LogicConv3d(nn.Module):
         )
         sample_size = 2**self.tree_depth
 
-        # Randomly select positions within the receptive field
-        h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
-        w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
-        d_indices = torch.randint(0, d_k, (2 * sample_size,), device=self.device)
-        c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
+        all_pairs_a = []
+        all_pairs_b = []
 
-        # Stack the indices
-        indices = torch.stack([h_indices, w_indices, d_indices, c_indices], dim=-1)
+        # Generate different random pairs for each kernel
+        for _ in range(self.num_kernels):
+            # Randomly select positions within the receptive field
+            h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
+            w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
+            d_indices = torch.randint(0, d_k, (2 * sample_size,), device=self.device)
+            c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
 
-        # Split for binary tree (split the random connections)
-        pairs_a = indices[:sample_size]
-        pairs_b = indices[sample_size:]
+            # Stack the indices
+            indices = torch.stack([h_indices, w_indices, d_indices, c_indices], dim=-1)
 
-        return pairs_a, pairs_b
+            # Split for binary tree (split the random connections)
+            pairs_a = indices[:sample_size]
+            pairs_b = indices[sample_size:]
+
+            all_pairs_a.append(pairs_a)
+            all_pairs_b.append(pairs_b)
+
+        # Stack all kernel pairs: shape (num_kernels, sample_size, 4)
+        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
 
 
     def get_random_unique_receptive_field_pairs(self):
-        """Generate random unique index pairs within the receptive field.
+        """Generate random unique index pairs within the receptive field for each kernel.
         No self-connections or duplicate pairs.
         """
         c, h_k, w_k, d_k = (
@@ -545,20 +576,29 @@ class LogicConv3d(nn.Module):
         triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=self.device)
         total_pairs = triu_indices.shape[1]
 
-        # Randomly select sample_size pairs
-        selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
-        selected_i = triu_indices[0, selected_pair_indices]
-        selected_j = triu_indices[1, selected_pair_indices]
+        all_pairs_a = []
+        all_pairs_b = []
 
-        pairs_a = all_positions[selected_i]
-        pairs_b = all_positions[selected_j]
+        # Generate different unique pairs for each kernel
+        for _ in range(self.num_kernels):
+            # Randomly select sample_size pairs
+            selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
+            selected_i = triu_indices[0, selected_pair_indices]
+            selected_j = triu_indices[1, selected_pair_indices]
 
-        return pairs_a, pairs_b
+            pairs_a = all_positions[selected_i]
+            pairs_b = all_positions[selected_j]
+
+            all_pairs_a.append(pairs_a)
+            all_pairs_b.append(pairs_b)
+
+        # Stack all kernel pairs: shape (num_kernels, sample_size, 4)
+        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
 
 
     def apply_sliding_window(self, pairs_tuple):
         """Apply sliding window to the receptive field pairs across all kernel positions."""
-        pairs_a, pairs_b = pairs_tuple
+        pairs_a, pairs_b = pairs_tuple  # Shape: (num_kernels, sample_size, 4)
         h, w, d = self.in_dim[0], self.in_dim[1], self.in_dim[2]
         h_k, w_k, d_k = self.receptive_field_size
 
@@ -583,26 +623,30 @@ class LogicConv3d(nn.Module):
         all_stacked_as = []
         all_stacked_bs = []
 
-        # Process for each kernel
+        # Process for each kernel with its unique pairs
         for kernel_idx in range(self.num_kernels):
             stacked_as = []
             stacked_bs = []
+
+            # Get the pairs for this specific kernel
+            kernel_pairs_a = pairs_a[kernel_idx]  # Shape: (sample_size, 4)
+            kernel_pairs_b = pairs_b[kernel_idx]  # Shape: (sample_size, 4)
 
             # Slide the kernel over the image (across all positions)
             for h_start, w_start, d_start in zip(h_grid.flatten(), w_grid.flatten(), d_grid.flatten()):
                 # Apply sliding window offset
                 indices_a = torch.stack([
-                    pairs_a[:, 0] + h_start,
-                    pairs_a[:, 1] + w_start,
-                    pairs_a[:, 2] + d_start,
-                    pairs_a[:, 3]
+                    kernel_pairs_a[:, 0] + h_start,
+                    kernel_pairs_a[:, 1] + w_start,
+                    kernel_pairs_a[:, 2] + d_start,
+                    kernel_pairs_a[:, 3]
                 ], dim=-1)
 
                 indices_b = torch.stack([
-                    pairs_b[:, 0] + h_start,
-                    pairs_b[:, 1] + w_start,
-                    pairs_b[:, 2] + d_start,
-                    pairs_b[:, 3]
+                    kernel_pairs_b[:, 0] + h_start,
+                    kernel_pairs_b[:, 1] + w_start,
+                    kernel_pairs_b[:, 2] + d_start,
+                    kernel_pairs_b[:, 3]
                 ], dim=-1)
 
                 stacked_as.append(indices_a)
