@@ -1,0 +1,563 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>torchlogix.models.conv &mdash; TorchLogix 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../../_static/copybutton.js?v=30646c52"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            TorchLogix
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/installation.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/logic_gates.html">Logic Gates in TorchLogix</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/layers.html">Layers Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/models.html">Models Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/functional.html">Functional Module</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/contributing.html">Contributing to TorchLogix</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">TorchLogix</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">torchlogix.models.conv</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for torchlogix.models.conv</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span><span class="p">,</span> <span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">OrPooling</span><span class="p">,</span> <span class="n">GroupSum</span>
+
+
+<div class="viewcode-block" id="CNN">
+<a class="viewcode-back" href="../../../api/models.html#torchlogix.models.CNN">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CNN</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;An implementation of a logic gate convolutional neural network.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="CNN.__init__">
+<a class="viewcode-back" href="../../../api/models.html#torchlogix.models.CNN.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_count</span><span class="p">,</span> <span class="n">tau</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">CNN</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="n">logic_layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># specifically written for mnist</span>
+        <span class="n">k_num</span> <span class="o">=</span> <span class="mi">16</span>
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">28</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">9</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">())</span>
+
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">81</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">1280</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">1280</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">640</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">logic_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">640</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">320</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="o">*</span><span class="n">logic_layers</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">(</span><span class="n">class_count</span><span class="p">,</span> <span class="n">tau</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="CNN.forward">
+<a class="viewcode-back" href="../../../api/models.html#torchlogix.models.CNN.forward">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward pass of the logic gate convolutional neural network.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
+</div>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ResidualLogicBlock</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">in_dim</span><span class="p">,</span>
+        <span class="n">in_channels</span><span class="p">,</span>
+        <span class="n">out_channels</span><span class="p">,</span>
+        <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">downsample</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="n">stride</span> <span class="o">=</span> <span class="mi">2</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span> <span class="mi">1</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">main</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="n">in_dim</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="n">in_channels</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="n">out_channels</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="n">tree_depth</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="n">receptive_field_size</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="n">stride</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">(),</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">shortcut</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">()</span>
+        <span class="c1"># we can either project the input to the output channels, or use a standard skip connection</span>
+        <span class="k">if</span> <span class="n">downsample</span> <span class="ow">or</span> <span class="n">in_channels</span> <span class="o">!=</span> <span class="n">out_channels</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shortcut</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+                <span class="n">LogicConv2d</span><span class="p">(</span>
+                    <span class="n">in_dim</span><span class="o">=</span><span class="n">in_dim</span><span class="p">,</span>
+                    <span class="n">channels</span><span class="o">=</span><span class="n">in_channels</span><span class="p">,</span>
+                    <span class="n">num_kernels</span><span class="o">=</span><span class="n">out_channels</span><span class="p">,</span>
+                    <span class="n">tree_depth</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                    <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                    <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="n">stride</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">(),</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">main</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">identity</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shortcut</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span> <span class="o">+</span> <span class="n">identity</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnist</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Model as described in the paper &#39;Convolutional Logic Gate Networks&#39;</span>
+<span class="sd">    for the MNIST dataset.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k_num</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k_num</span> <span class="o">=</span> <span class="n">k_num</span>
+        <span class="n">layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">28</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">9</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">())</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">81</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">1280</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">1280</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">640</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">640</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">320</span> <span class="o">*</span> <span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">))</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistSmall</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistSmall</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistMedium</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistMedium</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistLarge</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistLarge</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An implementation of a logic gate convolutional neural network for CIFAR-10,</span>
+<span class="sd">    as described in the paper &#39;convolutional logic gate networks&#39;.</span>
+<span class="sd">    Provided in three sizes: small, medium, large.</span>
+<span class="sd">    Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">tau</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="n">layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">3</span><span class="o">*</span><span class="n">n_bits</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span> <span class="c1"># kx16x16</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">4</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span> <span class="c1"># 4kx8x8</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">4</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">16</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span> <span class="c1"># 16kx4x4</span>
+        
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">16</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">32</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span> <span class="c1"># 32kx2x2</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">())</span> <span class="c1"># 128k</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">128</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">1280</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">1280</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">640</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">640</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">320</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">))</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Res</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An implementation of a logic gate convolutional neural network for CIFAR-10,</span>
+<span class="sd">    as described in the paper &#39;convolutional logic gate networks&#39;.</span>
+<span class="sd">    Provided in three sizes: small, medium, large.</span>
+<span class="sd">    Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">tau</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="n">layers</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">ResidualLogicBlock</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+                <span class="n">in_channels</span><span class="o">=</span><span class="mi">3</span><span class="o">*</span><span class="n">n_bits</span><span class="p">,</span>
+                <span class="n">out_channels</span><span class="o">=</span><span class="mi">2</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="n">downsample</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">())</span> <span class="c1"># 4x4x16k = 256k</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">256</span><span class="o">*</span><span class="mi">2</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">512</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">512</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">256</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">256</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">320</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Res</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">))</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10SmallRes</span><span class="p">(</span><span class="n">ClgnCifar10Res</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10SmallRes</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Small</span><span class="p">(</span><span class="n">ClgnCifar10</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Small</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Medium</span><span class="p">(</span><span class="n">ClgnCifar10</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Medium</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10MediumRes</span><span class="p">(</span><span class="n">ClgnCifar10Res</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10MediumRes</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Large</span><span class="p">(</span><span class="n">ClgnCifar10</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Large</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">280</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Large2</span><span class="p">(</span><span class="n">ClgnCifar10</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Large2</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">340</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Large4</span><span class="p">(</span><span class="n">ClgnCifar10</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Large4</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n_bits</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">2560</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">450</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Tiny</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An implementation of a logic gate convolutional neural network for CIFAR-10,</span>
+<span class="sd">    Takes 3-bit-thresholded inputs. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="n">n_bits</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="n">tau</span> <span class="o">=</span> <span class="mi">20</span>
+        <span class="n">layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">3</span><span class="o">*</span><span class="n">n_bits</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span> <span class="c1"># kx28x28</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span> <span class="c1"># kx14x14</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">14</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="mi">4</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>  <span class="c1"># 4kx12x12</span>
+        <span class="c1"># layers.append(OrPooling(kernel_size=2, stride=2)) # 4kx6x6</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">())</span> <span class="c1"># 4kx6x6=144k</span>
+
+        <span class="c1"># layers.append(LogicDense(in_dim=144*k_num, out_dim=1280*k_num, **llkw))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">576</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">1280</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">1280</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">640</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">640</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">320</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Tiny</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">))</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Tiny32</span><span class="p">(</span><span class="n">ClgnCifar10Tiny</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Tiny32</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Tiny64</span><span class="p">(</span><span class="n">ClgnCifar10Tiny</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Tiny64</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Tiny128</span><span class="p">(</span><span class="n">ClgnCifar10Tiny</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Tiny128</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Tiny256</span><span class="p">(</span><span class="n">ClgnCifar10Tiny</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Tiny256</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Mini</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    An implementation of a logic gate convolutional neural network for CIFAR-10,</span>
+<span class="sd">    Takes continuous (unthresholded) inputs. Only single conv layer.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k_num</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="n">n_bits</span> <span class="o">=</span> <span class="mi">3</span>
+        <span class="n">tau</span> <span class="o">=</span> <span class="mi">20</span>
+        <span class="n">layers</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">LogicConv2d</span><span class="p">(</span>
+                <span class="n">in_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+                <span class="n">num_kernels</span><span class="o">=</span><span class="n">k_num</span><span class="p">,</span>
+                <span class="n">channels</span><span class="o">=</span><span class="mi">3</span><span class="o">*</span><span class="n">n_bits</span><span class="p">,</span>
+                <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+                <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span> <span class="c1"># kx28x28</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">())</span> <span class="c1"># kx29x29=841k</span>
+
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">841</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">512</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">512</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">256</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">256</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">128</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+        <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">128</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">60</span><span class="o">*</span><span class="n">k_num</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">))</span>
+
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Mini</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">))</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Mini32</span><span class="p">(</span><span class="n">ClgnCifar10Mini</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Mini32</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">5.</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Mini64</span><span class="p">(</span><span class="n">ClgnCifar10Mini</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Mini64</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">10.</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Mini128</span><span class="p">(</span><span class="n">ClgnCifar10Mini</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Mini128</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">20.</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10Mini256</span><span class="p">(</span><span class="n">ClgnCifar10Mini</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ClgnCifar10Mini256</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">40.</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023-2024 Felix Petersen (original DiffLogic), Lino Gerlach (TorchLogix extensions).</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,349 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Functional Module &mdash; TorchLogix 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="torchlogix.functional.bin_op" href="generated/torchlogix.functional.bin_op.html" />
+    <link rel="prev" title="torchlogix.models.CNN" href="generated/torchlogix.models.CNN.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            TorchLogix
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/installation.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/logic_gates.html">Logic Gates in TorchLogix</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="layers.html">Layers Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="models.html">Models Module</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Functional Module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#logic-operations">Logic Operations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.bin_op.html">torchlogix.functional.bin_op</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.bin_op_s.html">torchlogix.functional.bin_op_s</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.bin_op_cnn.html">torchlogix.functional.bin_op_cnn</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.bin_op_cnn_slow.html">torchlogix.functional.bin_op_cnn_slow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.compute_all_logic_ops_vectorized.html">torchlogix.functional.compute_all_logic_ops_vectorized</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#utility-functions">Utility Functions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.get_unique_connections.html">torchlogix.functional.get_unique_connections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/torchlogix.functional.GradFactor.html">torchlogix.functional.GradFactor</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#constants">Constants</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.ID_TO_OP"><code class="docutils literal notranslate"><span class="pre">ID_TO_OP</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#function-details">Function Details</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.bin_op"><code class="docutils literal notranslate"><span class="pre">bin_op()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.bin_op_s"><code class="docutils literal notranslate"><span class="pre">bin_op_s()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.bin_op_cnn"><code class="docutils literal notranslate"><span class="pre">bin_op_cnn()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.bin_op_cnn_slow"><code class="docutils literal notranslate"><span class="pre">bin_op_cnn_slow()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.compute_all_logic_ops_vectorized"><code class="docutils literal notranslate"><span class="pre">compute_all_logic_ops_vectorized()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.get_unique_connections"><code class="docutils literal notranslate"><span class="pre">get_unique_connections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.functional.GradFactor"><code class="docutils literal notranslate"><span class="pre">GradFactor</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.functional.GradFactor.forward"><code class="docutils literal notranslate"><span class="pre">GradFactor.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.functional.GradFactor.backward"><code class="docutils literal notranslate"><span class="pre">GradFactor.backward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../guides/contributing.html">Contributing to TorchLogix</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TorchLogix</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="torchlogix.html">TorchLogix Package</a></li>
+      <li class="breadcrumb-item active">Functional Module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/functional.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="functional-module">
+<h1>Functional Module<a class="headerlink" href="#functional-module" title="Link to this heading"></a></h1>
+<p>The functional module contains the core mathematical operations and utility functions for logic gate computations.</p>
+<section id="logic-operations">
+<h2>Logic Operations<a class="headerlink" href="#logic-operations" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/torchlogix.functional.bin_op.html#torchlogix.functional.bin_op" title="torchlogix.functional.bin_op"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bin_op</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/torchlogix.functional.bin_op_s.html#torchlogix.functional.bin_op_s" title="torchlogix.functional.bin_op_s"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bin_op_s</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/torchlogix.functional.bin_op_cnn.html#torchlogix.functional.bin_op_cnn" title="torchlogix.functional.bin_op_cnn"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bin_op_cnn</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/torchlogix.functional.bin_op_cnn_slow.html#torchlogix.functional.bin_op_cnn_slow" title="torchlogix.functional.bin_op_cnn_slow"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bin_op_cnn_slow</span></code></a></p></td>
+<td><p>A slower, non-optimized version of bin_op_cnn for clarity.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/torchlogix.functional.compute_all_logic_ops_vectorized.html#torchlogix.functional.compute_all_logic_ops_vectorized" title="torchlogix.functional.compute_all_logic_ops_vectorized"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_all_logic_ops_vectorized</span></code></a></p></td>
+<td><p>Compute all 16 logic operations in a single vectorized operation.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="utility-functions">
+<h2>Utility Functions<a class="headerlink" href="#utility-functions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="generated/torchlogix.functional.get_unique_connections.html#torchlogix.functional.get_unique_connections" title="torchlogix.functional.get_unique_connections"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_unique_connections</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor" title="torchlogix.functional.GradFactor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GradFactor</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="constants">
+<h2>Constants<a class="headerlink" href="#constants" title="Link to this heading"></a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="torchlogix.functional.ID_TO_OP">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">ID_TO_OP</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{0:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">1:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">2:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">3:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">4:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">5:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">6:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">7:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">8:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">9:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">10:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">11:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">12:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">13:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">14:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;,</span> <span class="pre">15:</span> <span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;}</span></em><a class="headerlink" href="#torchlogix.functional.ID_TO_OP" title="Link to this definition"></a></dt>
+<dd><p>dict() -&gt; new empty dictionary
+dict(mapping) -&gt; new dictionary initialized from a mapping object’s</p>
+<blockquote>
+<div><p>(key, value) pairs</p>
+</div></blockquote>
+<dl>
+<dt>dict(iterable) -&gt; new dictionary initialized as if via:</dt><dd><p>d = {}
+for k, v in iterable:</p>
+<blockquote>
+<div><p>d[k] = v</p>
+</div></blockquote>
+</dd>
+<dt>dict(<a href="#id1"><span class="problematic" id="id2">**</span></a>kwargs) -&gt; new dictionary initialized with the name=value pairs</dt><dd><p>in the keyword argument list.  For example:  dict(one=1, two=2)</p>
+</dd>
+</dl>
+<p>Dictionary mapping logic gate IDs (0-15) to their corresponding operations.</p>
+<p>Each logic gate represents one of the 16 possible binary Boolean operations:</p>
+<ul class="simple">
+<li><p>0: False (always 0)</p></li>
+<li><p>1: AND (a ∧ b)</p></li>
+<li><p>2: A and not B (a ∧ ¬b)</p></li>
+<li><p>3: A (identity for a)</p></li>
+<li><p>4: not A and B (¬a ∧ b)</p></li>
+<li><p>5: B (identity for b)</p></li>
+<li><p>6: XOR (a ⊕ b)</p></li>
+<li><p>7: OR (a ∨ b)</p></li>
+<li><p>8: NOR (¬(a ∨ b))</p></li>
+<li><p>9: XNOR (¬(a ⊕ b))</p></li>
+<li><p>10: NOT B (¬b)</p></li>
+<li><p>11: B implies A (b → a)</p></li>
+<li><p>12: NOT A (¬a)</p></li>
+<li><p>13: A implies B (a → b)</p></li>
+<li><p>14: NAND (¬(a ∧ b))</p></li>
+<li><p>15: True (always 1)</p></li>
+</ul>
+</dd></dl>
+
+</section>
+<section id="function-details">
+<h2>Function Details<a class="headerlink" href="#function-details" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="torchlogix.functional.bin_op">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">bin_op</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#bin_op"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.bin_op" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="torchlogix.functional.bin_op_s">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">bin_op_s</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i_s</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#bin_op_s"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.bin_op_s" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="torchlogix.functional.bin_op_cnn">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">bin_op_cnn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i_s</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#bin_op_cnn"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.bin_op_cnn" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="torchlogix.functional.bin_op_cnn_slow">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">bin_op_cnn_slow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">i_s</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#bin_op_cnn_slow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.bin_op_cnn_slow" title="Link to this definition"></a></dt>
+<dd><p>A slower, non-optimized version of bin_op_cnn for clarity.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="torchlogix.functional.compute_all_logic_ops_vectorized">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">compute_all_logic_ops_vectorized</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#compute_all_logic_ops_vectorized"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.compute_all_logic_ops_vectorized" title="Link to this definition"></a></dt>
+<dd><p>Compute all 16 logic operations in a single vectorized operation.</p>
+<p>Returns a tensor with shape […, 16] where the last dimension contains
+all 16 logic operations applied to inputs a and b.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="torchlogix.functional.get_unique_connections">
+<span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">get_unique_connections</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#get_unique_connections"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.get_unique_connections" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.functional.GradFactor">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">GradFactor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#GradFactor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/autograd.html#torch.autograd.Function" title="(in PyTorch v2.9)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Function</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.functional.GradFactor.forward">
+<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#GradFactor.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.forward" title="Link to this definition"></a></dt>
+<dd><p>Define the forward of the custom autograd Function.</p>
+<p>This function is to be overridden by all subclasses.
+There are two ways to define forward:</p>
+<p>Usage 1 (Combined forward and ctx):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@staticmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>It must accept a context ctx as the first argument, followed by any
+number of arguments (tensors or other types).</p></li>
+<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#combining-forward-context" title="(in PyTorch v2.9)"><span>Combined or separate forward() and setup_context()</span></a> for more details</p></li>
+</ul>
+<p>Usage 2 (Separate forward and ctx):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@staticmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+    <span class="k">pass</span>
+
+
+<span class="nd">@staticmethod</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">setup_context</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">inputs</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>The forward no longer accepts a ctx argument.</p></li>
+<li><p>Instead, you must also override the <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.autograd.Function.setup_context()</span></code>
+staticmethod to handle setting up the <code class="docutils literal notranslate"><span class="pre">ctx</span></code> object.
+<code class="docutils literal notranslate"><span class="pre">output</span></code> is the output of the forward, <code class="docutils literal notranslate"><span class="pre">inputs</span></code> are a Tuple of inputs
+to the forward.</p></li>
+<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#extending-autograd" title="(in PyTorch v2.9)"><span>Extending torch.autograd</span></a> for more details</p></li>
+</ul>
+<p>The context can be used to store arbitrary data that can be then
+retrieved during the backward pass. Tensors should not be stored
+directly on <cite>ctx</cite> (though this is not currently enforced for
+backward compatibility). Instead, tensors should be saved either with
+<code class="xref py py-func docutils literal notranslate"><span class="pre">ctx.save_for_backward()</span></code> if they are intended to be used in
+<code class="docutils literal notranslate"><span class="pre">backward</span></code> (equivalently, <code class="docutils literal notranslate"><span class="pre">vjp</span></code>) or <code class="xref py py-func docutils literal notranslate"><span class="pre">ctx.save_for_forward()</span></code>
+if they are intended to be used for in <code class="docutils literal notranslate"><span class="pre">jvp</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.functional.GradFactor.backward">
+<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#GradFactor.backward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.backward" title="Link to this definition"></a></dt>
+<dd><p>Define a formula for differentiating the operation with backward mode automatic differentiation.</p>
+<p>This function is to be overridden by all subclasses.
+(Defining this function is equivalent to defining the <code class="docutils literal notranslate"><span class="pre">vjp</span></code> function.)</p>
+<p>It must accept a context <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx</span></code> as the first argument, followed by
+as many outputs as the <a class="reference internal" href="generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.forward" title="torchlogix.functional.GradFactor.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> returned (None will be passed in
+for non tensor outputs of the forward function),
+and it should return as many tensors, as there were inputs to
+<a class="reference internal" href="generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.forward" title="torchlogix.functional.GradFactor.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>. Each argument is the gradient w.r.t the given output,
+and each returned value should be the gradient w.r.t. the
+corresponding input. If an input is not a Tensor or is a Tensor not
+requiring grads, you can just pass None as a gradient for that input.</p>
+<p>The context can be used to retrieve tensors saved during the forward
+pass. It also has an attribute <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx.needs_input_grad</span></code> as a tuple
+of booleans representing whether each input needs gradient. E.g.,
+<a class="reference internal" href="generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.backward" title="torchlogix.functional.GradFactor.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> will have <code class="docutils literal notranslate"><span class="pre">ctx.needs_input_grad[0]</span> <span class="pre">=</span> <span class="pre">True</span></code> if the
+first input to <a class="reference internal" href="generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.forward" title="torchlogix.functional.GradFactor.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> needs gradient computed w.r.t. the
+output.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="generated/torchlogix.models.CNN.html" class="btn btn-neutral float-left" title="torchlogix.models.CNN" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="generated/torchlogix.functional.bin_op.html" class="btn btn-neutral float-right" title="torchlogix.functional.bin_op" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023-2024 Felix Petersen (original DiffLogic), Lino Gerlach (TorchLogix extensions).</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
