@@ -190,8 +190,8 @@ def test_and_model():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0], [1, 0, 0]]),
-        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
+        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -255,8 +255,8 @@ def test_and_model_walsh():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0], [1, 0, 0]]),
-        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
+        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -314,8 +314,8 @@ def test_binary_model():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0], [1, 0, 0]]),
-        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
+        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -365,8 +365,8 @@ def test_conv_model():
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0], [1, 0, 0]]),
-        torch.tensor([[0, 1, 0], [1, 1, 0]]),
+        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
+        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
@@ -417,16 +417,16 @@ def test_conv_model_rect():
         channels=1,
         num_kernels=1,
         tree_depth=1,
-            receptive_field_size=2,
-            implementation="python",
-            connections="random-unique",
-            stride=1,
-            padding=0,
+        receptive_field_size=2,
+        implementation="python",
+        connections="random-unique",
+        stride=1,
+        padding=0,
     )
 
     kernel_pairs = (
-        torch.tensor([[0, 0, 0, 0], [1, 0, 0, 0]]),
-        torch.tensor([[0, 1, 0, 0], [1, 1, 0, 0]]),
+        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
+        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
     )
     layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
 
