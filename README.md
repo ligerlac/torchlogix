@@ -6,8 +6,8 @@
 (Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)) by Felix Petersen et al. As the aforementioned repository is not maintained anymore, `torchlogix` extends `difflogic` by bugfixes and new concepts such as learnable thermometer thresholding and the walsh-decomposition-based reparametrization of differentiable logic gates with 4 instead of 16 parameters as described in "WARP-LUTs - Walsh-Assisted Relaxation for Probabilistic Look Up Tables" (Paper @ [ArXiv](https://www.arxiv.org/abs/2510.15655)). It also implements convolutional logic gate layers as described in the NeurIPS 2024 Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 The goal behind differentiable logic gate networks is to solve machine learning tasks by learning combinations of logic
-gates, i.e., logic gate networks. As the choice of a logic is conventionally non-differentiable, relaxations of are applied
-to allow training logic gate networks with gradient-based methods. Specifically, `torchlogix` combines real-valued logics
+gates, i.e., logic gate networks. As the choice of a logic is conventionally non-differentiable, relaxations are applied
+to allow training logic gate networks with gradient-based methods. Specifically, `torchlogix` combines real-valued logic
 and a continuously parameterized approximation of the network. This allows learning which logic gate (out of 16 possible)
 is optimal for each neuron. The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a
 million images of MNIST per second on a single CPU core.
@@ -23,7 +23,7 @@ pip install "torchlogix[dev]"          # with dev tools
 
 ## 📚 Documentation
 
-**Full documentation is available at:** [TorchLogix Documentation](docs/_build/html/index.html)
+**Full documentation is available at:** [TorchLogix Documentation](https://ligerlac.github.io/torchlogix/)
 
 - **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions
 - **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
