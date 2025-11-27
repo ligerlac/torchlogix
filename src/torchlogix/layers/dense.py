@@ -5,7 +5,7 @@ import torch
 from rich import print
 from torch.nn.common_types import _size_2_t
 from torch.nn.modules.utils import _pair
-from torch.nn.functional import gumbel_softmax, softmax
+from torch.nn.functional import gumbel_softmax
 from itertools import product
 
 from ..functional import (
@@ -13,10 +13,8 @@ from ..functional import (
     bin_op_s,
     get_unique_connections,
     gumbel_sigmoid,
-    soft_raw,
-    soft_walsh,
-    hard_raw,
-    hard_walsh,
+    softmax,
+    sigmoid,
     WALSH_COEFFICIENTS,
 )
 from ..packbitstensor import PackBitsTensor
@@ -38,7 +36,7 @@ class LogicDense(torch.nn.Module):
         implementation: str = None,
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
-        parametrization: str = "raw",  # standard or walsh or anf
+        parametrization: str = "raw",  # "raw" or "walsh"
         temperature: float = 1.0,
         forward_sampling: str = "soft"  # "soft", "hard", "gumbel_soft", "gumbel_hard"
     ):
@@ -69,7 +67,7 @@ class LogicDense(torch.nn.Module):
                 )
             else:
                 raise ValueError(weight_init)
-        elif self.parametrization in ["walsh", "anf"]:
+        elif self.parametrization in ["walsh"]:
             if weight_init == "residual":
                 # chose randomly from walsh_coefficients, but prefer id=10
                 walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
@@ -168,9 +166,9 @@ class LogicDense(torch.nn.Module):
         if self.parametrization == "raw":
             if self.training:
                 if self.forward_sampling == "soft":
-                    x = soft_raw(self.weight, tau=self.temperature)
+                    x = softmax(self.weight, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "hard":
-                    x = hard_raw(self.weight, tau=self.temperature)
+                    x = softmax(self.weight, hard=True, tau=self.temperature)
                 elif self.forward_sampling == "gumbel_soft":
                     x = gumbel_softmax(self.weight, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "gumbel_hard":
@@ -193,9 +191,9 @@ class LogicDense(torch.nn.Module):
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
                 if self.forward_sampling == "soft":
-                    x = soft_walsh(x, tau=self.temperature)
+                    x = sigmoid(x, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "hard":
-                    x = hard_walsh(x, tau=self.temperature)
+                    x = sigmoid(x, tau=self.temperature, hard=True)
                 elif self.forward_sampling == "gumbel_soft":
                     x = gumbel_sigmoid(x, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "gumbel_hard":

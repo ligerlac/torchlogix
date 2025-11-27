@@ -7,7 +7,7 @@ from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 from torch.nn.functional import gumbel_softmax
 
-from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, soft_raw, soft_walsh, hard_raw, hard_walsh, WALSH_COEFFICIENTS
+from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, softmax, sigmoid, WALSH_COEFFICIENTS
 
 
 class LogicConv2d(nn.Module):
@@ -129,8 +129,8 @@ class LogicConv2d(nn.Module):
 
         if self.parametrization == "raw":
             weighting_func = {
-                "soft": soft_raw,
-                "hard": hard_raw,
+                "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
+                "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
                 "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
                 "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
             }[self.forward_sampling]
@@ -161,17 +161,16 @@ class LogicConv2d(nn.Module):
                 current_level = bin_op_cnn(a, b, level_weights)
 
         elif self.parametrization == "walsh":
+            weighting_func = {
+                "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
+                "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
+                "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
+                "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
+            }[self.forward_sampling]
             level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
             current_level = bin_op_cnn_walsh(a, b, level_weights)
             if self.training:
-                if self.forward_sampling == "soft":
-                    current_level = soft_walsh(current_level, tau=self.temperature)
-                elif self.forward_sampling == "hard":
-                    current_level = hard_walsh(current_level, tau=self.temperature)
-                elif self.forward_sampling == "gumbel_soft":
-                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=False)
-                elif self.forward_sampling == "gumbel_hard":
-                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=True)
+                current_level = weighting_func(current_level)
             else:
                 current_level = (current_level > 0).to(torch.float32)
 
@@ -184,7 +183,7 @@ class LogicConv2d(nn.Module):
                 level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
                 current_level = bin_op_cnn_walsh(a, b, level_weights)
                 if self.training:
-                    current_level = torch.sigmoid(current_level / self.temperature)
+                    current_level = weighting_func(current_level)
                 else:
                     current_level = (current_level > 0).to(torch.float32)
 

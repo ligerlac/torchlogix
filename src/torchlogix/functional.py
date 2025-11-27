@@ -258,49 +258,6 @@ class GradFactor(torch.autograd.Function):
 
 ##########################################################################
 
-
-def gumbel_sigmoid_old(logits, tau=1.0, hard=False, threshold=0.5):
-
-    """
-    Samples from the Gumbel-Sigmoid distribution with an optional hard gate at the selected threshold.
-    
-    Gumbel Sigmoid is equivalent to gumbel softmax for two classes with one class being 0
-    i.e. gumbel_sigmoid = e^([a+gumbel1]/t) / [e^([a+gumbel1]/t) + e^(gumbel2/t)] = sigm([a+gumbel1-gumbel2]/t)
-
-    Args:
-      logits: `[..., num_features]` unnormalized log probabilities
-      temp: non-negative scalar temperature
-      hard: if ``True``, the returned samples will be discretized,
-            but will be differentiated as if it is the soft sample in autograd
-     threshold: threshold for the discretization,
-                values greater than this will be set to 1 and the rest to 0
-
-    Returns:
-      Sampled tensor of same shape as `logits` from the Gumbel-Sigmoid distribution.
-      If ``hard=True``, the returned samples are descretized according to `threshold`, otherwise they will
-      be probability distributions.
-
-    """
-    # Temperature must be positive.
-    if tau <= 0:
-        raise ValueError("Temperature must be positive")
-
-    # Sample Gumbel noise. The difference of two Gumbels is equivalent to a Logistic distribution.
-    gumbel_noise = Gumbel(0, 1).sample(logits.shape).to(logits.device) - \
-                   Gumbel(0, 1).sample(logits.shape).to(logits.device)
-    
-    # Apply the reparameterization trick
-    y_soft = torch.sigmoid((logits + gumbel_noise) / tau)
-
-    if hard:
-        # Straight-Through Estimator
-        y_hard = (y_soft > threshold).float()
-        return (y_hard - y_soft).detach() + y_soft
-    
-    return y_soft
-
-
-
 def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
     """
     Fast Gumbel-Sigmoid implementation using logistic noise trick.
@@ -322,23 +279,17 @@ def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
 
     return y_soft
 
-def soft_raw(logits, tau=1.0):
-    return torch.nn.functional.softmax(logits / tau, dim=-1)
+def softmax(logits, hard=False, tau=1.0):
+    y_soft = torch.nn.functional.softmax(logits / tau, dim=-1)
+    if hard:
+        index = y_soft.max(-1, keepdim=True)[1]
+        y_hard = torch.zeros_like(logits).scatter_(-1, index, 1.0)
+        return (y_hard - y_soft).detach() + y_soft
+    return y_soft
 
-def hard_raw(logits, tau=1.0):
-    x = torch.nn.functional.softmax(logits / tau, dim=-1)
-    # Straight through.
-    index = x.max(-1, keepdim=True)[1]
-    x_hard = torch.zeros_like(
-        logits, memory_format=torch.legacy_contiguous_format
-    ).scatter_(-1, index, 1.0)
-    return x_hard - x.detach() + x
-
-def soft_walsh(logits, tau=1.0):
-    return torch.sigmoid(logits / tau)
-
-def hard_walsh(logits, tau=1.0):
-    x = torch.sigmoid(logits / tau)
-    x = (x > 0.5).to(torch.float32) - x.detach() + x
-    return x
-
+def sigmoid(logits, hard=False, tau=1.0):
+    y_soft = torch.sigmoid(logits / tau)
+    if hard:
+        y_hard = (y_soft > 0.5).float()
+        return (y_hard - y_soft).detach() + y_soft
+    return y_soft
