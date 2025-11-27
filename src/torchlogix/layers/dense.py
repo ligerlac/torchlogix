@@ -166,14 +166,14 @@ class LogicDense(torch.nn.Module):
         if self.parametrization == "raw":
             if self.training:
                 if self.forward_sampling == "soft":
-                    x = softmax(self.weight, tau=self.temperature, hard=False)
+                    w = softmax(self.weight, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "hard":
-                    x = softmax(self.weight, hard=True, tau=self.temperature)
+                    w = softmax(self.weight, hard=True, tau=self.temperature)
                 elif self.forward_sampling == "gumbel_soft":
-                    x = gumbel_softmax(self.weight, tau=self.temperature, hard=False)
+                    w = gumbel_softmax(self.weight, tau=self.temperature, hard=False)
                 elif self.forward_sampling == "gumbel_hard":
-                    x = gumbel_softmax(self.weight, tau=self.temperature, hard=True)
-                x = bin_op_s(a, b, x)
+                    w = gumbel_softmax(self.weight, tau=self.temperature, hard=True)
+                x = bin_op_s(a, b, w)
             else:
                 weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
                     torch.float32

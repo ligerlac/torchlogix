@@ -173,6 +173,9 @@ class ClgnMnist(torch.nn.Sequential):
 
         super(ClgnMnist, self).__init__(*layers, GroupSum(k=10, tau=1.0))
 
+class ClgnMnistTiny(ClgnMnist):
+    def __init__(self, **llkw):
+        super(ClgnMnistTiny, self).__init__(k_num=4, **llkw)
 
 class ClgnMnistSmall(ClgnMnist):
     def __init__(self, **llkw):

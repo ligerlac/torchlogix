@@ -162,10 +162,10 @@ class LogicConv2d(nn.Module):
 
         elif self.parametrization == "walsh":
             weighting_func = {
-                "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
-                "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
-                "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
-                "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
+                "soft": lambda x: sigmoid(x, tau=self.temperature, hard=False),
+                "hard": lambda x: sigmoid(x, tau=self.temperature, hard=True),
+                "gumbel_soft": lambda x: gumbel_sigmoid(x, tau=self.temperature, hard=False),
+                "gumbel_hard": lambda x: gumbel_sigmoid(x, tau=self.temperature, hard=True),
             }[self.forward_sampling]
             level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
             current_level = bin_op_cnn_walsh(a, b, level_weights)

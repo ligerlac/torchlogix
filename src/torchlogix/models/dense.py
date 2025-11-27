@@ -40,6 +40,9 @@ class DlgnMnist(Dlgn):
             **llkw
         )
 
+class DlgnMnistTiny(DlgnMnist):
+    def __init__(self, **llkw):
+        super(DlgnMnistTiny, self).__init__(neurons_per_layer=1000, tau=1./0.1, **llkw)
 
 class DlgnMnistSmall(DlgnMnist):
     def __init__(self, **llkw):
