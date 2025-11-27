@@ -7,6 +7,8 @@ from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 from torch.nn.functional import gumbel_softmax
 
+from .initialization import initialize_weights_raw, initialize_weights_walsh
+
 from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, softmax, sigmoid, WALSH_COEFFICIENTS
 
 
@@ -34,7 +36,9 @@ class LogicConv2d(nn.Module):
         padding: int = 0,
         parametrization: str = "raw", # or 'walsh'
         temperature: float = 1.0,
-        forward_sampling: str = "soft" # or "hard", "gumbel_soft", or "gumbel_hard"
+        forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
+        weight_init_param: float = 1.0,
+        n_inputs: int = 2
     ):
         """Initialize the 2d logic convolutional layer.
 
@@ -57,6 +61,8 @@ class LogicConv2d(nn.Module):
         super().__init__()
         self.parametrization = parametrization
         self.forward_sampling = forward_sampling
+        self.n_inputs = n_inputs
+        self.weight_init_param = weight_init_param
 
         # self.tree_weights = []
         assert stride <= receptive_field_size, (
@@ -68,26 +74,9 @@ class LogicConv2d(nn.Module):
             level_weights = torch.nn.ParameterList()
             for _ in range(2**i):  # Iterate over nodes at this level
                 if self.parametrization == "raw":
-                    if weight_init == "residual":
-                        weights = torch.zeros(
-                            num_kernels, 16, device=device
-                        )  # Initialize with zeros
-                        weights[:, 3] = 5  # Set the fourth element (index 3) to 5
-                    elif weight_init == "random":
-                        weights = torch.randn(num_kernels, 16, device=device)
+                    weights = initialize_weights_raw(weight_init, num_kernels, n_inputs, weight_init_param, device)
                 elif self.parametrization == "walsh":
-                    if weight_init == "residual":
-                        # chose randomly from walsh_coefficients, but prefer id=10
-                        walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
-                        weights = walsh_coefficients_tensor[
-                            torch.randint(0, 16, (num_kernels,), device=device)
-                        ].clone()  # .clone() for safety
-                        n = num_kernels // 2
-                        # set half of weights to id=10 (pick index randomly)
-                        indices = torch.randperm(num_kernels, device=device)
-                        weights[indices[:n]] = walsh_coefficients_tensor[10]
-                    elif weight_init == "random":
-                        weights = torch.randn(num_kernels, 4, device=device) * 0.1
+                    weights = initialize_weights_walsh(weight_init, num_kernels, n_inputs, weight_init_param, device)
                 level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
         self.in_dim = _pair(in_dim)

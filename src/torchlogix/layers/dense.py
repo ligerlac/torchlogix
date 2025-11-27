@@ -8,6 +8,8 @@ from torch.nn.modules.utils import _pair
 from torch.nn.functional import gumbel_softmax
 from itertools import product
 
+from .initialization import initialize_weights_raw, initialize_weights_walsh
+
 from ..functional import (
     GradFactor,
     bin_op_s,
@@ -36,9 +38,11 @@ class LogicDense(torch.nn.Module):
         implementation: str = None,
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
+        weight_init_param: float = 1.0,
         parametrization: str = "raw",  # "raw" or "walsh"
         temperature: float = 1.0,
-        forward_sampling: str = "soft"  # "soft", "hard", "gumbel_soft", "gumbel_hard"
+        forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
+        n_inputs: int = 2,
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -54,37 +58,15 @@ class LogicDense(torch.nn.Module):
         self.temperature = temperature
         self.forward_sampling = forward_sampling
         self.weight_init = weight_init
-
+        self.weight_init_param = weight_init_param#
+        self.n_inputs = n_inputs
+        self.n_exp = 1 << n_inputs
         if self.parametrization == "raw":
-            if weight_init == "residual":
-                # all weights to 0 except for weight number 3, which is set to 5
-                weights = torch.zeros((out_dim, 16), device=device)
-                weights[:, 3] = 5.0
-                self.weight = torch.nn.parameter.Parameter(weights)
-            elif weight_init == "random":
-                self.weight = torch.nn.parameter.Parameter(
-                    torch.randn(out_dim, 16, device=device)
-                )
-            else:
-                raise ValueError(weight_init)
+            weights = initialize_weights_raw(weight_init, out_dim, n_inputs, weight_init_param, device)
+            self.weight = torch.nn.Parameter(weights)
         elif self.parametrization in ["walsh"]:
-            if weight_init == "residual":
-                # chose randomly from walsh_coefficients, but prefer id=10
-                walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
-                weights = walsh_coefficients_tensor[
-                    torch.randint(0, 16, (out_dim,), device=device)
-                ]
-                n = out_dim // 2
-                # set half of weights to id=10 (pick index randomly)
-                indices = torch.randperm(out_dim, device=device)
-                weights[indices[:n]] = walsh_coefficients_tensor[10]
-                self.weight = torch.nn.parameter.Parameter(weights)
-            elif weight_init == "random":
-                self.weight = torch.nn.parameter.Parameter(
-                    torch.randn(out_dim, 4, device=device) * 0.1
-                )
-            else:
-                raise ValueError(weight_init)
+            weights = initialize_weights_walsh(weight_init, out_dim, n_inputs, weight_init_param, device)
+            self.weight = torch.nn.Parameter(weights)
         else:
             raise ValueError(self.parametrization)
         

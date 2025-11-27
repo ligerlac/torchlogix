@@ -15,6 +15,8 @@ def get_model(args):
         "forward_sampling": args.forward_sampling,
         "temperature": args.temperature,
         "weight_init": args.weight_init,
+        "weight_init_param": args.weight_init_param,
+        "n_inputs": args.n_inputs,
     }
     model_cls = torchlogix.models.__dict__[args.architecture]
     model = model_cls(**llkw)
