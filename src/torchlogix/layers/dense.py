@@ -58,22 +58,38 @@ class LogicDense(torch.nn.Module):
         self.temperature = temperature
         self.forward_sampling = forward_sampling
         self.weight_init = weight_init
-        self.weight_init_param = weight_init_param#
+        self.weight_init_param = weight_init_param
         self.n_inputs = n_inputs
         self.n_exp = 1 << n_inputs
         if self.parametrization == "raw":
+            assert n_inputs == 2, "Raw parametrization only supports 2 inputs."
             weights = initialize_weights_raw(weight_init, out_dim, n_inputs, weight_init_param, device)
             self.weight = torch.nn.Parameter(weights)
+            self.forward_sampling_func = {
+                "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
+                "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
+                "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
+                "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
+            }[self.forward_sampling]
         elif self.parametrization in ["walsh"]:
             weights = initialize_weights_walsh(weight_init, out_dim, n_inputs, weight_init_param, device)
             self.weight = torch.nn.Parameter(weights)
+            self.forward_sampling_func = {
+                "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
+                "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
+                "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
+                "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
+            }[self.forward_sampling]
         else:
             raise ValueError(self.parametrization)
-        
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.device = device
         self.grad_factor = grad_factor
+        idx = torch.arange(self.n_exp, device=self.device)
+        bits = ((idx.unsqueeze(1) >> torch.arange(self.n_inputs, device=self.device)) & 1)
+        bits = bits.flip(1).view(1, 1, self.n_exp, self.n_inputs)
+        self.register_buffer("bits", bits.to(torch.float))
 
         """
         The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only
@@ -91,7 +107,7 @@ class LogicDense(torch.nn.Module):
         self.connections = connections
         assert self.connections in ["random", "unique"], self.connections
         self.indices = self.get_connections(self.connections, device)
-
+        self.indices_T = self.indices.transpose(0, 1)
         if self.implementation == "cuda":
             """
             Defining additional indices for improving the efficiency of the backward of the CUDA implementation.
@@ -142,44 +158,37 @@ class LogicDense(torch.nn.Module):
 
     def forward_python(self, x):
         assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
-        if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
+        """if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
             self.indices = self.indices[0].long(), self.indices[1].long()
-        a, b = x[..., self.indices[0]], x[..., self.indices[1]]
+        a, b = x[..., self.indices[0]], x[..., self.indices[1]]"""
+        self.indices = self.indices.long()
+
         if self.parametrization == "raw":
+            a, b = x[..., self.indices[0]], x[..., self.indices[1]]
             if self.training:
-                if self.forward_sampling == "soft":
-                    w = softmax(self.weight, tau=self.temperature, hard=False)
-                elif self.forward_sampling == "hard":
-                    w = softmax(self.weight, hard=True, tau=self.temperature)
-                elif self.forward_sampling == "gumbel_soft":
-                    w = gumbel_softmax(self.weight, tau=self.temperature, hard=False)
-                elif self.forward_sampling == "gumbel_hard":
-                    w = gumbel_softmax(self.weight, tau=self.temperature, hard=True)
+                w = self.forward_sampling_func(self.weight)
                 x = bin_op_s(a, b, w)
             else:
-                weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 16).to(
+                weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.n_exp).to(
                     torch.float32
                 )
                 x = bin_op_s(a, b, weights)
         elif self.parametrization == "walsh":
-            A = 2 * a -1
+            """A = 2 * a -1
             B = 2 * b -1
             basis = torch.stack([
                 torch.ones_like(A),
                 A,
                 B,
                 A*B
-            ], dim=-1)
+            ], dim=-1)"""
+            x = 1 - 2 * x
+            x = x[..., self.indices_T]
+            bits = self.bits
+            basis = (1 - bits + bits * x.unsqueeze(-2)).prod(dim=-1)
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
-                if self.forward_sampling == "soft":
-                    x = sigmoid(x, tau=self.temperature, hard=False)
-                elif self.forward_sampling == "hard":
-                    x = sigmoid(x, tau=self.temperature, hard=True)
-                elif self.forward_sampling == "gumbel_soft":
-                    x = gumbel_sigmoid(x, tau=self.temperature, hard=False)
-                elif self.forward_sampling == "gumbel_hard":
-                    x = gumbel_sigmoid(x, tau=self.temperature, hard=True)
+                x = self.forward_sampling_func(x)
             else:
                 x = (x > 0).to(torch.float32)
         return x
@@ -240,13 +249,15 @@ class LogicDense(torch.nn.Module):
         #                                        'number of inputs ({}) because otherwise not all inputs could be ' \
         #                                        'used or considered.'.format(self.out_dim, self.in_dim)
         if connections == "random":
-            c = torch.randperm(2 * self.out_dim) % self.in_dim
+            c = torch.randperm(self.n_inputs * self.out_dim) % self.in_dim
             c = torch.randperm(self.in_dim)[c]
-            c = c.reshape(2, self.out_dim)
-            a, b = c[0], c[1]
+            c = c.reshape(self.n_inputs, self.out_dim)
+            """a, b = c[0], c[1]
             a, b = a.to(torch.int64), b.to(torch.int64)
             a, b = a.to(device), b.to(device)
-            return a, b
+            return a, b"""
+            c = c.to(torch.int64).to(device)
+            return c
         elif connections == "unique":
             return get_unique_connections(self.in_dim, self.out_dim, device)
         else:

@@ -26,16 +26,15 @@ def initialize_weights_walsh(weight_init, out_dim, n_inputs, weight_init_param, 
         # identity representation 
         identity = 1 - 2 * ((torch.tensor(n_exp - 1) >> torch.arange(n_exp)) & 1).flip(0).to(torch.int32)
         transformed_identity = walsh_hadamard_transform(identity, n_inputs, dtype=torch.int32, device=device)
-        print(transformed_identity)
         # randomly sample indices
         indices = torch.randperm(out_dim, device=device)
-        weights[indices[:n]] = transformed_identity.to(torch.float)
+        weights[indices[:n]] = (1.0 / n_inputs) * transformed_identity.to(torch.float)
         # sample random binary representations
         samples = 1 - 2 * torch.randint(0, 2, (n, n_exp), device=device).to(torch.int32)
         # convert with wh transform
         transformed_samples = walsh_hadamard_transform(samples, n_inputs, device=device, dtype=torch.int32)
         if n < out_dim:
-            weights[indices[n:]] = transformed_samples.to(torch.float)
+            weights[indices[n:]] = (1.0 / n_inputs) * transformed_samples.to(torch.float)
         return weights
     elif weight_init == "random":
         return torch.randn(out_dim, n_exp, device=device) * 0.1
