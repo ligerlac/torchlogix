@@ -364,6 +364,10 @@ class LogicConv3d(nn.Module):
         connections: str = "random",  # or 'random-unique'
         stride: int = 1,
         padding: int = None,
+        forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
+        weight_init_param: float = 1.0,
+        n_inputs: int = 2,
+        weight_init: str = "residual",  # "residual" or "random"
     ):
         """Initialize the 3d logic convolutional layer.
 
@@ -385,6 +389,10 @@ class LogicConv3d(nn.Module):
         super().__init__()
 
         self.receptive_field_size = _triple(receptive_field_size)
+        self.forward_sampling = forward_sampling
+        self.n_inputs = n_inputs
+        self.weight_init_param = weight_init_param
+        self.weight_init = weight_init
         assert (
             (stride <= self.receptive_field_size[0]) and
             (stride <= self.receptive_field_size[1]) and
@@ -397,10 +405,10 @@ class LogicConv3d(nn.Module):
         for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
             for _ in range(2**i):  # Iterate over nodes at this level
-                weights = torch.zeros(
-                    num_kernels, 16, device=device
-                )  # Initialize with zeros
-                weights[:, 3] = 5  # Set the fourth element (index 3) to 5
+                if self.weight_init == "raw":
+                    weights = initialize_weights_raw(weight_init, num_kernels, n_inputs, weight_init_param, device)
+                if self.weight_init == "walsh":
+                    weights = initialize_weights_walsh(weight_init, num_kernels, n_inputs, weight_init_param, device)
                 # Wrap as a trainable parameter
                 level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
