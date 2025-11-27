@@ -293,3 +293,48 @@ def sigmoid(logits, hard=False, tau=1.0):
         y_hard = (y_soft > 0.5).float()
         return (y_hard - y_soft).detach() + y_soft
     return y_soft
+
+
+def fwht(x: torch.Tensor, n: int) -> torch.Tensor:
+    """
+    Fast Walsh–Hadamard transform on the last dimension.
+    x: (..., n) with n a power of 2
+    """
+    n_exp = x.size(-1)
+    y = x.reshape(-1, n_exp)  # collapse batch dims
+    for s in range(n):
+        step = 1 << s       # 2^s
+        block = step << 1   # 2^(s+1)
+
+        # shape: (batch, n / block, block)
+        y = y.view(-1, n_exp // block, block)
+
+        a = y[..., :step]
+        b = y[..., step:block]
+
+        y = torch.cat((a + b, a - b), dim=-1)  # still (batch, n/block, block)
+        y = y.reshape(-1, n_exp)
+
+    return y.view_as(x)
+
+
+def hadamard_matrix(n, dtype=torch.float32, device=None):
+    if n == 1:
+        return torch.tensor([[1.0]], dtype=dtype, device=device)
+
+    H = hadamard_matrix(n // 2, dtype=dtype, device=device)
+    top = torch.cat([H, H], dim=1)
+    bottom = torch.cat([H, -H], dim=1)
+    return torch.cat([top, bottom], dim=0)
+
+
+def walsh_hadamard_transform(x: torch.Tensor, n: int, dtype=torch.float32, device=None, fast=False) -> torch.Tensor:
+    """
+    Walsh-Hadamard transform on the last dimension.
+    x: (..., 2^n)
+    """
+    if fast:
+        return fwht(x, n)
+    else:
+        H = hadamard_matrix(1 << n, dtype=dtype, device=device)
+        return x @ H
