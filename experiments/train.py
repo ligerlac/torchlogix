@@ -194,7 +194,7 @@ def run_training(args):
             pbar.set_postfix(loss=f"{loss:.4f}", temp=f"{temperature:.4f}")
 
         # Evaluation
-        if ((i + 1) % args.eval_freq == 0) or (i == 0):
+        if (((i + 1) % args.eval_freq == 0) or (i == 0)) and args.verbose == 1:
             # if args.reg_lambda > 0.0:
             print(f"\nEvaluation at iteration {i + 1}")
 
@@ -331,7 +331,7 @@ def main():
     )
 
     parser.add_argument(
-        "--parametrization", type=str, default="raw", choices=["raw", "walsh", "anf", "walsh2"],
+        "--parametrization", type=str, default="raw", choices=["raw", "walsh"],
         help="Parametrization to use"
     )
 
@@ -368,6 +368,29 @@ def main():
     parser.add_argument(
         "--weight-init", type=str, default="residual", choices=["residual", "random"],
         help="Initialization method for model weights"
+    )
+
+    parser.add_argument(
+        "--weight-init-param", type=float, default=1.0,
+        help="Parameter for residual weight initialization. " \
+        "Raw: Corresponds to scale given to identity function times 5." \
+        "Walsh: Corresponds to percentage of LUTs initialized to identity function times 0.5."
+    )
+
+    parser.add_argument(
+        "--n-inputs", type=int, default=2, choices=[2, 4, 6],
+        help="Number of inputs to each LUT node"
+    )
+
+    parser.add_argument(
+        "--hard-basis", action="store_true", 
+        help="If True, use hard-coded basis, which is faster. " \
+        "Only works for n_inputs=2 for raw and n_inputs=2,4,6 for walsh]"
+        )
+    
+    parser.add_argument(
+        "--verbose", type=int, default=0, choices=[0, 1],
+        help="Verbosity during training, allowed only for n_inputs=2. 0 = silent, 1 = verbose"
     )
 
     args = parser.parse_args()
