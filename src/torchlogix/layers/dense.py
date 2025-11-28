@@ -15,10 +15,14 @@ from ..functional import (
     bin_op_s,
     get_unique_connections,
     gumbel_sigmoid,
+    kron_pairwise_basis,
     softmax,
     sigmoid,
     WALSH_COEFFICIENTS,
-)
+    walsh_basis_2,
+    walsh_basis_4,
+    walsh_basis_6,
+    )
 from ..packbitstensor import PackBitsTensor
 
 
@@ -43,6 +47,7 @@ class LogicDense(torch.nn.Module):
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
         n_inputs: int = 2,
+        hard_basis: bool = False  # Whether to use hard-coded basis
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -61,6 +66,7 @@ class LogicDense(torch.nn.Module):
         self.weight_init_param = weight_init_param
         self.n_inputs = n_inputs
         self.n_exp = 1 << n_inputs
+        self.hard_basis = hard_basis
         if self.parametrization == "raw":
             assert n_inputs == 2, "Raw parametrization only supports 2 inputs."
             weights = initialize_weights_raw(weight_init, out_dim, n_inputs, weight_init_param, device)
@@ -72,6 +78,7 @@ class LogicDense(torch.nn.Module):
                 "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
             }[self.forward_sampling]
         elif self.parametrization in ["walsh"]:
+            assert not (self.hard_basis and self.n_inputs not in [2, 4, 6]), "Hard basis only supports n=2 or n=4 for Walsh parametrization."
             weights = initialize_weights_walsh(weight_init, out_dim, n_inputs, weight_init_param, device)
             self.weight = torch.nn.Parameter(weights)
             self.forward_sampling_func = {
@@ -158,9 +165,6 @@ class LogicDense(torch.nn.Module):
 
     def forward_python(self, x):
         assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
-        """if self.indices[0].dtype == torch.int64 or self.indices[1].dtype == torch.int64:
-            self.indices = self.indices[0].long(), self.indices[1].long()
-        a, b = x[..., self.indices[0]], x[..., self.indices[1]]"""
         self.indices = self.indices.long()
 
         if self.parametrization == "raw":
@@ -169,28 +173,30 @@ class LogicDense(torch.nn.Module):
                 w = self.forward_sampling_func(self.weight)
                 x = bin_op_s(a, b, w)
             else:
-                weights = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.n_exp).to(
+                w = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.n_exp).to(
                     torch.float32
                 )
-                x = bin_op_s(a, b, weights)
+                x = bin_op_s(a, b, w)
         elif self.parametrization == "walsh":
-            """A = 2 * a -1
-            B = 2 * b -1
-            basis = torch.stack([
-                torch.ones_like(A),
-                A,
-                B,
-                A*B
-            ], dim=-1)"""
             x = 1 - 2 * x
-            x = x[..., self.indices_T]
-            bits = self.bits
-            basis = (1 - bits + bits * x.unsqueeze(-2)).prod(dim=-1)
+            if self.hard_basis:
+                if self.n_inputs == 2:
+                    basis = walsh_basis_2(x, self.indices)
+                elif self.n_inputs == 4:
+                    basis = walsh_basis_4(x, self.indices)
+                elif self.n_inputs == 6:
+                    basis = walsh_basis_6(x, self.indices)
+                else:
+                    raise ValueError(f"Hard basis not supported for n_inputs={self.n_inputs}")
+            else:
+                x = x[..., self.indices_T]
+                bits = self.bits
+                basis = (1 - bits + bits * x.unsqueeze(-2)).prod(dim=-1)
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
                 x = self.forward_sampling_func(x)
             else:
-                x = (x > 0).to(torch.float32)
+                x = (x > 0).to(dtype=torch.float32)
         return x
 
     def forward_cuda(self, x):
@@ -252,10 +258,6 @@ class LogicDense(torch.nn.Module):
             c = torch.randperm(self.n_inputs * self.out_dim) % self.in_dim
             c = torch.randperm(self.in_dim)[c]
             c = c.reshape(self.n_inputs, self.out_dim)
-            """a, b = c[0], c[1]
-            a, b = a.to(torch.int64), b.to(torch.int64)
-            a, b = a.to(device), b.to(device)
-            return a, b"""
             c = c.to(torch.int64).to(device)
             return c
         elif connections == "unique":

@@ -17,6 +17,7 @@ def get_model(args):
         "weight_init": args.weight_init,
         "weight_init_param": args.weight_init_param,
         "n_inputs": args.n_inputs,
+        "hard_basis": args.hard_basis
     }
     model_cls = torchlogix.models.__dict__[args.architecture]
     model = model_cls(**llkw)

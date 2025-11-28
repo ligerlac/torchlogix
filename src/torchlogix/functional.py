@@ -338,3 +338,160 @@ def walsh_hadamard_transform(x: torch.Tensor, n: int, dtype=torch.float32, devic
     else:
         H = hadamard_matrix(1 << n, dtype=dtype, device=device)
         return x @ H
+    
+# Needs to be CUDAized
+def kron_pairwise_basis(x):
+    """
+    x: (..., n) where x[...,k] is the kth scalar input
+    returns: (..., 2**n) basis vector 
+             matching EXACTLY the example:
+             [1, A] \odot [1, B] = [1, B, A, A*B]
+             etc.
+    """
+    *batch, n = x.shape
+    m = 1 << n
+    out = x.new_empty(*batch, m)
+    out[..., 0] = 1
+
+    size = 1
+    for k in range(n):
+        prev = out[..., :size]
+
+        # Create next
+        # Correct Kronecker ordering:
+        # [prev*1, prev*x_k], but interleaved rather than blocked
+        out[..., : 2*size : 2] = prev
+        out[..., 1 : 2*size : 2] = prev * x[..., k].unsqueeze(-1)
+
+        size *= 2
+
+    return out
+
+
+def walsh_basis_2(x: torch.Tensor, indices) -> torch.Tensor:
+    A, B = x[..., indices[0]], x[..., indices[1]]
+    #A = 1- 2 * a
+    #B = 1 - 2 * b
+    basis = torch.stack([
+        torch.ones_like(A),
+        B,
+        A,
+        A*B
+    ], dim=-1)
+    return basis
+
+
+def walsh_basis_3(x: torch.Tensor, indices) -> torch.Tensor:
+    A, B, C = x[..., indices[0]], x[..., indices[1]], x[..., indices[2]]
+    basis = torch.stack([
+        torch.ones_like(A),
+        C,
+        B,
+        B*C,
+        A,
+        A*C,
+        A*B,
+        A*B*C
+    ], dim=-1)
+    return basis
+
+def walsh_basis_4(x: torch.Tensor, indices) -> torch.Tensor:
+    A, B, C, D = x[..., indices[0]], x[..., indices[1]], x[..., indices[2]], x[..., indices[3]]
+    basis = torch.stack([
+        torch.ones_like(A),
+        D,
+        C,
+        C*D,
+        B,
+        B*D,
+        B*C,
+        B*C*D,
+        A,
+        A*D,
+        A*C,
+        A*C*D,
+        A*B,
+        A*B*D,
+        A*B*C,
+        A*B*C*D
+    ], dim=-1)
+    return basis
+
+
+def walsh_basis_6(x: torch.Tensor, indices) -> torch.Tensor:
+    A, B, C, D, E, F = (
+        x[..., indices[0]],
+        x[..., indices[1]],
+        x[..., indices[2]],
+        x[..., indices[3]],
+        x[..., indices[4]],
+        x[..., indices[5]],
+    )
+    basis = torch.stack([
+        torch.ones_like(A),
+        F,
+        E,
+        E*F,
+        D,
+        D*F,
+        D*E,
+        D*E*F,
+        C,
+        C*F,
+        C*E,
+        C*E*F,
+        C*D,
+        C*D*F,
+        C*D*E,
+        C*D*E*F,
+        B,
+        B*F,
+        B*E,
+        B*E*F,
+        B*D,
+        B*D*F,
+        B*D*E,
+        B*D*E*F,
+        B*C,
+        B*C*F,
+        B*C*E,
+        B*C*E*F,
+        B*C*D,
+        B*C*D*F,
+        B*C*D*E,
+        B*C*D*E*F,
+        A,
+        A*F,
+        A*E,
+        A*E*F,
+        A*D,
+        A*D*F,
+        A*D*E,
+        A*D*E*F,
+        A*C,
+        A*C*F,
+        A*C*E,
+        A*C*E*F,
+        A*C*D,
+        A*C*D*F,
+        A*C*D*E,
+        A*C*D*E*F,
+        A*B,
+        A*B*F,
+        A*B*E,
+        A*B*E*F,
+        A*B*D,
+        A*B*D*F,
+        A*B*D*E,
+        A*B*D*E*F,
+        A*B*C,
+        A*B*C*F,
+        A*B*C*E,
+        A*B*C*E*F,
+        A*B*C*D,
+        A*B*C*D*F,
+        A*B*C*D*E,
+        A*B*C*D*E*F
+    ], dim=-1)
+    return basis
+
