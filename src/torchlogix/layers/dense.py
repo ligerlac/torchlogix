@@ -47,7 +47,7 @@ class LogicDense(torch.nn.Module):
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
         n_inputs: int = 2,
-        hard_basis: bool = False  # Whether to use hard-coded basis
+        hard_basis: bool = True  # Whether to use hard-coded basis
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -166,7 +166,7 @@ class LogicDense(torch.nn.Module):
     def forward_python(self, x):
         assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
         self.indices = self.indices.long()
-
+        print(self.indices)
         if self.parametrization == "raw":
             a, b = x[..., self.indices[0]], x[..., self.indices[1]]
             if self.training:
@@ -194,9 +194,10 @@ class LogicDense(torch.nn.Module):
                 basis = (1 - bits + bits * x.unsqueeze(-2)).prod(dim=-1)
             x = (self.weight * basis).sum(dim=-1)
             if self.training:
-                x = self.forward_sampling_func(x)
+                x = self.forward_sampling_func(-x)
             else:
-                x = (x > 0).to(dtype=torch.float32)
+                # x = (x > 0).to(dtype=torch.float32)
+                x = (x < 0).to(dtype=torch.float32)
         return x
 
     def forward_cuda(self, x):
@@ -261,6 +262,8 @@ class LogicDense(torch.nn.Module):
             c = c.to(torch.int64).to(device)
             return c
         elif connections == "unique":
+            if self.n_inputs != 2:
+                raise ValueError("Unique connections only supported for n_inputs=2, not yet implemented!")
             return get_unique_connections(self.in_dim, self.out_dim, device)
         else:
             raise ValueError(connections)

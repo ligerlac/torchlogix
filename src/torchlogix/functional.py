@@ -235,11 +235,11 @@ def get_unique_connections(in_dim, out_dim, device="cuda"):
 
     a = a[:, perm].squeeze(0)
     b = b[:, perm].squeeze(0)
-
-    a, b = a.to(torch.int64), b.to(torch.int64)
-    a, b = a.to(device), b.to(device)
-    a, b = a.contiguous(), b.contiguous()
-    return a, b
+    c = torch.stack([a, b], dim=-2).to(dtype=torch.int64, device=device).contiguous()
+    #a, b = a.to(torch.int64), b.to(torch.int64)
+    #a, b = a.to(device), b.to(device)
+    #a, b = a.contiguous(), b.contiguous()
+    return c
 
 
 ##########################################################################

@@ -21,7 +21,7 @@ def test_trivial_layer():
     It should not be possible to have more than one connection (==out_dim).
     """
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
-    assert layer.indices == (0, 1) or layer.indices == (1, 0)
+    assert torch.allclose(layer.indices, torch.tensor(((0,), (1,)))) or torch.allclose(layer.indices, torch.tensor(((1,), (0,))))
     assert layer.weight.shape == (1, 16)
     with pytest.raises(AssertionError):
         LogicDense(in_dim=2, out_dim=2, **llkw)
@@ -52,7 +52,7 @@ def test_xor_model_walsh():
     """
     layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
     layer.weight.data = torch.zeros(4)
-    layer.weight.data[3] = -100
+    layer.weight.data[3] = 100
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:
