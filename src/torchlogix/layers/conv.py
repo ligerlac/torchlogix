@@ -491,6 +491,7 @@ class LogicConv2d(nn.Module):
         out = all_indices.permute(2, 0, 1, 3, 4)
         return out
 
+    @DeprecationWarning
     def get_indices_from_kernel_pairs(self, pairs_tuple):
         indices = [
             self.apply_sliding_window_pairs(pairs_tuple)

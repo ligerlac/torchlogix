@@ -189,11 +189,11 @@ def test_and_model():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -254,15 +254,15 @@ def test_and_model_walsh():
         parametrization="walsh",
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
-        and_weights = torch.tensor([-100., 50., 50., 50.]).reshape(1, 4)
+        and_weights = -torch.tensor([-100., 50., 50., 50.]).reshape(1, 4)
         # and_weights[0, 3] = 100.0  # Large value so softmax will make it close to 1
         layer.tree_weights[0][0].data = and_weights
         layer.tree_weights[0][1].data = and_weights
@@ -313,11 +313,11 @@ def test_binary_model():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
 
     # Set weights to BARELY select AND operation
     with torch.no_grad():
@@ -364,11 +364,11 @@ def test_conv_model():
             padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -424,11 +424,11 @@ def test_conv_model_rect():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
-        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0, 0], [1, 0, 0, 0]]],
+        [[[0, 1, 0, 0], [1, 1, 0, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
