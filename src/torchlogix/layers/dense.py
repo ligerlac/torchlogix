@@ -17,7 +17,8 @@ from ..functional import (
     gumbel_sigmoid,
     softmax,
     sigmoid,
-    walsh_basis_hard
+    walsh_basis_hard,
+    walsh_hadamard_transform
     )
 from ..packbitstensor import PackBitsTensor
 
@@ -255,6 +256,24 @@ class LogicDense(torch.nn.Module):
             return get_unique_connections(self.in_dim, self.out_dim, device)
         else:
             raise ValueError(connections)
+
+    def get_lut_ids(self):
+        """
+        Computes most-probable LUT for each learned set of weights.
+        Returns tuple with most probable LUTs and their IDs.
+        """
+        if self.parametrization == "raw":
+            ids = self.weight.argmax(axis=1)
+            luts = (ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1
+        elif self.parametrization == "walsh":
+            # Implement logic for walsh parametrization if needed
+            luts = walsh_hadamard_transform(self.weight, self.n_inputs)
+            luts = luts < 0
+            ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
+            ids = (ids.unsqueeze(0) * luts).sum(dim=1)
+        else:
+            raise ValueError(f"Unknown parametrization: {self.parametrization}")
+        return luts, ids
 
     def get_gate_ids(self):
         """Computes most-probable gate for each learned set of weights.

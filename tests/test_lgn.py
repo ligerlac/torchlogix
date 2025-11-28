@@ -13,6 +13,24 @@ from torchlogix.layers import GroupSum, LogicDense
 llkw = {"connections": "unique", "implementation": "python", "device": "cpu"}
 
 
+def test_get_lut_ids_xor_walsh():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer.weight.data = torch.zeros((1, 4))
+    layer.weight.data[0, 3] = 1
+    luts, ids = layer.get_lut_ids()
+    assert torch.allclose(ids, torch.tensor([6]))
+    assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 1, 1, 0]]]))
+    
+
+def test_get_lut_ids_xor():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
+    layer.weight.data = torch.zeros((1, 16))
+    layer.weight.data[0, 6] = 100
+    luts, ids = layer.get_lut_ids()
+    assert torch.allclose(ids, torch.tensor([6]))
+    assert torch.allclose(luts, torch.tensor([[[0, 1, 1, 0]]]))
+
+
 def test_trivial_layer():
     """Test a layer with minimal dimensions.
 
