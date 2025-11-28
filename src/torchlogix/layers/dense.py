@@ -42,12 +42,12 @@ class LogicDense(torch.nn.Module):
         implementation: str = None,
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
-        weight_init_param: float = 1.0,
+        residual_init_param: float = 1.0,
         parametrization: str = "raw",  # "raw" or "walsh"
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
         n_inputs: int = 2,
-        hard_basis: bool = True  # Whether to use hard-coded basis
+        arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         """
         :param in_dim:      input dimensionality of the layer
@@ -63,13 +63,13 @@ class LogicDense(torch.nn.Module):
         self.temperature = temperature
         self.forward_sampling = forward_sampling
         self.weight_init = weight_init
-        self.weight_init_param = weight_init_param
+        self.residual_init_param = residual_init_param
         self.n_inputs = n_inputs
         self.n_exp = 1 << n_inputs
-        self.hard_basis = hard_basis
+        self.arbitrary_basis = arbitrary_basis
         if self.parametrization == "raw":
             assert n_inputs == 2, "Raw parametrization only supports 2 inputs."
-            weights = initialize_weights_raw(weight_init, out_dim, n_inputs, weight_init_param, device)
+            weights = initialize_weights_raw(weight_init, out_dim, n_inputs, residual_init_param, device)
             self.weight = torch.nn.Parameter(weights)
             self.forward_sampling_func = {
                 "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
@@ -78,8 +78,8 @@ class LogicDense(torch.nn.Module):
                 "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
             }[self.forward_sampling]
         elif self.parametrization in ["walsh"]:
-            assert not (self.hard_basis and self.n_inputs not in [2, 4, 6]), "Hard basis only supports n=2 or n=4 for Walsh parametrization."
-            weights = initialize_weights_walsh(weight_init, out_dim, n_inputs, weight_init_param, device)
+            assert self.arbitrary_basis or (self.n_inputs in [2, 4, 6]), "Hard basis only supports n=2, n=4 and n=6 for Walsh parametrization."
+            weights = initialize_weights_walsh(weight_init, out_dim, n_inputs, residual_init_param, device)
             self.weight = torch.nn.Parameter(weights)
             self.forward_sampling_func = {
                 "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
@@ -166,7 +166,6 @@ class LogicDense(torch.nn.Module):
     def forward_python(self, x):
         assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
         self.indices = self.indices.long()
-        print(self.indices)
         if self.parametrization == "raw":
             a, b = x[..., self.indices[0]], x[..., self.indices[1]]
             if self.training:
@@ -179,7 +178,7 @@ class LogicDense(torch.nn.Module):
                 x = bin_op_s(a, b, w)
         elif self.parametrization == "walsh":
             x = 1 - 2 * x
-            if self.hard_basis:
+            if not self.arbitrary_basis:
                 if self.n_inputs == 2:
                     basis = walsh_basis_2(x, self.indices)
                 elif self.n_inputs == 4:
