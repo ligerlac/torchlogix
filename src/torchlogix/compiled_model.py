@@ -42,7 +42,7 @@ class CompiledLogicNet(torch.nn.Module):
         num_bits: int = 64,
         cpu_compiler: str = "gcc",
         verbose: bool = False,
-        use_bitpacking: bool = False,
+        use_bitpacking: bool = True,
     ):
         super().__init__()
         self.model = model
@@ -54,6 +54,8 @@ class CompiledLogicNet(torch.nn.Module):
 
         assert cpu_compiler in ["clang", "gcc"], cpu_compiler
         assert num_bits in [1, 8, 16, 32, 64]
+        if num_bits > 1 and not use_bitpacking:
+            raise ValueError("num_bits > 1 requires use_bitpacking=True.")
 
         # Initialize layer storage
         self.thresholding_layer = None
@@ -861,6 +863,10 @@ class CompiledLogicNet(torch.nn.Module):
         code.append("}")
 
         # Add processing function
+        print("="*60)
+        print(f"self.use_bitpacking: {self.use_bitpacking}")
+        print("="*60)
+
         if self.use_bitpacking:
             code.extend(self._generate_batch_processing_function())
         else:
