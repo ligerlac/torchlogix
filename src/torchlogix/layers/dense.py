@@ -15,13 +15,9 @@ from ..functional import (
     bin_op_s,
     get_unique_connections,
     gumbel_sigmoid,
-    kron_pairwise_basis,
     softmax,
     sigmoid,
-    WALSH_COEFFICIENTS,
-    walsh_basis_2,
-    walsh_basis_4,
-    walsh_basis_6,
+    walsh_basis_hard
     )
 from ..packbitstensor import PackBitsTensor
 
@@ -179,14 +175,7 @@ class LogicDense(torch.nn.Module):
         elif self.parametrization == "walsh":
             x = 1 - 2 * x
             if not self.arbitrary_basis:
-                if self.n_inputs == 2:
-                    basis = walsh_basis_2(x, self.indices)
-                elif self.n_inputs == 4:
-                    basis = walsh_basis_4(x, self.indices)
-                elif self.n_inputs == 6:
-                    basis = walsh_basis_6(x, self.indices)
-                else:
-                    raise ValueError(f"Hard basis not supported for n_inputs={self.n_inputs}")
+                basis = walsh_basis_hard(x, self.indices, self.n_inputs)
             else:
                 x = x[..., self.indices_T]
                 bits = self.bits

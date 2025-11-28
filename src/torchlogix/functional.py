@@ -367,9 +367,70 @@ def kron_pairwise_basis(x):
 
     return out
 
+def walsh_cnn(r, i_s):
+    i_s = i_s.unsqueeze(0).unsqueeze(2)
+    i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
+    i_s = i_s.permute(0, 3, 2, 1, 4)
+    return (r * i_s).sum(dim=-1)
 
-def walsh_basis_2(x: torch.Tensor, indices) -> torch.Tensor:
-    A, B = x[..., indices[0]], x[..., indices[1]]
+def walsh_basis_hard(x, indices, n_inputs):
+    if n_inputs == 2:
+        A, B = x[..., indices[0]], x[..., indices[1]]
+        basis = walsh_basis_2(A, B)
+    elif n_inputs == 4:
+        A, B, C, D = (x[..., indices[0]], x[..., indices[1]], 
+                        x[..., indices[2]], x[..., indices[3]]
+                        )
+        basis = walsh_basis_4(A, B, C, D)
+    elif n_inputs == 6:
+        A, B, C, D, E, F = (
+            x[..., indices[0]], x[..., indices[1]], x[..., indices[2]],
+            x[..., indices[3]], x[..., indices[4]], x[..., indices[5]],
+        )
+        basis = walsh_basis_6(A, B, C, D, E, F)
+    else:
+        raise ValueError(f"Hard basis not supported for n_inputs={n_inputs}")
+    return basis
+
+def walsh_basis_hard_cnn_first_level(x, n_inputs):
+    if n_inputs == 2:
+        A, B = x[:, 0], x[:, 1]
+        basis = walsh_basis_2(A, B)
+    elif n_inputs == 4:
+        A, B, C, D = (x[:, 0], x[:, 1], 
+                        x[:, 2], x[:, 3]
+                        )
+        basis = walsh_basis_4(A, B, C, D)
+    elif n_inputs == 6:
+        A, B, C, D, E, F = (
+            x[:, 0], x[:, 1], x[:, 2],
+            x[:, 3], x[:, 4], x[:, 5],
+        )
+        basis = walsh_basis_6(A, B, C, D, E, F)
+    else:
+        raise ValueError(f"Hard basis not supported for n_inputs={n_inputs}")
+    return basis
+
+def walsh_basis_hard_cnn_deep_level(x, n_inputs):
+    if n_inputs == 2:
+        A, B = x[..., 0,:], x[..., 1,:]
+        basis = walsh_basis_2(A, B)
+    elif n_inputs == 4:
+        A, B, C, D = (x[..., 0,:], x[..., 1,:], 
+                        x[..., 2,:], x[..., 3,:]
+                        )
+        basis = walsh_basis_4(A, B, C, D)
+    elif n_inputs == 6:
+        A, B, C, D, E, F = (
+            x[..., 0,:], x[..., 1,:], x[..., 2,:],
+            x[..., 3,:], x[..., 4,:], x[..., 5,:],
+        )
+        basis = walsh_basis_6(A, B, C, D, E, F)
+    else:
+        raise ValueError(f"Hard basis not supported for n_inputs={n_inputs}")
+    return basis
+
+def walsh_basis_2(A, B) -> torch.Tensor:
     #A = 1- 2 * a
     #B = 1 - 2 * b
     basis = torch.stack([
@@ -380,9 +441,7 @@ def walsh_basis_2(x: torch.Tensor, indices) -> torch.Tensor:
     ], dim=-1)
     return basis
 
-
-def walsh_basis_3(x: torch.Tensor, indices) -> torch.Tensor:
-    A, B, C = x[..., indices[0]], x[..., indices[1]], x[..., indices[2]]
+def walsh_basis_3(A, B, C) -> torch.Tensor:
     basis = torch.stack([
         torch.ones_like(A),
         C,
@@ -395,8 +454,7 @@ def walsh_basis_3(x: torch.Tensor, indices) -> torch.Tensor:
     ], dim=-1)
     return basis
 
-def walsh_basis_4(x: torch.Tensor, indices) -> torch.Tensor:
-    A, B, C, D = x[..., indices[0]], x[..., indices[1]], x[..., indices[2]], x[..., indices[3]]
+def walsh_basis_4(A, B, C, D) -> torch.Tensor:
     basis = torch.stack([
         torch.ones_like(A),
         D,
@@ -418,15 +476,7 @@ def walsh_basis_4(x: torch.Tensor, indices) -> torch.Tensor:
     return basis
 
 
-def walsh_basis_6(x: torch.Tensor, indices) -> torch.Tensor:
-    A, B, C, D, E, F = (
-        x[..., indices[0]],
-        x[..., indices[1]],
-        x[..., indices[2]],
-        x[..., indices[3]],
-        x[..., indices[4]],
-        x[..., indices[5]],
-    )
+def walsh_basis_6(A, B, C, D, E, F) -> torch.Tensor:
     basis = torch.stack([
         torch.ones_like(A),
         F,
