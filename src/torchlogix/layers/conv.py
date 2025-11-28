@@ -9,7 +9,7 @@ from torch.nn.functional import gumbel_softmax
 
 from .initialization import initialize_weights_raw, initialize_weights_walsh
 
-from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, softmax, sigmoid, walsh_cnn, walsh_basis_hard_cnn_first_level, walsh_basis_hard_cnn_deep_level
+from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, softmax, sigmoid, walsh_cnn, walsh_basis_hard_cnn_first_level, walsh_basis_hard_cnn_deep_level, walsh_hadamard_transform
 
 
 class LogicConv2d(nn.Module):
@@ -340,6 +340,34 @@ class LogicConv2d(nn.Module):
             base = torch.arange(size, device=self.device).view(-1, self.n_inputs).transpose(0, 1)
             indices.append(base)
         return indices
+    
+    def get_lut_ids(self):
+        """
+        Computes most-probable LUT for each learned set of weights.
+        Returns tuple with most probable LUTs and their IDs.
+        """
+        tree_ids = []
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_ids = []
+            level_luts = []
+            for w in self.tree_weights[level]:
+                if self.parametrization == "raw":
+                    ids = w.argmax(axis=1)
+                    luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+                elif self.parametrization == "walsh":
+                    # Implement logic for walsh parametrization if needed
+                    luts = walsh_hadamard_transform(w, self.n_inputs)
+                    luts = luts < 0
+                    ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
+                    ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+                else:
+                    raise ValueError(f"Unknown parametrization: {self.parametrization}")
+                level_ids.append(ids)
+                level_luts.append(luts)
+            tree_ids.append(level_ids)
+            tree_luts.append(level_luts)
+        return tree_luts, tree_ids
 
 
 class LogicConv3d(nn.Module):

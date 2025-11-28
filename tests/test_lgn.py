@@ -20,6 +20,14 @@ def test_get_lut_ids_xor_walsh():
     luts, ids = layer.get_lut_ids()
     assert torch.allclose(ids, torch.tensor([6]))
     assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 1, 1, 0]]]))
+
+
+def test_get_lut_ids_and_walsh():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
+    luts, ids = layer.get_lut_ids()
+    assert torch.allclose(ids, torch.tensor([1]))
+    assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 0, 0, 1]]]))
     
 
 def test_get_lut_ids_xor():
@@ -29,6 +37,15 @@ def test_get_lut_ids_xor():
     luts, ids = layer.get_lut_ids()
     assert torch.allclose(ids, torch.tensor([6]))
     assert torch.allclose(luts, torch.tensor([[[0, 1, 1, 0]]]))
+
+
+def test_get_lut_ids_and():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
+    layer.weight.data = torch.zeros((1, 16))
+    layer.weight.data[0, 1] = 100
+    luts, ids = layer.get_lut_ids()
+    assert torch.allclose(ids, torch.tensor([1]))
+    assert torch.allclose(luts, torch.tensor([[[0, 0, 0, 1]]]))
 
 
 def test_trivial_layer():

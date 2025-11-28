@@ -264,13 +264,13 @@ class LogicDense(torch.nn.Module):
         """
         if self.parametrization == "raw":
             ids = self.weight.argmax(axis=1)
-            luts = (ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1
+            luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
         elif self.parametrization == "walsh":
             # Implement logic for walsh parametrization if needed
             luts = walsh_hadamard_transform(self.weight, self.n_inputs)
             luts = luts < 0
             ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
-            ids = (ids.unsqueeze(0) * luts).sum(dim=1)
+            ids = (luts * ids.unsqueeze(0)).sum(dim=1)
         else:
             raise ValueError(f"Unknown parametrization: {self.parametrization}")
         return luts, ids

@@ -232,6 +232,92 @@ def test_and_model():
             expected
         )
 
+def test_get_lut_ids_and():
+    """Test the AND gate implementation.
+
+    AND is the 1-st gate:
+    - set the weights to 0, except for the 1-st element (set to some high value)
+    - test some possible inputs
+    """
+    layer = LogicConv2d(
+        in_dim=3,
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        implementation="python",
+        connections="random-unique",
+        stride=1,
+        padding=0,
+    )
+
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+
+    # Set weights to select AND operation
+    with torch.no_grad():
+        and_weights = torch.zeros(1, 16)
+        and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
+        layer.tree_weights[0][0].data = and_weights
+        layer.tree_weights[0][1].data = and_weights
+        layer.tree_weights[1][0].data = and_weights
+
+    luts, ids = layer.get_lut_ids()
+    assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[0][1].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[1][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(ids[0][0], torch.tensor([1]))
+    assert torch.allclose(ids[0][1], torch.tensor([1]))
+    assert torch.allclose(ids[1][0], torch.tensor([1]))
+    
+
+
+def test_get_lut_ids_and_walsh():
+    """Test the AND gate implementation.
+
+    AND is the 1-st gate:
+    - set the weights to 0, except for the 1-st element (set to some high value)
+    - test some possible inputs
+    """
+    layer = LogicConv2d(
+        in_dim=3,
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        implementation="python",
+        connections="random-unique",
+        stride=1,
+        padding=0,
+        parametrization="walsh",
+    )
+
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+
+    # Set weights to select AND operation
+    with torch.no_grad():
+        and_weights = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
+        layer.tree_weights[0][0].data = and_weights
+        layer.tree_weights[0][1].data = and_weights
+        layer.tree_weights[1][0].data = and_weights
+
+    luts, ids = layer.get_lut_ids()
+    assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[0][1].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[1][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(ids[0][0], torch.tensor([1]))
+    assert torch.allclose(ids[0][1], torch.tensor([1]))
+    assert torch.allclose(ids[1][0], torch.tensor([1]))
+    
 
 def test_and_model_walsh():
     """Test the AND gate implementation.
