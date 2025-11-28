@@ -36,26 +36,20 @@ class CompiledLogicNet(torch.nn.Module):
 
     def __init__(
         self,
-        model: torch.nn.Sequential = None,
+        model: torch.nn.Sequential,
+        input_shape: tuple,
         device: str = "cpu",
         num_bits: int = 64,
         cpu_compiler: str = "gcc",
         verbose: bool = False,
-        input_shape: tuple = None,
-        apply_thresholding: bool = False,
         use_bitpacking: bool = False,
-
     ):
         super().__init__()
         self.model = model
         self.device = device
         self.num_bits = num_bits
-        self.apply_thresholding = apply_thresholding
-        self.use_bitpacking = use_bitpacking
-        if apply_thresholding:
-            # can't do batch processing if thresholding is applied within the compiled network
-            self.num_bits = 1
-            self.use_bitpacking = False
+        self.apply_thresholding = False  # Will be set during _parse_model
+        self.use_bitpacking = use_bitpacking  # Store user's choice
         self.cpu_compiler = cpu_compiler
 
         assert cpu_compiler in ["clang", "gcc"], cpu_compiler
@@ -80,6 +74,22 @@ class CompiledLogicNet(torch.nn.Module):
 
     def _parse_model(self, verbose: bool):
         """Parse the model structure, handling conv, pooling, and linear layers."""
+
+        # Detect if first layer is thresholding
+        if len(self.model) > 0 and isinstance(self.model[0], LearnableThermometerThresholding):
+            self.apply_thresholding = True
+
+            # Validate bitpacking constraint
+            if self.use_bitpacking:
+                raise ValueError(
+                    "Bitpacking (use_bitpacking=True) cannot be used with thresholding layers. "
+                    "The thresholding layer requires processing one sample at a time."
+                )
+
+            # Set constraints for thresholding mode
+            self.num_bits = 1
+            self.use_bitpacking = False
+
         # Find GroupSum layer for num_classes
         for layer in self.model:
             if isinstance(layer, GroupSum):
@@ -94,27 +104,18 @@ class CompiledLogicNet(torch.nn.Module):
         # Parse all layers and track execution order
         for layer in self.model:
             if isinstance(layer, LearnableThermometerThresholding):
-                if not self.apply_thresholding:
-                    raise ValueError("If apply_thresholding is False, LearnableThermometerThresholding is not allowed.")
-                if len(self.layer_order)>0:
+                if len(self.layer_order) > 0:
                     raise ValueError("LearnableThermometerThresholding layer must appear first in layer order.")
-                if self.input_shape is None:
-                    raise ValueError(("If model begins with a LearnableThermometerThresholding layer, input_shape"
-                                      " must be specified when initializing CompiledLogicNet"))
                 thresholding_info = self._extract_thresholding_layer_info(layer)
-                self.thresholding_layer = thresholding_info # there will only be one thresholding layer
+                self.thresholding_layer = thresholding_info  # there will only be one thresholding layer
             elif isinstance(layer, LogicConv2d):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
-                if self.input_shape is None:
-                    self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1])
             elif isinstance(layer, LogicConv3d):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
-                if self.input_shape is None:
-                    self.input_shape = (layer.channels, layer.in_dim[0], layer.in_dim[1], layer.in_dim[2])
             elif isinstance(layer, OrPooling):
                 pool_info = self._extract_pooling_layer_info(layer)
                 self.pooling_layers.append(pool_info)
@@ -143,16 +144,6 @@ class CompiledLogicNet(torch.nn.Module):
         # Validate model structure
         if not self.conv_layers and not self.linear_layers:
             raise ValueError("Model must contain at least one LogicConv2d, LogicConv3d, or LogicDense layer.")
-
-        # Set input shape for linear-only models
-        if not self.conv_layers and self.linear_layers:
-            first_linear = None
-            for layer in self.model:
-                if isinstance(layer, LogicDense):
-                    first_linear = layer
-                    break
-            if first_linear and not self.apply_thresholding:
-                self.input_shape = (first_linear.in_dim,)
 
     def _extract_thresholding_layer_info(self, layer: LearnableThermometerThresholding) -> Dict[str, Any]:
         """Extract information from a thresholding layer for compilation."""
@@ -1150,7 +1141,11 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
 
     @staticmethod
     def load(save_lib_path: str, input_shape: tuple, num_classes: int = None, num_bits: int = 64):
-        """Load a compiled network from a shared library."""
+        """Load a compiled network from a shared library.
+
+        Note: input_shape is required here since we're loading a pre-compiled library
+        without access to the original model structure for inference.
+        """
         self = CompiledLogicNet(None, num_bits=num_bits)
         self.input_shape = input_shape
         self.num_classes = num_classes
