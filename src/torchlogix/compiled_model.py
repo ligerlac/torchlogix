@@ -863,10 +863,6 @@ class CompiledLogicNet(torch.nn.Module):
         code.append("}")
 
         # Add processing function
-        print("="*60)
-        print(f"self.use_bitpacking: {self.use_bitpacking}")
-        print("="*60)
-
         if self.use_bitpacking:
             code.extend(self._generate_batch_processing_function())
         else:

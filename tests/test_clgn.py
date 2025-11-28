@@ -13,7 +13,7 @@ from torchlogix import CompiledLogicNet
 
 @pytest.fixture
 def layer(
-    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections
+    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections, weight_init
 ):
     """Create instance of LogicCNNLayer."""
     params = {
@@ -27,6 +27,7 @@ def layer(
         "connections": connections,
         "stride": stride,
         "padding": padding,
+        "weight_init": weight_init
     }
     # in_dim can be an integer or a tuple of integers. be m either the int
     # itself or the min of the tuple
@@ -55,6 +56,7 @@ def layer(
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("padding", [0])
 @pytest.mark.parametrize("connections", ["random", "random-unique"])
+@pytest.mark.parametrize("weight_init", ["random", "residual"])
 class TestIndeces:
     """Test the shape and structure of layer indices.
 
@@ -672,7 +674,8 @@ def test_compiled_model_with_thresholding():
         input_shape=(3, 3),  # Input shape BEFORE thresholding
         num_bits=1,  # Thresholding requires num_bits=1
         cpu_compiler="gcc",
-        verbose=True
+        verbose=True,
+        use_bitpacking=False
     )
     compiled_model.compile(save_lib_path="compiled_thresholding_model.so", verbose=False)
 
