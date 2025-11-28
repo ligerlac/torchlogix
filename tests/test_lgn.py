@@ -60,13 +60,15 @@ def test_xor_model_walsh():
         assert np.isclose(pred, expected)
 
 
-def test_compiled_model():
+@pytest.mark.parametrize("weight_init", ["random", "residual"])
+def test_compiled_model(weight_init):
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
         LogicDense(
             in_dim=42,
             out_dim=42,
             connections="unique",
+            weight_init=weight_init,
             implementation="python",
             device="cpu",
         ),
@@ -74,6 +76,7 @@ def test_compiled_model():
             in_dim=42,
             out_dim=42,
             connections="unique",
+            weight_init=weight_init,
             implementation="python",
             device="cpu",
         ),
