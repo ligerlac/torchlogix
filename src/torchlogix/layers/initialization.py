@@ -23,8 +23,8 @@ def initialize_weights_walsh(weight_init, out_dim, n_inputs, weight_init_param, 
     if weight_init == "residual":
         n = int((out_dim * weight_init_param) // 2) % (out_dim + 1)
         weights = torch.empty((out_dim, n_exp), device=device)
-        # identity representation 
-        identity = 1 - 2 * ((torch.tensor(n_exp - 1) >> torch.arange(n_exp)) & 1).flip(0).to(torch.int32)
+        # identity representation, corresponds to Boolean function, which maps MSB (last single variable) to itself
+        identity = torch.cat([torch.zeros(n_exp // 2), torch.ones(n_exp - n_exp // 2)]).to(dtype=torch.int32, device=device)
         transformed_identity = walsh_hadamard_transform(identity, n_inputs, dtype=torch.int32, device=device)
         # randomly sample indices
         indices = torch.randperm(out_dim, device=device)
