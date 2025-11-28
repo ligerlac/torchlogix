@@ -80,7 +80,7 @@ def test_compiled_model():
         GroupSum(1),
     )
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(42,), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
 
@@ -103,7 +103,7 @@ def test_large_compiled_model():
         GroupSum(8),
     )
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(81 * k_num,), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
 

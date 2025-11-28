@@ -527,7 +527,7 @@ def test_compiled_model():
 
     model.train(False)  # Switch model to eval mode
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(1, 3, 3, 3), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
@@ -561,7 +561,7 @@ def test_compiled_model_rect():
 
     model.train(False)  # Switch model to eval mode
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(1, 3, 4, 3), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
@@ -595,7 +595,7 @@ def test_compiled_pooling_model():
 
     model.train(False)  # Switch model to eval mode
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(1, 3, 3, 3), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
