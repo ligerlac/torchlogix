@@ -606,58 +606,24 @@ class LogicConv3d(nn.Module):
         num_kernels: int = 16,
         tree_depth: int = None,
         receptive_field_size: _size_3_t = None,
-        implementation: str = None,
         connections: str = "random",  # or 'random-unique'
+        weight_init: str = "residual",  # "residual" or "random"
         stride: int = 1,
         padding: int = None,
+        temperature: float = 1.0,
         forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
         residual_init_param: float = 1.0,
         n_inputs: int = 2,
-        weight_init: str = "residual",  # "residual" or "random"
+        arbitrary_basis: bool = False  # Whether to use hard-coded basis
+    
     ):
-        """Initialize the 3d logic convolutional layer.
-
-        Args:
-            in_dim: Input dimensions (height, width, depth)
-            device: Device to run the layer on
-            grad_factor: Gradient factor for the logic operations
-            channels: Number of input channels
-            num_kernels: Number of output kernels
-            tree_depth: Depth of the binary tree
-            receptive_field_size: Size of the receptive field
-            implementation: Implementation type ("python" or "cuda")
-            connections: Connection type: "random" or "unique". The latter will overwrite
-                the tree_depth parameter and use a full binary tree of all possible connections
-                within the receptive field.
-            stride: Stride of the convolution
-            padding: Padding of the convolution
-        """
         super().__init__()
-
         self.receptive_field_size = _triple(receptive_field_size)
         self.forward_sampling = forward_sampling
         self.n_inputs = n_inputs
+        self.n_exp = 1 << n_inputs
         self.residual_init_param = residual_init_param
         self.weight_init = weight_init
-        assert (
-            (stride <= self.receptive_field_size[0]) and
-            (stride <= self.receptive_field_size[1]) and
-            (stride <= self.receptive_field_size[2])), (
-                f"Stride ({stride}) cannot be larger than receptive field size "
-                f"({receptive_field_size})"
-            )
-
-        self.tree_weights = torch.nn.ModuleList()
-        for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
-            level_weights = torch.nn.ParameterList()
-            for _ in range(2**i):  # Iterate over nodes at this level
-                if self.weight_init == "raw":
-                    weights = initialize_weights_raw(weight_init, num_kernels, n_inputs, residual_init_param, device)
-                if self.weight_init == "walsh":
-                    weights = initialize_weights_walsh(weight_init, num_kernels, n_inputs, residual_init_param, device)
-                # Wrap as a trainable parameter
-                level_weights.append(torch.nn.Parameter(weights))
-            self.tree_weights.append(level_weights)
         self.in_dim = _triple(in_dim)
         self.device = device
         self.grad_factor = grad_factor
@@ -667,6 +633,16 @@ class LogicConv3d(nn.Module):
         self.stride = stride
         self.padding = padding
         self.connections = connections
+        self.temperature = temperature
+        self.arbitrary_basis = arbitrary_basis
+        assert (
+            (stride <= self.receptive_field_size[0]) and
+            (stride <= self.receptive_field_size[1]) and
+            (stride <= self.receptive_field_size[2])), (
+                f"Stride ({stride}) cannot be larger than receptive field size "
+                f"({receptive_field_size})"
+            )
+        
         if connections == "random":
             self.kernel_pairs = self.get_random_receptive_field_pairs()
         elif connections == "random-unique":
@@ -674,7 +650,25 @@ class LogicConv3d(nn.Module):
         else:
             raise ValueError(f"Unknown connections type: {connections}")
         self.indices = self.get_indices_from_kernel_pairs(self.kernel_pairs)
+        self.tree_weights, self.forward_sampling_func = self._init_weights()
 
+    
+    def _init_weights(self):
+        tree_weights = torch.nn.ModuleList()
+        for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
+            level_weights = torch.nn.ParameterList()
+            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
+                weights = initialize_weights_raw(self.weight_init, self.num_kernels, 
+                                                 self.n_inputs, self.residual_init_param, self.device)
+                level_weights.append(torch.nn.Parameter(weights))
+            tree_weights.append(level_weights)
+        forward_sampling_func = {
+            "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
+            "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
+            "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
+            "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
+        }[self.forward_sampling]
+        return tree_weights, forward_sampling_func
 
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
