@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, LogicConv2dWalsh, OrPooling, GroupSum
+from torchlogix.layers import LogicConv2d, OrPooling, GroupSum
 from torchlogix import CompiledLogicNet
 
 
@@ -171,8 +171,9 @@ class TestIndeces:
 def test_lut_rank_walsh():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
-    layer = layer = LogicConv2dWalsh(
+    layer = layer = LogicConv2d(
         in_dim=(3, 4),
+        parametrization="walsh",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -301,8 +302,9 @@ def test_get_lut_ids_and_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2dWalsh(
+    layer = LogicConv2d(
         in_dim=3,
+        parametrization="walsh",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -342,8 +344,9 @@ def test_and_model_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2dWalsh(
+    layer = LogicConv2d(
         in_dim=3,
+        parametrization="walsh",
         device="cpu",
         channels=1,
         num_kernels=1,

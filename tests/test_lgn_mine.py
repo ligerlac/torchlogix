@@ -8,14 +8,13 @@ import pytest
 import torch
 
 from torchlogix import CompiledLogicNet
-from torchlogix.layers import GroupSum, LogicDense
+from torchlogix.layers import GroupSum, LogicDense, LogicDenseWalsh
 
 llkw = {"connections": "random-unique", "device": "cpu"}
-llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}
 
 
 def test_get_lut_ids_xor_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer = LogicDenseWalsh(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros((1, 4))
     layer.weight.data[0, 3] = 1
     luts, ids = layer.get_lut_ids()
@@ -24,7 +23,7 @@ def test_get_lut_ids_xor_walsh():
 
 
 def test_get_lut_ids_and_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer = LogicDenseWalsh(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
     luts, ids = layer.get_lut_ids()
     assert torch.allclose(ids, torch.tensor([1]))
@@ -61,22 +60,23 @@ def test_trivial_layer():
     assert layer.weight.shape == (1, 16)
     with pytest.raises(AssertionError):
         LogicDense(in_dim=2, out_dim=2, **llkw)
+    with pytest.raises(AssertionError):  # raw param should only accept lut_rank==2
+        LogicDense(in_dim=2, out_dim=1, lut_rank=4, **llkw)
 
 
+@pytest.mark.parametrize("in_dim", [2, 4, 6])
+@pytest.mark.parametrize("out_dim", [1, 2])
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
-def test_trivial_layer_walsh(lut_rank):
-    layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, parametrization="walsh", connections="random", device="cpu")
+def test_trivial_layer_walsh(lut_rank, in_dim):
+    if lut_rank > in_dim:
+        with pytest.raises(AssertionError):
+            LogicDenseWalsh(in_dim=in_dim, out_dim=1, lut_rank=lut_rank, **llkw)
+        return
+    layer = LogicDenseWalsh(in_dim=in_dim, out_dim=1, lut_rank=lut_rank, **llkw)
     assert layer.indices.shape == (lut_rank, 1)
     # the connections must be random permutation of all inputs
     assert set(layer.indices[:, 0].tolist()) == set(range(lut_rank))
     assert layer.weight.shape == (1, 2**lut_rank)
-
-
-@pytest.mark.parametrize("lut_rank", [4, 6])
-def test_in_dim_less_than_lut_rank(lut_rank):
-    """Test that an error is raised when in_dim < lut_rank."""
-    with pytest.raises(AssertionError):
-        LogicDense(in_dim=2, out_dim=1, lut_rank=lut_rank, parametrization="walsh", connections="random", device="cpu")
 
 
 def test_xor_model():
@@ -102,7 +102,7 @@ def test_xor_model_walsh():
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer = LogicDenseWalsh(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros(4)
     layer.weight.data[3] = 100
     model = torch.nn.Sequential(layer)
@@ -113,11 +113,20 @@ def test_xor_model_walsh():
 
 
 def test_lut_rank_walsh():
-    """Test scaling up to multiple inputs, that is n=4."""
+    """Test scaling up to multiple inputs, that is n=4 and n=6."""
     x = 1 - 2 * torch.rand((1, 12))
     lut_rank = 4
     out_dim = x.shape[1] // lut_rank
-    layer = LogicDense(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw_walsh)
+    layer = LogicDenseWalsh(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw)
+    luts, ids = layer.get_lut_ids()
+    assert luts.shape == (out_dim, 1 << lut_rank)
+    model = torch.nn.Sequential(layer)
+    y = model(x)
+    assert y.shape == (x.shape[0], out_dim)
+
+    lut_rank = 6
+    out_dim = x.shape[1] // lut_rank
+    layer = LogicDenseWalsh(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw)
     luts, ids = layer.get_lut_ids()
     assert luts.shape == (out_dim, 1 << lut_rank)
     model = torch.nn.Sequential(layer)
