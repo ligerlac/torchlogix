@@ -101,19 +101,20 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.layers.conv</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">,</span> <span class="n">OrPooling</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.layers.dense</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.layers.groupsum</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroupSum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.layers.thresholding</span><span class="w"> </span><span class="kn">import</span> <span class="n">LearnableThermometerThresholding</span>
 
 <span class="n">ALL_OPERATIONS</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;zero&quot;</span><span class="p">,</span> <span class="s2">&quot;and&quot;</span><span class="p">,</span> <span class="s2">&quot;not_implies&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="s2">&quot;not_implied_by&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="s2">&quot;xor&quot;</span><span class="p">,</span> <span class="s2">&quot;or&quot;</span><span class="p">,</span>
     <span class="s2">&quot;not_or&quot;</span><span class="p">,</span> <span class="s2">&quot;not_xor&quot;</span><span class="p">,</span> <span class="s2">&quot;not_b&quot;</span><span class="p">,</span> <span class="s2">&quot;implied_by&quot;</span><span class="p">,</span> <span class="s2">&quot;not_a&quot;</span><span class="p">,</span> <span class="s2">&quot;implies&quot;</span><span class="p">,</span> <span class="s2">&quot;not_and&quot;</span><span class="p">,</span> <span class="s2">&quot;one&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 
-<span class="n">BITS_TO_DTYPE</span> <span class="o">=</span> <span class="p">{</span><span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;char&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="s2">&quot;short&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;long long&quot;</span><span class="p">}</span>
-<span class="n">BITS_TO_ZERO_LITERAL</span> <span class="o">=</span> <span class="p">{</span><span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;(char) 0&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="s2">&quot;(short) 0&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;0LL&quot;</span><span class="p">}</span>
-<span class="n">BITS_TO_ONE_LITERAL</span> <span class="o">=</span> <span class="p">{</span><span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;(char) 1&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="s2">&quot;(short) 1&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;1LL&quot;</span><span class="p">}</span>
+<span class="n">BITS_TO_DTYPE</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;bool&quot;</span><span class="p">,</span> <span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;char&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="s2">&quot;short&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;long long&quot;</span><span class="p">}</span>
+<span class="n">BITS_TO_ZERO_LITERAL</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;(char) 0&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="s2">&quot;(short) 0&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;0LL&quot;</span><span class="p">}</span>
+<span class="n">BITS_TO_ONE_LITERAL</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="mi">8</span><span class="p">:</span> <span class="s2">&quot;(char) 1&quot;</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="s2">&quot;(short) 1&quot;</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="s2">&quot;1LL&quot;</span><span class="p">}</span>
 <span class="n">BITS_TO_C_DTYPE</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="mi">8</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int8</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int16</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int64</span><span class="p">,</span>
+    <span class="mi">1</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_bool</span><span class="p">,</span> <span class="mi">8</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int8</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int16</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int32</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int64</span><span class="p">,</span>
 <span class="p">}</span>
-<span class="n">BITS_TO_NP_DTYPE</span> <span class="o">=</span> <span class="p">{</span><span class="mi">8</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int16</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">}</span>
+<span class="n">BITS_TO_NP_DTYPE</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">,</span> <span class="mi">8</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int16</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">}</span>
 
 
 <div class="viewcode-block" id="CompiledLogicNet">
@@ -127,29 +128,40 @@
 <a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.CompiledLogicNet.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">,</span>
+        <span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
         <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
         <span class="n">num_bits</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
         <span class="n">cpu_compiler</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gcc&quot;</span><span class="p">,</span>
         <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">use_bitpacking</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">=</span> <span class="n">num_bits</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Will be set during _parse_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span> <span class="o">=</span> <span class="n">use_bitpacking</span>  <span class="c1"># Store user&#39;s choice</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">cpu_compiler</span> <span class="o">=</span> <span class="n">cpu_compiler</span>
 
         <span class="k">assert</span> <span class="n">cpu_compiler</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;clang&quot;</span><span class="p">,</span> <span class="s2">&quot;gcc&quot;</span><span class="p">],</span> <span class="n">cpu_compiler</span>
-        <span class="k">assert</span> <span class="n">num_bits</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">num_bits</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">num_bits</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">use_bitpacking</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;num_bits &gt; 1 requires use_bitpacking=True.&quot;</span><span class="p">)</span>
 
         <span class="c1"># Initialize layer storage</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pooling_layers</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="o">=</span> <span class="n">input_shape</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lib_fn</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># GroupSum information</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tau</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="mi">0</span>
 
         <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_parse_model</span><span class="p">(</span><span class="n">verbose</span><span class="p">)</span></div>
@@ -157,26 +169,48 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse the model structure, handling conv, pooling, and linear layers.&quot;&quot;&quot;</span>
+
+        <span class="c1"># Detect if first layer is thresholding</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">LearnableThermometerThresholding</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="c1"># Validate bitpacking constraint</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Bitpacking (use_bitpacking=True) cannot be used with thresholding layers. &quot;</span>
+                    <span class="s2">&quot;The thresholding layer requires processing one sample at a time.&quot;</span>
+                <span class="p">)</span>
+
+            <span class="c1"># Set constraints for thresholding mode</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span> <span class="o">=</span> <span class="kc">False</span>
+
         <span class="c1"># Find GroupSum layer for num_classes</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">k</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tau</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">tau</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">beta</span>
                 <span class="k">break</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;No GroupSum layer found in model&quot;</span><span class="p">)</span>
 
         <span class="c1"># Parse all layers and track execution order</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicConv2d</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LearnableThermometerThresholding</span><span class="p">):</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;LearnableThermometerThresholding layer must appear first in layer order.&quot;</span><span class="p">)</span>
+                <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_thresholding_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span> <span class="o">=</span> <span class="n">thresholding_info</span>  <span class="c1"># there will only be one thresholding layer</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicConv2d</span><span class="p">):</span>
                 <span class="n">conv_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_conv_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">conv_info</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span> <span class="n">layer</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">):</span>
                 <span class="n">conv_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_conv_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">conv_info</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span> <span class="n">layer</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">OrPooling</span><span class="p">):</span>
                 <span class="n">pool_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_pooling_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">pooling_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pool_info</span><span class="p">)</span>
@@ -192,28 +226,26 @@
                     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found Flatten layer&quot;</span><span class="p">)</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
-                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found GroupSum layer with </span><span class="si">{</span><span class="n">layer</span><span class="o">.</span><span class="n">k</span><span class="si">}</span><span class="s2"> classes&quot;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found GroupSum layer (tau=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="si">}</span><span class="s2">, beta=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="si">}</span><span class="s2">) with </span><span class="si">{</span><span class="n">layer</span><span class="o">.</span><span class="n">k</span><span class="si">}</span><span class="s2"> classes&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
                     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Warning: Unknown layer type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Parsed </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> conv, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pooling_layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> pooling, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> linear layers&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">((</span><span class="sa">f</span><span class="s2">&quot;Parsed </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="kc">None</span><span class="p">)</span><span class="si">}</span><span class="s2"> thresholding, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> conv,&quot;</span> 
+                   <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pooling_layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> pooling, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> linear layers&quot;</span><span class="p">))</span>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer execution order: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="c1"># Validate model structure</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Model must contain at least one LogicConv2d, LogicConv3d, or LogicDense layer.&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Set input shape for linear-only models</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">:</span>
-            <span class="n">first_linear</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">:</span>
-                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicDense</span><span class="p">):</span>
-                    <span class="n">first_linear</span> <span class="o">=</span> <span class="n">layer</span>
-                    <span class="k">break</span>
-            <span class="k">if</span> <span class="n">first_linear</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">first_linear</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_thresholding_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">LearnableThermometerThresholding</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract information from a thresholding layer for compilation.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;num_thresholds&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">num_thresholds</span><span class="p">,</span>
+            <span class="s1">&#39;thresholds&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">get_thresholds</span><span class="p">(),</span>
+        <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_extract_conv_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract information from a LogicConv2d or LogicConv3d layer for compilation.&quot;&quot;&quot;</span>
@@ -251,45 +283,82 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate C code for a logic gate operation.&quot;&quot;&quot;</span>
         <span class="n">operation_name</span> <span class="o">=</span> <span class="n">ALL_OPERATIONS</span><span class="p">[</span><span class="n">gate_op</span><span class="p">]</span>
 
-        <span class="k">if</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;zero&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;and&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp; </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_implies&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp; ~</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;a&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_implied_by&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2"> &amp; ~</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;b&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;xor&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> ^ </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;or&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_or&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_xor&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> ^ </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_b&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;implied_by&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_a&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;implies&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_and&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp; </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;one&quot;</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Operator </span><span class="si">{</span><span class="n">operation_name</span><span class="si">}</span><span class="s2"> unknown.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;zero&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;and&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp; </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_implies&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp; ~</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;a&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_implied_by&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2"> &amp; ~</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;b&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;xor&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> ^ </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;or&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_or&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_xor&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> ^ </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_b&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;implied_by&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_a&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;implies&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_and&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp; </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;one&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Operator </span><span class="si">{</span><span class="n">operation_name</span><span class="si">}</span><span class="s2"> unknown.&quot;</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">==</span> <span class="mi">8</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(char) (</span><span class="si">{</span><span class="n">res</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">==</span> <span class="mi">16</span><span class="p">:</span>
-            <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(short) (</span><span class="si">{</span><span class="n">res</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">==</span> <span class="mi">8</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(char) (</span><span class="si">{</span><span class="n">res</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">==</span> <span class="mi">16</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(short) (</span><span class="si">{</span><span class="n">res</span><span class="si">}</span><span class="s2">)&quot;</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;zero&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;and&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp;&amp; </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_implies&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp;&amp; !</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;a&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_implied_by&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2"> &amp;&amp; !</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;b&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;xor&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;or&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> || </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_or&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;!(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> || </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_xor&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> == </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_b&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;!</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;implied_by&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(!</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">) || </span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_a&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;!</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;implies&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(!</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">) || </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;not_and&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;!(</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2"> &amp;&amp; </span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="k">elif</span> <span class="n">operation_name</span> <span class="o">==</span> <span class="s2">&quot;one&quot;</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;~</span><span class="si">{</span><span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Operator </span><span class="si">{</span><span class="n">operation_name</span><span class="si">}</span><span class="s2"> unknown.&quot;</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">res</span></div>
 
@@ -297,7 +366,18 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_layer_output_sizes_and_shapes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Calculate output sizes and shapes for all layers in execution order.&quot;&quot;&quot;</span>
         <span class="n">layer_info</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">current_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">current_shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">)</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span>
+                <span class="n">current_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">thresholding_info</span><span class="p">[</span><span class="s1">&#39;num_thresholds&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">)</span><span class="o">==</span><span class="mi">3</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">!=</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;If the input tensor is rank 3, index 0 must be a dummy index.&quot;</span><span class="p">)</span>
+                <span class="n">current_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">thresholding_info</span><span class="p">[</span><span class="s1">&#39;num_thresholds&#39;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The thresholding layer can only accept input tensors of rank 2 or 3.&quot;</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">layer_type</span><span class="p">,</span> <span class="n">layer_idx</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
@@ -708,18 +788,46 @@
             <span class="s2">&quot;#include &lt;stdlib.h&gt;&quot;</span><span class="p">,</span>
             <span class="s2">&quot;#include &lt;stdbool.h&gt;&quot;</span><span class="p">,</span>
             <span class="s2">&quot;#include &lt;string.h&gt;&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;&quot;</span><span class="p">,</span>
-            <span class="sa">f</span><span class="s2">&quot;void logic_net(&quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> const *inp, &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out);&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;&quot;</span><span class="p">,</span>
-            <span class="sa">f</span><span class="s2">&quot;void logic_net(&quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> const *inp, &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out) </span><span class="se">{{</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;#include &lt;stdio.h&gt;&quot;</span><span class="p">,</span>
         <span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="s2">&quot;bool&quot;</span>
 
         <span class="c1"># Calculate sizes and shapes for all layers</span>
         <span class="n">layer_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calculate_layer_output_sizes_and_shapes</span><span class="p">()</span>
+        <span class="n">logic_net_inp_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_input_size</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;If the inputs are not boolean then the first layer must be a thresholding layer.&quot;</span><span class="p">)</span>
+            <span class="n">logic_net_inp_size</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span><span class="p">[</span><span class="s1">&#39;num_thresholds&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
+            <span class="n">code</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span>
+                <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;void logic_net(&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> const *inp, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> *out);&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;void logic_net(&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> const *inp, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> *out) </span><span class="se">{{</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">])</span>
+
+        <span class="k">else</span><span class="p">:</span> <span class="c1"># processing one event at a time</span>
+            <span class="n">code</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span>
+                <span class="s2">&quot;&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;void logic_net(&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;bool const inp[</span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2">], &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;bool out[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_output_size</span><span class="p">()</span><span class="si">}</span><span class="s2">]);&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;void logic_net(&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;bool const inp[</span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2">], &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;bool out[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_output_size</span><span class="p">()</span><span class="si">}</span><span class="s2">]) </span><span class="se">{{</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">])</span>
 
         <span class="c1"># Allocate intermediate buffers for non-linear layers</span>
         <span class="k">for</span> <span class="n">layer_type</span><span class="p">,</span> <span class="n">layer_idx</span><span class="p">,</span> <span class="n">output_shape</span><span class="p">,</span> <span class="n">output_size</span> <span class="ow">in</span> <span class="n">layer_info</span><span class="p">:</span>
@@ -852,9 +960,11 @@
 
         <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;}&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Add batch processing function if needed</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">:</span>
+        <span class="c1"># Add processing function</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
             <span class="n">code</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_generate_batch_processing_function</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">code</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_generate_single_processing_function</span><span class="p">())</span>
 
         <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">code</span><span class="p">)</span></div>
 
@@ -917,7 +1027,7 @@
 <span class="s2">                    res &lt;&lt;= 1;</span>
 <span class="s2">                    res += !!(out_temp_o[d] &amp; bit_mask);</span>
 <span class="s2">                </span><span class="se">}}</span>
-<span class="s2">                out[(i * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> + b) * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2"> + c] = res;</span>
+<span class="s2">                out[(i * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> + b) * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2"> + c] = (res + </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="si">}</span><span class="s2">) / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="si">}</span><span class="s2">;</span>
 <span class="s2">            </span><span class="se">}}</span>
 <span class="s2">        </span><span class="se">}}</span>
 <span class="s2">    </span><span class="se">}}</span>
@@ -927,6 +1037,98 @@
 <span class="se">}}</span>
 <span class="s2">&quot;&quot;&quot;</span>
         <span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_generate_single_processing_function</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate the processing function for the case where we want to process one event at a time.</span>
+<span class="sd">        Includes thresholding if apply_thresholding is set to True. Also includes GroupSum. </span>
+<span class="sd">        This method is meant to be the top-level method for HLS synthesis.&quot;&quot;&quot;</span>
+
+        <span class="n">input_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_input_size</span><span class="p">()</span>
+        <span class="n">num_neurons_ll</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_output_size</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span>
+            <span class="n">num_thresholds</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;num_thresholds&quot;</span><span class="p">]</span>
+            <span class="n">thresholds</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;thresholds&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="n">thresholds_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">)</span>
+            <span class="n">thresholds_c_def</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;const int thresholds[</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">)</span><span class="si">}</span><span class="s2">] = </span><span class="se">{{</span><span class="si">{</span><span class="n">thresholds_str</span><span class="si">}</span><span class="se">}}</span><span class="s2">;&quot;</span>
+        
+        <span class="n">inp_dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="k">else</span> <span class="s2">&quot;bool&quot;</span>
+        <span class="n">out_len</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span>
+        <span class="n">logic_net_out_arg</span> <span class="o">=</span> <span class="s2">&quot;out_temp&quot;</span>
+        <span class="n">out_dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+
+        <span class="n">code</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;void apply_logic_net_one_event(</span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2"> const inp[</span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">], </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="si">}</span><span class="s2"> out[</span><span class="si">{</span><span class="n">out_len</span><span class="si">}</span><span class="s2">]) </span><span class="se">{{</span>
+<span class="s2">    bool out_temp[</span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2">];&quot;&quot;&quot;</span>
+        <span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;    bool inp_temp[</span><span class="si">{</span><span class="n">input_size</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">num_thresholds</span><span class="si">}</span><span class="s2">];</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">thresholds_c_def</span><span class="si">}</span>
+
+<span class="s2">    // Convert the inputs into boolean</span>
+<span class="s2">    for (size_t t = 0; t &lt; </span><span class="si">{</span><span class="n">num_thresholds</span><span class="si">}</span><span class="s2">; t++) </span><span class="se">{{</span>
+<span class="s2">        for (size_t in_idx = 0; in_idx &lt; </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">; in_idx++)</span><span class="se">{{</span>
+<span class="s2">            size_t out_idx = t * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> + in_idx;</span>
+<span class="s2">            inp_temp[out_idx] = (inp[in_idx] &gt; thresholds[t])? 1 : 0;</span>
+<span class="s2">        </span><span class="se">}}</span>
+<span class="s2">    </span><span class="se">}}</span>
+<span class="s2">    </span>
+<span class="s2">    //run logic net</span>
+<span class="s2">    logic_net(inp_temp, </span><span class="si">{</span><span class="n">logic_net_out_arg</span><span class="si">}</span><span class="s2">);</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    //run logic net</span>
+<span class="s2">    logic_net(inp, </span><span class="si">{</span><span class="n">logic_net_out_arg</span><span class="si">}</span><span class="s2">);</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    //apply GroupSum</span>
+<span class="s2">    for (size_t c = 0; c &lt; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2">; c++) </span><span class="se">{{</span>
+<span class="s2">        </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="si">}</span><span class="s2"> sum = 0;</span>
+<span class="s2">        for(size_t a = 0; a &lt; </span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2">; a++) </span><span class="se">{{</span>
+<span class="s2">            sum += out_temp[c * </span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2"> + a];</span>
+<span class="s2">        </span><span class="se">}}</span><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="o">!=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="o">!=</span><span class="mi">1</span><span class="p">):</span>
+                <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        out[c] = (sum + </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="si">}</span><span class="s2">) / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="si">}</span><span class="s2">;</span>
+<span class="s2">    </span><span class="se">}}</span>
+<span class="se">}}</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+                <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        out[c] = sum;</span>
+<span class="s2">    </span><span class="se">}}</span>
+<span class="se">}}</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    </span>
+<span class="s2">void apply_logic_net(</span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2"> const *inp, </span><span class="si">{</span><span class="n">out_dtype</span><span class="si">}</span><span class="s2"> *out, size_t len) </span><span class="se">{{</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2"> *inp_temp = malloc(</span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2">));</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">out_dtype</span><span class="si">}</span><span class="s2"> *out_temp = malloc(</span><span class="si">{</span><span class="n">out_len</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">out_dtype</span><span class="si">}</span><span class="s2">));</span>
+
+<span class="s2">    // run inference one event at a time</span>
+<span class="s2">    for (size_t i = 0; i &lt; len; ++i) </span><span class="se">{{</span>
+<span class="s2">        for (size_t j = 0; j &lt; </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">; ++j) </span><span class="se">{{</span>
+<span class="s2">            inp_temp[j] = inp[i * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> + j];</span>
+<span class="s2">        </span><span class="se">}}</span>
+<span class="s2">        apply_logic_net_one_event(inp_temp, out_temp);</span>
+<span class="s2">        for (size_t k = 0; k &lt; </span><span class="si">{</span><span class="n">out_len</span><span class="si">}</span><span class="s2">; ++k) </span><span class="se">{{</span>
+<span class="s2">            out[i * </span><span class="si">{</span><span class="n">out_len</span><span class="si">}</span><span class="s2"> + k] = out_temp[k];</span>
+<span class="s2">        </span><span class="se">}}</span>
+<span class="s2">    </span><span class="se">}}</span>
+<span class="s2">    free(inp_temp);</span>
+<span class="s2">    free(out_temp);</span>
+<span class="se">}}</span>
+
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">code</span>
+    
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_input_size</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the total input size.&quot;&quot;&quot;</span>
@@ -986,21 +1188,16 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_setup_library_function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lib</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Setup the library function with appropriate signatures.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">:</span>
-            <span class="n">lib_fn</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">apply_logic_net</span>
-            <span class="n">lib_fn</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">lib_fn</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">ctypeslib</span><span class="o">.</span><span class="n">ndpointer</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_bool</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">ctypeslib</span><span class="o">.</span><span class="n">ndpointer</span><span class="p">(</span><span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">],</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>
-                <span class="n">ctypes</span><span class="o">.</span><span class="n">c_size_t</span><span class="p">,</span>
-            <span class="p">]</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">lib_fn</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">logic_net</span>
-            <span class="n">lib_fn</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">lib_fn</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">ctypeslib</span><span class="o">.</span><span class="n">ndpointer</span><span class="p">(</span><span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">],</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">ctypeslib</span><span class="o">.</span><span class="n">ndpointer</span><span class="p">(</span><span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">],</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>
-            <span class="p">]</span>
+        <span class="n">inp_type</span> <span class="o">=</span> <span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="k">else</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_bool</span>
+        <span class="n">out_type</span> <span class="o">=</span> <span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+
+        <span class="n">lib_fn</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">apply_logic_net</span>
+        <span class="n">lib_fn</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">lib_fn</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ctypeslib</span><span class="o">.</span><span class="n">ndpointer</span><span class="p">(</span><span class="n">inp_type</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">ctypeslib</span><span class="o">.</span><span class="n">ndpointer</span><span class="p">(</span><span class="n">out_type</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="s2">&quot;C_CONTIGUOUS&quot;</span><span class="p">),</span>
+            <span class="n">ctypes</span><span class="o">.</span><span class="n">c_size_t</span><span class="p">,</span>
+        <span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">lib_fn</span> <span class="o">=</span> <span class="n">lib_fn</span>
 
 <div class="viewcode-block" id="CompiledLogicNet.forward">
@@ -1014,17 +1211,19 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
             <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward_with_groupsum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward pass.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
+            <span class="n">batch_size_div_bits</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">)</span>
+            <span class="n">pad_len</span> <span class="o">=</span> <span class="n">batch_size_div_bits</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">-</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">[:</span><span class="n">pad_len</span><span class="p">])])</span>
+            <span class="n">n_iter</span> <span class="o">=</span> <span class="n">batch_size_div_bits</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward_direct</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">verbose</span><span class="p">)</span></div>
-
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_with_groupsum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward pass with GroupSum (batch processing).&quot;&quot;&quot;</span>
-        <span class="n">batch_size_div_bits</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">)</span>
-        <span class="n">pad_len</span> <span class="o">=</span> <span class="n">batch_size_div_bits</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">-</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">[:</span><span class="n">pad_len</span><span class="p">])])</span>
+            <span class="n">pad_len</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">n_iter</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;x.shape&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
@@ -1032,9 +1231,13 @@
         <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">BITS_TO_NP_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">])</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">lib_fn</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">batch_size_div_bits</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lib_fn</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">n_iter</span><span class="p">)</span>
 
-        <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_size_div_bits</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">batch_size_div_bits</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">n_iter</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="n">pad_len</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="p">[:</span><span class="o">-</span><span class="n">pad_len</span><span class="p">]</span>
 
@@ -1043,25 +1246,15 @@
 
         <span class="k">return</span> <span class="n">out</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_direct</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Direct forward pass without GroupSum.&quot;&quot;&quot;</span>
-        <span class="n">batch_size</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">input_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_input_size</span><span class="p">()</span>
-        <span class="n">x_flat</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">input_size</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">BITS_TO_NP_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">])</span>
-
-        <span class="n">output_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_output_size</span><span class="p">()</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">output_size</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">BITS_TO_NP_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">])</span>
-
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">lib_fn</span><span class="p">(</span><span class="n">x_flat</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
-
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-
 <div class="viewcode-block" id="CompiledLogicNet.load">
 <a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.CompiledLogicNet.load">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="n">save_lib_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">input_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load a compiled network from a shared library.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load a compiled network from a shared library.</span>
+
+<span class="sd">        Note: input_shape is required here since we&#39;re loading a pre-compiled library</span>
+<span class="sd">        without access to the original model structure for inference.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">num_bits</span><span class="o">=</span><span class="n">num_bits</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="o">=</span> <span class="n">input_shape</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">=</span> <span class="n">num_classes</span>
