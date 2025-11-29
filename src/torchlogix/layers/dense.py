@@ -83,7 +83,7 @@ class LogicDense(torch.nn.Module):
         out_dim: int,
         device: str = "cpu",
         grad_factor: float = 1.0,
-        connections: str = "random-unique",
+        connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
         residual_init_param: float = 1.0,
         temperature: float = 1.0,
