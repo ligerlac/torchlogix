@@ -19,7 +19,7 @@ def get_gate_ids(path, param="raw", model_cls=ClgnCifar10SmallRes):
         torch.load(path, map_location=torch.device('cpu'))
     )
     print(f"Model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
-    gate_ids = [l.get_gate_ids() for l in model if isinstance(l, LogicDense)]
+    gate_ids = [l.get_lut_ids()[1] for l in model if isinstance(l, LogicDense)]
     return torch.cat([ids.flatten() for ids in gate_ids])
 
 

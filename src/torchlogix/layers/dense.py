@@ -1,15 +1,9 @@
-import warnings
 
 import numpy as np
 import torch
-from rich import print
-from torch.nn.common_types import _size_2_t
-from torch.nn.modules.utils import _pair
 from torch.nn.functional import gumbel_softmax
-from itertools import product
 
 from .initialization import initialize_weights_raw, initialize_weights_walsh
-
 from ..functional import (
     GradFactor,
     bin_op_s,
@@ -25,9 +19,62 @@ from ..packbitstensor import PackBitsTensor
 
 ##########################################################################
 
+
+def setup_dense_cls(parametrization: str) -> torch.nn.Module:
+    """Factory function to select the appropriate LogicDense subclass.
+
+    Args:
+        parametrization: String specifying the LUT parametrization method.
+            Supported values are:
+            - ``"raw"``: Raw LUT-space logits.
+            - ``"walsh"``: Walsh–Hadamard basis coefficients.
+
+    Returns:
+        The corresponding LogicDense subclass.
+    """
+    if parametrization == "raw":
+        return LogicDense
+    elif parametrization == "walsh":
+        return LogicDenseWalsh
+    else:
+        raise ValueError(f"Unsupported parametrization: {parametrization}")
+
+
 class LogicDense(torch.nn.Module):
     """
-    The core module for differentiable logic gate networks. Provides a differentiable logic gate layer.
+    The core module for Weightless Neural Networks. This baseclass provides the
+    implementation of Differentiable Deep Logic Gate Networks.
+
+    Args:
+        in_dim: Number of input features (last dimension of the input tensor).
+        out_dim: Number of output neurons (logical units).
+        device: Device on which parameters and buffers are allocated
+            (e.g. ``"cpu"`` or ``"cuda"``).
+        grad_factor: Scaling factor applied to the gradient of the input using
+            ``GradFactor``. A value of 1.0 leaves gradients unchanged.
+        connections: Strategy for wiring input features to each neuron.
+            Supported values are:
+            - ``"random"``: Randomly sampled connections per neuron.
+            - ``"unique"``: Deterministic, non-overlapping connections
+                (currently only for ``n_inputs == 2``).
+        weight_init: Initialization scheme for LUT weights. Supported values:
+            - ``"residual"``: Residual-style initialization around a default LUT.
+            - ``"random"``: Fully random logits for each possible LUT.
+        residual_init_param: Scalar parameter controlling the strength of the
+            residual initialization when ``weight_init == "residual"``.
+        temperature: Temperature parameter used for (Gumbel-)Softmax sampling
+            of LUT weights during training.
+        forward_sampling: Strategy for sampling LUT weights in the forward pass.
+            Supported values:
+            - ``"soft"``: Softmax over weights (continuous relaxation).
+            - ``"hard"``: Straight-through hard selection via Softmax.
+            - ``"gumbel_soft"``: Gumbel-Softmax (continuous).
+            - ``"gumbel_hard"``: Straight-through Gumbel-Softmax (discrete).
+        n_inputs: Number of inputs per logic gate (arity of the LUT). The
+            number of possible entries in the LUT is ``2 ** n_inputs``.
+        arbitrary_basis: If True, allows a non-hardcoded basis for LUT
+            parametrization (e.g., an arbitrary Walsh basis). If False,
+            uses a fixed / hardcoded basis.
     """
 
     def __init__(
@@ -36,27 +83,15 @@ class LogicDense(torch.nn.Module):
         out_dim: int,
         device: str = "cpu",
         grad_factor: float = 1.0,
-        implementation: str = None,
         connections: str = "random",
         weight_init: str = "residual",  # "residual" or "random"
         residual_init_param: float = 1.0,
-        parametrization: str = "raw",  # "raw" or "walsh"
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
         n_inputs: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
-        """
-        :param in_dim:      input dimensionality of the layer
-        :param out_dim:     output dimensionality of the layer
-        :param device:      device (options: 'cuda' / 'cpu')
-        :param grad_factor: for deep models (>6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients
-        :param implementation: implementation to use (options: 'cuda' / 'python').
-        :param connections: method for initializing the connectivity of the logic gate net
-        """
         super().__init__()
-
-        self.parametrization = parametrization
         self.temperature = temperature
         self.forward_sampling = forward_sampling
         self.weight_init = weight_init
@@ -64,28 +99,6 @@ class LogicDense(torch.nn.Module):
         self.n_inputs = n_inputs
         self.n_exp = 1 << n_inputs
         self.arbitrary_basis = arbitrary_basis
-        if self.parametrization == "raw":
-            assert n_inputs == 2, "Raw parametrization only supports 2 inputs."
-            weights = initialize_weights_raw(weight_init, out_dim, n_inputs, residual_init_param, device)
-            self.weight = torch.nn.Parameter(weights)
-            self.forward_sampling_func = {
-                "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
-                "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
-                "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
-                "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
-            }[self.forward_sampling]
-        elif self.parametrization in ["walsh"]:
-            assert self.arbitrary_basis or (self.n_inputs in [2, 4, 6]), "Hard basis only supports n=2, n=4 and n=6 for Walsh parametrization."
-            weights = initialize_weights_walsh(weight_init, out_dim, n_inputs, residual_init_param, device)
-            self.weight = torch.nn.Parameter(weights)
-            self.forward_sampling_func = {
-                "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
-                "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
-                "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
-                "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
-            }[self.forward_sampling]
-        else:
-            raise ValueError(self.parametrization)
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.device = device
@@ -94,47 +107,304 @@ class LogicDense(torch.nn.Module):
         bits = ((idx.unsqueeze(1) >> torch.arange(self.n_inputs, device=self.device)) & 1)
         bits = bits.flip(1).view(1, 1, self.n_exp, self.n_inputs)
         self.register_buffer("bits", bits.to(torch.float))
-
-        """
-        The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only
-        available for device='cuda'. The `python` implementation exists for 2 reasons:
-        1. To provide an easy-to-understand implementation of differentiable logic gate networks
-        2. To provide a CPU implementation of differentiable logic gate networks
-        """
-        self.implementation = implementation
-        if self.implementation is None and device == "cuda":
-            self.implementation = "cuda"
-        elif self.implementation is None and device == "cpu":
-            self.implementation = "python"
-        assert self.implementation in ["cuda", "python"], self.implementation
-
+        weights, forward_sampling_func = self._init_weights()
+        self.weight = torch.nn.Parameter(weights)
+        self.forward_sampling_func = forward_sampling_func
         self.connections = connections
         assert self.connections in ["random", "unique"], self.connections
-        self.indices = self.get_connections(self.connections, device)
+        self.indices = self.get_connections(self.connections)
         self.indices_T = self.indices.transpose(0, 1)
-        if self.implementation == "cuda":
-            """
-            Defining additional indices for improving the efficiency of the backward of the CUDA implementation.
-            """
-            given_x_indices_of_y = [[] for _ in range(in_dim)]
-            indices_0_np = self.indices[0].cpu().numpy()
-            indices_1_np = self.indices[1].cpu().numpy()
-            for y in range(out_dim):
-                given_x_indices_of_y[indices_0_np[y]].append(y)
-                given_x_indices_of_y[indices_1_np[y]].append(y)
-            self.given_x_indices_of_y_start = torch.tensor(
-                np.array([0] + [len(g) for g in given_x_indices_of_y]).cumsum(),
-                device=device,
-                dtype=torch.int64,
-            )
-            self.given_x_indices_of_y = torch.tensor(
-                [item for sublist in given_x_indices_of_y for item in sublist],
-                dtype=torch.int64,
-                device=device,
-            )
-
         self.num_neurons = out_dim
         self.num_weights = out_dim
+
+    def _init_weights(self):
+        assert self.n_inputs == 2, "Raw parametrization only supports 2 inputs."
+        weights = initialize_weights_raw(self.weight_init, self.out_dim, self.n_inputs, self.residual_init_param, self.device)
+        forward_sampling_func = {
+            "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
+            "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
+            "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
+            "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
+        }[self.forward_sampling]
+        return weights, forward_sampling_func
+
+    def forward(self, x):
+        """Applies the LogicDense transformation to the input.
+
+        For each neuron, the layer:
+        1. Selects ``n_inputs`` input features according to the connection
+           pattern in ``self.indices``.
+        2. Samples (or selects) LUT weights based on ``self.weight`` and
+           ``self.forward_sampling_func``.
+        3. Evaluates the resulting binary operation via ``bin_op_s``.
+
+        Args:
+            x: Input tensor of shape ``(..., in_dim)``. The last dimension must
+                match ``self.in_dim``.
+
+        Returns:
+            A tensor of shape ``(..., out_dim)`` containing the neuron outputs.
+        """
+        assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
+        if self.grad_factor != 1.0:
+                x = GradFactor.apply(x, self.grad_factor)
+        self.indices = self.indices.long()
+        a, b = x[..., self.indices[0]], x[..., self.indices[1]]
+        if self.training:
+            w = self.forward_sampling_func(self.weight)
+            x = bin_op_s(a, b, w)
+        else:
+            w = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.n_exp).to(
+                torch.float32
+            )
+            x = bin_op_s(a, b, w)
+        return x
+
+    def extra_repr(self):
+        """Returns a string representation for printing the module.
+
+        Returns:
+            A string summarizing the input dimension, output dimension, and
+            whether the module is currently in training or evaluation mode.
+        """
+        return "{}, {}, {}".format(
+            self.in_dim, self.out_dim, "train" if self.training else "eval"
+        )
+
+    def get_connections(self, connections):
+        """Constructs input–neuron connection indices.
+
+        Each neuron takes ``n_inputs`` input features. This function returns a
+        tensor encoding which input indices are connected to which neuron.
+
+        Args:
+            connections: Strategy for building connections. Supported values:
+                - ``"random"``: Randomly sample ``n_inputs`` input indices for
+                  each of the ``out_dim`` neurons.
+                - ``"unique"``: Use a deterministic, non-overlapping pattern of
+                  connections (currently only for ``n_inputs == 2``).
+
+        Returns:
+            A tensor of shape ``(n_inputs, out_dim)`` with integer indices into
+            the last dimension of the input.
+        """
+        if connections == "random":
+            c = torch.randperm(self.n_inputs * self.out_dim) % self.in_dim
+            c = torch.randperm(self.in_dim)[c]
+            c = c.reshape(self.n_inputs, self.out_dim)
+            c = c.to(torch.int64).to(self.device)
+            return c
+        elif connections == "unique":
+            if self.n_inputs != 2:
+                raise ValueError("Unique connections only supported for n_inputs=2, not yet implemented!")
+            return get_unique_connections(self.in_dim, self.out_dim, self.device)
+        else:
+            raise ValueError(connections)
+
+    def get_lut_ids(self):
+        """Computes the most probable LUT and its ID for each neuron by choosing maximum weight over all
+        possible Boolean functions.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** n_inputs)``,
+                  where each row is the most probable LUT truth table for a
+                  neuron (entry is True for output 1, False for 0).
+                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
+                  entry is the integer ID of the corresponding LUT, obtained by
+                  interpreting its truth table as a binary number.
+        """
+        ids = self.weight.argmax(axis=1)
+        luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+        return luts, ids
+    
+
+##########################################################################
+
+
+class LogicDenseWalsh(LogicDense):
+    """Differentiable LUT network using a Walsh–Hadamard parametrization.
+
+    This subclass of :class:`LogicDense` replaces the raw LUT-space
+    parametrization with a Walsh–Hadamard basis. Instead of assigning 
+    logits to the LUT truth table directly, the weights represent Walsh 
+    coefficients, which are transformed back into a
+    Boolean truth table via a Walsh–Hadamard transform.
+
+    This representation encourages smoother optimization and exploits structure
+    inherent to Boolean functions (e.g., parity, correlations).
+
+    Args:
+        in_dim: Number of input features.
+        out_dim: Number of output logic neurons.
+        device: Device on which parameters are allocated.
+        grad_factor: Gradient scaling factor applied to the input.
+        connections: Connection pattern for inputs to neurons. Must be either
+            ``"random"`` or ``"unique"``.
+        weight_init: Weight initialization strategy. One of:
+            - ``"residual"``: initialize near an identity-like Walsh vector.
+            - ``"random"``: random Walsh coefficients.
+        residual_init_param: Scalar controlling residual initialization scale.
+        temperature: Temperature used in the sampling function.
+        forward_sampling: Sampling strategy used in the forward pass.
+            One of {``"soft"``, ``"hard"``, ``"gumbel_soft"``, ``"gumbel_hard"``}.
+        n_inputs: Arity of the Boolean function (size of LUT input).
+        arbitrary_basis: If ``True``, a flexible user-defined basis is used
+            instead of a hardcoded Walsh basis.
+    """
+
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        connections: str = "random",
+        weight_init: str = "residual",  # "residual" or "random"
+        residual_init_param: float = 1.0,
+        temperature: float = 1.0,
+        forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
+        n_inputs: int = 2,
+        arbitrary_basis: bool = False  # Whether to use hard-coded basis
+    ):
+        super().__init__(in_dim=in_dim, 
+                         out_dim=out_dim, 
+                         device=device, 
+                         grad_factor=grad_factor,
+                         connections=connections, 
+                         weight_init=weight_init, 
+                         residual_init_param=residual_init_param,
+                         temperature=temperature, 
+                         forward_sampling=forward_sampling, 
+                         n_inputs=n_inputs,
+                         arbitrary_basis=arbitrary_basis)
+
+    def _init_weights(self):
+        assert self.arbitrary_basis or (self.n_inputs in [2, 4, 6]), "Hard basis only supports n=2, n=4 and n=6 for Walsh parametrization."
+        weights = initialize_weights_walsh(self.weight_init, self.out_dim, self.n_inputs, self.residual_init_param, self.device)
+        forward_sampling_func = {
+            "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
+            "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
+            "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
+            "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
+        }[self.forward_sampling]
+        return weights, forward_sampling_func
+    
+    def forward(self, x):
+        """Applies the Walsh-based logic transformation.
+
+        The procedure is:
+
+        1. Extract input slices for each neuron according to ``self.indices``.
+        2. Convert inputs to ``{-1, +1}`` values so that Walsh basis functions
+           correspond to parity correlations.
+        3. Compute basis activations either using:
+            - a fast hardcoded Walsh basis (for n=2,4,6), or
+            - a generic basis using the precomputed ``self.bits`` tensor.
+        4. Combine basis activations with Walsh coefficients.
+        5. Perform differentiable sampling via sigmoid / Gumbel-sigmoid.
+
+        Args:
+            x: Input tensor of shape ``(..., in_dim)``.
+
+        Returns:
+            Tensor of shape ``(..., out_dim)`` containing the neuron outputs.
+        """
+        assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
+        self.indices = self.indices.long()
+        x = 1 - 2 * x
+        if not self.arbitrary_basis:
+            basis = walsh_basis_hard(x, self.indices, self.n_inputs)
+        else:
+            x = x[..., self.indices_T]
+            bits = self.bits
+            basis = (1 - bits + bits * x.unsqueeze(-2)).prod(dim=-1)
+        x = (self.weight * basis).sum(dim=-1)
+        if self.training:
+            x = self.forward_sampling_func(-x)
+        else:
+            x = (x < 0).to(dtype=torch.float32)
+        return x
+    
+    def get_lut_ids(self):
+        """Returns the most probable LUT truth tables and their integer IDs.
+
+        The Walsh coefficients are transformed into Boolean truth tables by
+        applying a Walsh–Hadamard transform and checking the sign:
+
+        - Negative output → Boolean `1`
+        - Non-negative output → Boolean `0`
+
+        This yields the most likely LUT implemented by each neuron.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2**n_inputs)``.
+                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each ID
+                  is the binary encoding of the corresponding truth table
+                  (MSB first).
+        """
+        luts = walsh_hadamard_transform(self.weight, self.n_inputs)
+        luts = luts < 0
+        ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
+        ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+        return luts, ids
+
+
+##########################################################################
+
+
+class LogicDenseCuda(LogicDense):
+    """
+    The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only
+    available for device='cuda'. The `python` implementation exists for 2 reasons:
+    1. To provide an easy-to-understand implementation of differentiable logic gate networks
+    2. To provide a CPU implementation of differentiable logic gate networks
+    """
+
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        connections: str = "random",
+        weight_init: str = "residual",  # "residual" or "random"
+        residual_init_param: float = 1.0,
+        temperature: float = 1.0,
+        forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
+        n_inputs: int = 2,
+        arbitrary_basis: bool = False  # Whether to use hard-coded basis
+    ):
+        super().__init__(in_dim=in_dim, 
+                         out_dim=out_dim, 
+                         device=device, 
+                         grad_factor=grad_factor,
+                         connections=connections, 
+                         weight_init=weight_init, 
+                         residual_init_param=residual_init_param,
+                         temperature=temperature, 
+                         forward_sampling=forward_sampling, 
+                         n_inputs=n_inputs,
+                         arbitrary_basis=arbitrary_basis)
+        # Defining additional indices for improving the efficiency 
+        # of the backward of the CUDA implementation.
+        given_x_indices_of_y = [[] for _ in range(in_dim)]
+        indices_0_np = self.indices[0].cpu().numpy()
+        indices_1_np = self.indices[1].cpu().numpy()
+        for y in range(out_dim):
+            given_x_indices_of_y[indices_0_np[y]].append(y)
+            given_x_indices_of_y[indices_1_np[y]].append(y)
+        self.given_x_indices_of_y_start = torch.tensor(
+            np.array([0] + [len(g) for g in given_x_indices_of_y]).cumsum(),
+            device=device,
+            dtype=torch.int64,
+        )
+        self.given_x_indices_of_y = torch.tensor(
+            [item for sublist in given_x_indices_of_y for item in sublist],
+            dtype=torch.int64,
+            device=device,
+        )
 
     def forward(self, x):
         if isinstance(x, PackBitsTensor):
@@ -150,45 +420,10 @@ class LogicDense(torch.nn.Module):
         else:
             if self.grad_factor != 1.0:
                 x = GradFactor.apply(x, self.grad_factor)
-
-        if self.implementation == "cuda":
-            if isinstance(x, PackBitsTensor):
+        if isinstance(x, PackBitsTensor):
                 return self.forward_cuda_eval(x)
-            return self.forward_cuda(x)
-        elif self.implementation == "python":
-            return self.forward_python(x)
-        else:
-            raise ValueError(self.implementation)
-
-    def forward_python(self, x):
-        assert x.shape[-1] == self.in_dim, (x[0].shape[-1], self.in_dim)
-        self.indices = self.indices.long()
-        if self.parametrization == "raw":
-            a, b = x[..., self.indices[0]], x[..., self.indices[1]]
-            if self.training:
-                w = self.forward_sampling_func(self.weight)
-                x = bin_op_s(a, b, w)
-            else:
-                w = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.n_exp).to(
-                    torch.float32
-                )
-                x = bin_op_s(a, b, w)
-        elif self.parametrization == "walsh":
-            x = 1 - 2 * x
-            if not self.arbitrary_basis:
-                basis = walsh_basis_hard(x, self.indices, self.n_inputs)
-            else:
-                x = x[..., self.indices_T]
-                bits = self.bits
-                basis = (1 - bits + bits * x.unsqueeze(-2)).prod(dim=-1)
-            x = (self.weight * basis).sum(dim=-1)
-            if self.training:
-                x = self.forward_sampling_func(-x)
-            else:
-                # x = (x > 0).to(dtype=torch.float32)
-                x = (x < 0).to(dtype=torch.float32)
-        return x
-
+        return self.forward_cuda(x)
+        
     def forward_cuda(self, x):
         if self.training:
             assert x.device.type == "cuda", x.device
@@ -234,105 +469,7 @@ class LogicDense(torch.nn.Module):
         x.t = torchlogix_cuda.eval(x.t, a, b, w)
 
         return x
-
-    def extra_repr(self):
-        return "{}, {}, {}".format(
-            self.in_dim, self.out_dim, "train" if self.training else "eval"
-        )
-
-    def get_connections(self, connections, device="cuda"):
-        # assert self.out_dim * 2 >= self.in_dim, 'The number of neurons ({}) must not be smaller than half of the ' \
-        #                                        'number of inputs ({}) because otherwise not all inputs could be ' \
-        #                                        'used or considered.'.format(self.out_dim, self.in_dim)
-        if connections == "random":
-            c = torch.randperm(self.n_inputs * self.out_dim) % self.in_dim
-            c = torch.randperm(self.in_dim)[c]
-            c = c.reshape(self.n_inputs, self.out_dim)
-            c = c.to(torch.int64).to(device)
-            return c
-        elif connections == "unique":
-            if self.n_inputs != 2:
-                raise ValueError("Unique connections only supported for n_inputs=2, not yet implemented!")
-            return get_unique_connections(self.in_dim, self.out_dim, device)
-        else:
-            raise ValueError(connections)
-
-    def get_lut_ids(self):
-        """
-        Computes most-probable LUT for each learned set of weights.
-        Returns tuple with most probable LUTs and their IDs.
-        """
-        if self.parametrization == "raw":
-            ids = self.weight.argmax(axis=1)
-            luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
-        elif self.parametrization == "walsh":
-            # Implement logic for walsh parametrization if needed
-            luts = walsh_hadamard_transform(self.weight, self.n_inputs)
-            luts = luts < 0
-            ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
-            ids = (luts * ids.unsqueeze(0)).sum(dim=1)
-        else:
-            raise ValueError(f"Unknown parametrization: {self.parametrization}")
-        return luts, ids
-
-    def get_gate_ids(self):
-        """Computes most-probable gate for each learned set of weights.
-        Returns tensor of most-probable gate IDs."""
-
-        assert self.parametrization in ["raw", "walsh"], \
-            f"Cannot compute gate IDs for parameterization={self.parameterization}"
-
-        if self.parametrization=="walsh":
-            n_inputs = 2
-            n_rows = 2**n_inputs
-
-            # generate all 2^n input combinations
-            binary_inputs = torch.tensor(
-                list(product([-1, 1], repeat=n_inputs)),
-                dtype=torch.float32, 
-                device=self.device
-            ) # shape: (4, 2)
-
-            # generate truth tables
-            truth_tables = (
-                (0,0,0,0), (0,0,0,1), (0,0,1,0), (0,0,1,1), (0,1,0,0), (0,1,0,1), (0,1,1,0), (0,1,1,1),
-                (1,0,0,0), (1,0,0,1), (1,0,1,0), (1,0,1,1), (1,1,0,0), (1,1,0,1), (1,1,1,0), (1,1,1,1)
-            )
-            truth_tables = torch.tensor(truth_tables, dtype=torch.float32, device=self.device)
-
-
-            num_gates, num_coeffs = self.weight.shape
-            assert num_coeffs == 1 + n_inputs + (n_inputs*(n_inputs-1))//2, \
-                f"Unexpected param shape {self.weight.shape} for n_inputs={n_inputs}"
-            
-            # bias term
-            linear_preds = self.weight[:, 0].unsqueeze(1).expand(-1, n_rows)  # shape: (16, 4)
-
-            # add linear terms
-            for i in range(n_inputs):
-                linear_preds = linear_preds + self.weight[:, i+1].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0)
-
-            # add pairwise product terms
-            idx = n_inputs+1
-            for i in range(n_inputs):
-                for j in range(i+1, n_inputs):
-                    linear_preds += (self.weight[:, idx].unsqueeze(1) * binary_inputs[:, i].unsqueeze(0) 
-                                    * binary_inputs[:, j].unsqueeze(0))
-                    idx +=1
-
-            preds = (linear_preds > 0.0).float() # shape: (16, 4)
-            dists = (preds.unsqueeze(1) != truth_tables.unsqueeze(0)).sum(dim=-1)
-            ids = dists.argmin(axis=1) # index of closest truth table
-        
-        else: 
-            ids = self.weight.argmax(axis=1)
-
-        return ids
-
-
-
-##########################################################################
-
+    
 
 class LogicDenseCudaFunction(torch.autograd.Function):
     @staticmethod

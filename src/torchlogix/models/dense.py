@@ -1,6 +1,6 @@
 import torch
 
-from ..layers import GroupSum, LogicDense
+from ..layers import GroupSum, setup_dense_cls
 
 
 class Dlgn(torch.nn.Sequential):
@@ -9,16 +9,17 @@ class Dlgn(torch.nn.Sequential):
     'Deep Differentiable Logic Gate Networks'.
     """
     def __init__(
-        self, in_dim: int, n_layers: int, neurons_per_layer: int, class_count: int, tau: float, **llkw
+        self, parametrization: str, in_dim: int, n_layers: int, neurons_per_layer: int, class_count: int, tau: float, **llkw
     ):
         super(Dlgn, self).__init__()
         layers = [torch.nn.Flatten()]
+        dense_cls = setup_dense_cls(parametrization)
         layers.append(
-            LogicDense(in_dim=in_dim, out_dim=neurons_per_layer, **llkw)
+            dense_cls(in_dim=in_dim, out_dim=neurons_per_layer, **llkw)
         )
         for _ in range(n_layers - 1):
             layers.append(
-                LogicDense(in_dim=neurons_per_layer, out_dim=neurons_per_layer, **llkw)
+                dense_cls(in_dim=neurons_per_layer, out_dim=neurons_per_layer, **llkw)
             )
         super(Dlgn, self).__init__(*layers, GroupSum(class_count, tau))
 

@@ -8,13 +8,13 @@ import pytest
 import torch
 
 from torchlogix import CompiledLogicNet
-from torchlogix.layers import GroupSum, LogicDense
+from torchlogix.layers import GroupSum, LogicDense, LogicDenseWalsh
 
-llkw = {"connections": "unique", "implementation": "python", "device": "cpu"}
+llkw = {"connections": "unique", "device": "cpu"}
 
 
 def test_get_lut_ids_xor_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer = LogicDenseWalsh(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros((1, 4))
     layer.weight.data[0, 3] = 1
     luts, ids = layer.get_lut_ids()
@@ -23,7 +23,7 @@ def test_get_lut_ids_xor_walsh():
 
 
 def test_get_lut_ids_and_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer = LogicDenseWalsh(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
     luts, ids = layer.get_lut_ids()
     assert torch.allclose(ids, torch.tensor([1]))
@@ -85,7 +85,7 @@ def test_xor_model_walsh():
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer = LogicDenseWalsh(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros(4)
     layer.weight.data[3] = 100
     model = torch.nn.Sequential(layer)
@@ -102,14 +102,12 @@ def test_compiled_model():
             in_dim=42,
             out_dim=42,
             connections="unique",
-            implementation="python",
             device="cpu",
         ),
         LogicDense(
             in_dim=42,
             out_dim=42,
             connections="unique",
-            implementation="python",
             device="cpu",
         ),
         GroupSum(1),
@@ -132,9 +130,9 @@ def test_large_compiled_model():
     """Test model compilation and inference."""
     k_num = 16
     model = torch.nn.Sequential(
-        LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu", implementation="python"),
-        LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu", implementation="python"),
-        LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu", implementation="python"),
+        LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu"),
+        LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu"),
+        LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu"),
         GroupSum(8),
     )
     compiled_model = CompiledLogicNet(

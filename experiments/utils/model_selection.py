@@ -9,9 +9,7 @@ def get_model(args):
     """
     llkw = {
         "connections": args.connections,
-        "implementation": args.implementation,
         "device": args.device,
-        "parametrization": args.parametrization,
         "forward_sampling": args.forward_sampling,
         "temperature": args.temperature,
         "weight_init": args.weight_init,
@@ -20,7 +18,7 @@ def get_model(args):
         "arbitrary_basis": args.arbitrary_basis
     }
     model_cls = torchlogix.models.__dict__[args.architecture]
-    model = model_cls(**llkw)
+    model = model_cls(parametrization=args.parametrization, **llkw)
 
     model = model.to(llkw["device"])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
