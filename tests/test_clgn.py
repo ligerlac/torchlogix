@@ -7,13 +7,13 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, OrPooling, GroupSum
+from torchlogix.layers import LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
 from torchlogix import CompiledLogicNet
 
 
 @pytest.fixture
 def layer(
-    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections
+    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections, weight_init
 ):
     """Create instance of LogicCNNLayer."""
     params = {
@@ -27,6 +27,7 @@ def layer(
         "connections": connections,
         "stride": stride,
         "padding": padding,
+        "weight_init": weight_init
     }
     # in_dim can be an integer or a tuple of integers. be m either the int
     # itself or the min of the tuple
@@ -55,6 +56,7 @@ def layer(
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("padding", [0])
 @pytest.mark.parametrize("connections", ["random", "random-unique"])
+@pytest.mark.parametrize("weight_init", ["random", "residual"])
 class TestIndeces:
     """Test the shape and structure of layer indices.
 
@@ -496,7 +498,7 @@ def test_compiled_model():
 
     model.train(False)  # Switch model to eval mode
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(1, 3, 3), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
@@ -537,7 +539,7 @@ def test_compiled_model_rect():
 
     model.train(False)  # Switch model to eval mode
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(1, 3, 4), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
@@ -615,7 +617,7 @@ def test_compiled_pooling_model():
 
     model.train(False)  # Switch model to eval mode
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(1, 3, 3), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
 
@@ -630,4 +632,102 @@ def test_compiled_pooling_model():
     # print(c_code)
 
     assert np.allclose(preds, preds_compiled)
+
+
+def test_compiled_model_with_thresholding():
+    """Test model compilation and inference with LearnableThermometerThresholding."""
+    # Create thresholding layer with frozen thresholds
+    thresholds = [10, 20, 30, 40, 50]  # 5 thresholds
+    thresholding_layer = LearnableThermometerThresholding(init_thresholds=thresholds)
+    thresholding_layer.freeze_thresholds()  # Freeze to make deterministic
+
+    # Create a simple model: Thresholding -> Conv -> Flatten -> GroupSum
+    model = torch.nn.Sequential(
+        thresholding_layer,
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=5,  # Must match number of thresholds
+            num_kernels=2,
+            tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+        ),
+        torch.nn.Flatten(),
+        GroupSum(2),  # 2 classes
+    )
+
+    model.train(False)  # Switch model to eval mode
+
+    # Test with integer input (will be thresholded)
+    X = torch.randint(0, 60, (8, 3, 3)).float()  # 8 samples of shape (3, 3)
+
+    # Get predictions from original model
+    preds = model(X)
+
+    # Compile the model (no need to specify apply_thresholding - auto-detected!)
+    compiled_model = CompiledLogicNet(
+        model=model,
+        input_shape=(3, 3),  # Input shape BEFORE thresholding
+        num_bits=1,  # Thresholding requires num_bits=1
+        cpu_compiler="gcc",
+        verbose=True,
+        use_bitpacking=False
+    )
+    compiled_model.compile(save_lib_path="compiled_thresholding_model.so", verbose=False)
+
+    # Get predictions from compiled model
+    # Note: compiled model expects integer input (will be thresholded internally)
+    preds_compiled = compiled_model(X.int().numpy())
+
+    print(f"Original predictions:\n{preds}")
+    print(f"Compiled predictions:\n{preds_compiled}")
+
+    # Verify outputs match
+    assert np.allclose(preds.numpy(), preds_compiled, atol=1e-5), \
+        "Compiled model with thresholding predictions do not match original model"
+
+
+def test_thresholding_with_bitpacking_raises_error():
+    """Test that combining thresholding with bitpacking raises an error."""
+    # Create thresholding layer
+    thresholds = [10, 20, 30]
+    thresholding_layer = LearnableThermometerThresholding(init_thresholds=thresholds)
+    thresholding_layer.freeze_thresholds()
+
+    # Create a simple model with thresholding
+    model = torch.nn.Sequential(
+        thresholding_layer,
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=3,
+            num_kernels=1,
+            tree_depth=1,
+            receptive_field_size=2,
+            implementation="python",
+            connections="random-unique",
+            stride=1,
+            padding=0,
+        ),
+        torch.nn.Flatten(),
+        GroupSum(1),
+    )
+
+    model.train(False)
+
+    # Attempt to create CompiledLogicNet with use_bitpacking=True
+    # This should raise a ValueError
+    with pytest.raises(ValueError, match="Bitpacking.*cannot be used with thresholding"):
+        compiled_model = CompiledLogicNet(
+            model=model,
+            input_shape=(3, 3),
+            use_bitpacking=True,  # This should trigger an error!
+            num_bits=8,
+            cpu_compiler="gcc",
+            verbose=False
+        )
 
