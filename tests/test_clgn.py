@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, OrPooling, GroupSum
+from torchlogix.layers import LogicConv2d, LogicConv2dWalsh, OrPooling, GroupSum
 from torchlogix import CompiledLogicNet
 
 
@@ -23,7 +23,6 @@ def layer(
         "num_kernels": num_kernels,
         "tree_depth": tree_depth,
         "receptive_field_size": receptive_field_size,
-        "implementation": "python",
         "connections": connections,
         "stride": stride,
         "padding": padding,
@@ -183,7 +182,6 @@ def test_and_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
@@ -246,7 +244,6 @@ def test_get_lut_ids_and():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
@@ -283,18 +280,16 @@ def test_get_lut_ids_and_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2d(
+    layer = LogicConv2dWalsh(
         in_dim=3,
         device="cpu",
         channels=1,
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
-        parametrization="walsh",
     )
 
     kernels = torch.tensor([
@@ -326,18 +321,16 @@ def test_and_model_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2d(
+    layer = LogicConv2dWalsh(
         in_dim=3,
         device="cpu",
         channels=1,
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
-        parametrization="walsh",
     )
 
     kernels = torch.tensor([
@@ -393,7 +386,6 @@ def test_binary_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
@@ -443,11 +435,10 @@ def test_conv_model():
         channels=1,
         num_kernels=1,
         tree_depth=1,
-            receptive_field_size=2,
-            implementation="python",
-            connections="random-unique",
-            stride=1,
-            padding=0,
+        receptive_field_size=2,
+        connections="random-unique",
+        stride=1,
+        padding=0,
     )
 
     kernels = torch.tensor([
@@ -504,7 +495,6 @@ def test_conv_model_rect():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
@@ -571,7 +561,6 @@ def test_compiled_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
             connections="random-unique",
             stride=1,
             padding=0,
@@ -612,7 +601,6 @@ def test_compiled_model_rect():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
             connections="random-unique",
             stride=1,
             padding=0,
@@ -689,7 +677,6 @@ def test_compiled_pooling_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
             connections="random-unique",
             stride=1,
             padding=0,

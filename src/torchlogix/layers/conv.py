@@ -11,6 +11,28 @@ from .initialization import initialize_weights_raw, initialize_weights_walsh
 
 from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, softmax, sigmoid, walsh_cnn, walsh_basis_hard_cnn_first_level, walsh_basis_hard_cnn_deep_level, walsh_hadamard_transform
 
+##########################################################################
+
+
+def setup_cnn_cls(parametrization: str) -> torch.nn.Module:
+    """Factory function to select the appropriate LogicConv2d subclass.
+
+    Args:
+        parametrization: String specifying the LUT parametrization method.
+            Supported values are:
+            - ``"raw"``: Raw LUT-space logits.
+            - ``"walsh"``: Walsh–Hadamard basis coefficients.
+
+    Returns:
+        The corresponding LogicDense subclass.
+    """
+    if parametrization == "raw":
+        return LogicConv2d
+    elif parametrization == "walsh":
+        return LogicConv2dWalsh
+    else:
+        raise ValueError(f"Unsupported parametrization: {parametrization}")
+    
 
 class LogicConv2d(nn.Module):
     """2d convolutional layer with differentiable logic operations.
@@ -29,12 +51,10 @@ class LogicConv2d(nn.Module):
         num_kernels: int = 16,
         tree_depth: int = None,
         receptive_field_size: int = None,
-        implementation: str = None,  # "python" or "cuda"
         connections: str = "random",  # or 'random-unique'
         weight_init: str = "residual",  # "residual" or "random"
         stride: int = 1,
         padding: int = 0,
-        parametrization: str = "raw", # or 'walsh'
         temperature: float = 1.0,
         forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
         residual_init_param: float = 1.0,
@@ -60,26 +80,16 @@ class LogicConv2d(nn.Module):
             parametrization: Parametrization to use ("raw" or "walsh")
         """
         super().__init__()
-        self.parametrization = parametrization
         self.forward_sampling = forward_sampling
         self.n_inputs = n_inputs
+        self.n_exp = 1 << n_inputs
         self.residual_init_param = residual_init_param
-
-        # self.tree_weights = []
         assert stride <= receptive_field_size, (
             f"Stride ({stride}) cannot be larger than receptive field size "
             f"({receptive_field_size})."
         )
-        self.tree_weights = torch.nn.ModuleList()
-        for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
-            level_weights = torch.nn.ParameterList()
-            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
-                if self.parametrization == "raw":
-                    weights = initialize_weights_raw(weight_init, num_kernels, n_inputs, residual_init_param, device)
-                elif self.parametrization == "walsh":
-                    weights = initialize_weights_walsh(weight_init, num_kernels, n_inputs, residual_init_param, device)
-                level_weights.append(torch.nn.Parameter(weights))
-            self.tree_weights.append(level_weights)
+        self.tree_depth = tree_depth
+        self.weight_init = weight_init
         self.in_dim = _pair(in_dim)
         self.device = device
         self.grad_factor = grad_factor
@@ -100,98 +110,71 @@ class LogicConv2d(nn.Module):
         self.indices = self.get_indices_from_kernel_tensor(self.kernels)
         self.temperature = temperature
         self.arbitrary_basis = arbitrary_basis
+        self.tree_weights, self.forward_sampling_func = self._init_weights()
 
+    def _init_weights(self):
+        tree_weights = torch.nn.ModuleList()
+        for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
+            level_weights = torch.nn.ParameterList()
+            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
+                weights = initialize_weights_raw(self.weight_init, self.num_kernels, 
+                                                 self.n_inputs, self.residual_init_param, self.device)
+                level_weights.append(torch.nn.Parameter(weights))
+            tree_weights.append(level_weights)
+        forward_sampling_func = {
+            "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
+            "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
+            "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
+            "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
+        }[self.forward_sampling]
+        return tree_weights, forward_sampling_func
 
     def forward(self, x):
         """Implement the binary tree using the pre-selected indices."""
-        current_level = x
         if self.padding > 0:
-            current_level = torch.nn.functional.pad(
-                current_level,
+            x = torch.nn.functional.pad(
+                x,
                 (self.padding, self.padding, self.padding, self.padding, 0, 0),
                 mode="constant",
                 value=0
             )
         # first level tree indices
         ind_h, ind_w, ind_c = self.indices[0][...,0], self.indices[0][...,1], self.indices[0][...,2]
-        current_level = current_level[:, ind_c, ind_h, ind_w]
+        x = x[:, ind_c, ind_h, ind_w]
 
-        if self.parametrization == "raw":
-            weighting_func = {
-                "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
-                "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
-                "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
-                "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
-            }[self.forward_sampling]
+        level_weights = torch.stack(
+            [self.forward_sampling_func(w) for w in self.tree_weights[0]], dim=0
+        )
+        if not self.training:
+            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
+                torch.float32
+            )
+        x = bin_op_cnn(x[:, 0], x[:, 1], level_weights)
 
+        # Process remaining levels
+        for level in range(1, self.tree_depth + 1):
+            x = x[..., self.indices[level]]
             level_weights = torch.stack(
-                [weighting_func(w) for w in self.tree_weights[0]], dim=0
+                [self.forward_sampling_func(w) for w in self.tree_weights[level]], dim=0
             )
             if not self.training:
-                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
                     torch.float32
                 )
-            current_level = bin_op_cnn(current_level[:, 0], current_level[:, 1], level_weights)
-
-            # Process remaining levels
-            for level in range(1, self.tree_depth + 1):
-                current_level = current_level[..., self.indices[level]]
-                """left_indices, right_indices = self.indices[level]
-                a = current_level[..., left_indices]
-                b = current_level[..., right_indices]"""
-                level_weights = torch.stack(
-                    [weighting_func(w) for w in self.tree_weights[level]], dim=0
-                )
-                if not self.training:
-                    level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                        torch.float32
-                    )
-                
-                current_level = bin_op_cnn(current_level[..., 0, :], current_level[..., 1, :], level_weights)
-
-        elif self.parametrization == "walsh":
-            weighting_func = {
-                "soft": lambda x: sigmoid(x, tau=self.temperature, hard=False),
-                "hard": lambda x: sigmoid(x, tau=self.temperature, hard=True),
-                "gumbel_soft": lambda x: gumbel_sigmoid(x, tau=self.temperature, hard=False),
-                "gumbel_hard": lambda x: gumbel_sigmoid(x, tau=self.temperature, hard=True),
-            }[self.forward_sampling]
-            level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
-            if not self.arbitrary_basis:
-                basis = walsh_basis_hard_cnn_first_level(current_level, self.n_inputs)
-            else:
-                raise NotImplementedError("Arbitrary basis not implemented yet")
-            current_level = walsh_cnn(basis, level_weights)
-            if self.training:
-                current_level = weighting_func(-current_level)
-            else:
-                current_level = (-current_level > 0).to(torch.float32)
-
-            # Process remaining levels
-            for level in range(1, self.tree_depth + 1):
-                level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
-                if not self.arbitrary_basis:
-                    basis = walsh_basis_hard_cnn_deep_level(current_level, self.n_inputs)
-                else:
-                    raise NotImplementedError("Arbitrary basis not implemented yet")
-                current_level = walsh_cnn(basis, level_weights)
-                if self.training:
-                    current_level = weighting_func(-current_level)
-                else:
-                    current_level = (-current_level > 0).to(torch.float32)
+            x = bin_op_cnn(x[..., 0, :], x[..., 1, :], level_weights)
 
         # Reshape flattened output
         reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
         reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
 
-        current_level = current_level.view(
-            current_level.shape[0],
-            current_level.shape[1],
+        x = x.view(
+            x.shape[0],
+            x.shape[1],
             reshape_h,
             reshape_w,
         )
 
-        return current_level
+        return x
 
     def get_random_receptive_field_tensor(self):
         """Generate random index tensor within the receptive field for each kernel.
@@ -352,17 +335,161 @@ class LogicConv2d(nn.Module):
             level_ids = []
             level_luts = []
             for w in self.tree_weights[level]:
-                if self.parametrization == "raw":
-                    ids = w.argmax(axis=1)
-                    luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
-                elif self.parametrization == "walsh":
-                    # Implement logic for walsh parametrization if needed
-                    luts = walsh_hadamard_transform(w, self.n_inputs)
-                    luts = luts < 0
-                    ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
-                    ids = (luts * ids.unsqueeze(0)).sum(dim=1)
-                else:
-                    raise ValueError(f"Unknown parametrization: {self.parametrization}")
+                ids = w.argmax(axis=1)
+                luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+                level_ids.append(ids)
+                level_luts.append(luts)
+            tree_ids.append(level_ids)
+            tree_luts.append(level_luts)
+        return tree_luts, tree_ids
+    
+
+class LogicConv2dWalsh(LogicConv2d):
+    """2d convolutional layer with differentiable logic operations.
+
+    This layer implements a 2d convolution with differentiable logic operations.
+    It uses a binary tree structure to combine input features using logical
+    operations.
+    """
+
+    def __init__(
+        self,
+        in_dim: _size_2_t,
+        device: str = "cuda",
+        grad_factor: float = 1.0,
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: int = None,
+        connections: str = "random",  # or 'random-unique'
+        weight_init: str = "residual",  # "residual" or "random"
+        stride: int = 1,
+        padding: int = 0,
+        temperature: float = 1.0,
+        forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
+        residual_init_param: float = 1.0,
+        n_inputs: int = 2,
+        arbitrary_basis: bool = False  # Whether to use hard-coded basis
+    ):
+        """Initialize the 2d logic convolutional layer.
+
+        Args:
+            in_dim: Input dimensions (height, width)
+            device: Device to run the layer on
+            grad_factor: Gradient factor for the logic operations
+            channels: Number of input channels
+            num_kernels: Number of output kernels
+            tree_depth: Depth of the binary tree
+            receptive_field_size: Size of the receptive field
+            implementation: Implementation type ("python" or "cuda")
+            connections: Connection type: "random" or "unique". The latter will overwrite
+                the tree_depth parameter and use a full binary tree of all possible connections
+                within the receptive field.
+            stride: Stride of the convolution
+            padding: Padding of the convolution
+        """
+        super().__init__(
+            in_dim=in_dim,
+            device=device,
+            grad_factor=grad_factor,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            connections=connections,
+            weight_init=weight_init,
+            stride=stride,
+            padding=padding,
+            temperature=temperature,
+            forward_sampling=forward_sampling,
+            residual_init_param=residual_init_param,
+            n_inputs=n_inputs,
+            arbitrary_basis=arbitrary_basis,
+        )
+
+
+    def _init_weights(self):
+        tree_weights = torch.nn.ModuleList()
+        for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
+            level_weights = torch.nn.ParameterList()
+            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
+                weights = initialize_weights_walsh(self.weight_init, self.num_kernels, self.n_inputs, self.residual_init_param, self.device)
+                level_weights.append(torch.nn.Parameter(weights))
+            tree_weights.append(level_weights)
+        forward_sampling_func = {
+            "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
+            "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
+            "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
+            "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
+        }[self.forward_sampling]
+        return tree_weights, forward_sampling_func
+    
+    def forward(self, x):
+        """Implement the binary tree using the pre-selected indices."""
+        if self.padding > 0:
+            x = torch.nn.functional.pad(
+                x,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
+            )
+        # first level tree indices
+        ind_h, ind_w, ind_c = self.indices[0][...,0], self.indices[0][...,1], self.indices[0][...,2]
+        x = x[:, ind_c, ind_h, ind_w]
+
+        level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
+        if not self.arbitrary_basis:
+            basis = walsh_basis_hard_cnn_first_level(x, self.n_inputs)
+        else:
+            raise NotImplementedError("Arbitrary basis not implemented yet")
+        x = walsh_cnn(basis, level_weights)
+        if self.training:
+            x = self.forward_sampling_func(-x)
+        else:
+            x = (-x > 0).to(torch.float32)
+
+        # Process remaining levels
+        for level in range(1, self.tree_depth + 1):
+            x = x[..., self.indices[level]]
+            level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
+            if not self.arbitrary_basis:
+                basis = walsh_basis_hard_cnn_deep_level(x, self.n_inputs)
+            else:
+                raise NotImplementedError("Arbitrary basis not implemented yet")
+            x = walsh_cnn(basis, level_weights)
+            if self.training:
+                x = self.forward_sampling_func(-x)
+            else:
+                x = (-x > 0).to(torch.float32)
+
+        # Reshape flattened output
+        reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+
+        x = x.view(
+            x.shape[0],
+            x.shape[1],
+            reshape_h,
+            reshape_w,
+        )
+
+        return x
+    
+    def get_lut_ids(self):
+        """
+        Computes most-probable LUT for each learned set of weights.
+        Returns tuple with most probable LUTs and their IDs.
+        """
+        tree_ids = []
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_ids = []
+            level_luts = []
+            for w in self.tree_weights[level]:
+                luts = walsh_hadamard_transform(w, self.n_inputs)
+                luts = luts < 0
+                ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
+                ids = (luts * ids.unsqueeze(0)).sum(dim=1)
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)

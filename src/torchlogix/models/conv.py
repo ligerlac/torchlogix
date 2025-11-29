@@ -1,18 +1,20 @@
 import torch
 import torch.nn as nn
-from ..layers import LogicDense, LogicConv2d, OrPooling, GroupSum
+from ..layers import OrPooling, GroupSum, setup_cnn_cls, setup_dense_cls
 
 
 class CNN(torch.nn.Module):
     """An implementation of a logic gate convolutional neural network."""
 
-    def __init__(self, class_count, tau, **llkw):
+    def __init__(self, class_count, tau, parametrization, **llkw):
         super(CNN, self).__init__()
+        cnn_cls = setup_cnn_cls(parametrization)
+        dense_cls = setup_dense_cls(parametrization)
         logic_layers = []
         # specifically written for mnist
         k_num = 16
         logic_layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=28,
                 num_kernels=k_num,
                 channels=1,
@@ -25,7 +27,7 @@ class CNN(torch.nn.Module):
         logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=0))
 
         logic_layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=12,
                 channels=k_num,
                 num_kernels=3 * k_num,
@@ -38,7 +40,7 @@ class CNN(torch.nn.Module):
         logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=1))
 
         logic_layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=6,
                 channels=3 * k_num,
                 num_kernels=9 * k_num,
@@ -52,11 +54,9 @@ class CNN(torch.nn.Module):
 
         logic_layers.append(torch.nn.Flatten())
 
-        logic_layers.append(LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
-        logic_layers.append(
-            LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw)
-        )
-        logic_layers.append(LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
+        logic_layers.append(dense_cls(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
+        logic_layers.append(dense_cls(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw))
+        logic_layers.append(dense_cls(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
 
         self.model = torch.nn.Sequential(*logic_layers, GroupSum(class_count, tau))
 
@@ -74,14 +74,16 @@ class ResidualLogicBlock(nn.Module):
         receptive_field_size=3,
         padding=1,
         downsample=False,
+        parametrization="raw",
         **llkw,
     ):
         super().__init__()
+        cnn_cls = setup_cnn_cls(parametrization)
 
         stride = 2 if downsample else 1
 
         self.main = nn.Sequential(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=in_dim,
                 channels=in_channels,
                 num_kernels=out_channels,
@@ -97,7 +99,7 @@ class ResidualLogicBlock(nn.Module):
         # we can either project the input to the output channels, or use a standard skip connection
         if downsample or in_channels != out_channels:
             self.shortcut = nn.Sequential(
-                LogicConv2d(
+                cnn_cls(
                     in_dim=in_dim,
                     channels=in_channels,
                     num_kernels=out_channels,
@@ -120,12 +122,14 @@ class ClgnMnist(torch.nn.Sequential):
     for the MNIST dataset.
     """
 
-    def __init__(self, k_num: int=16, **llkw):
+    def __init__(self, k_num: int=16, parametrization="raw", **llkw):
         super(ClgnMnist, self).__init__()
+        cnn_cls = setup_cnn_cls(parametrization)
+        dense_cls = setup_dense_cls(parametrization)
         self.k_num = k_num
         layers = []
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=28,
                 num_kernels=k_num,
                 channels=1,
@@ -138,7 +142,7 @@ class ClgnMnist(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2, padding=0))
 
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=12,
                 channels=k_num,
                 num_kernels=3 * k_num,
@@ -151,7 +155,7 @@ class ClgnMnist(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2, padding=1))
 
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=6,
                 channels=3 * k_num,
                 num_kernels=9 * k_num,
@@ -165,11 +169,9 @@ class ClgnMnist(torch.nn.Sequential):
 
         layers.append(torch.nn.Flatten())
 
-        layers.append(LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
-        layers.append(
-            LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw)
-        )
-        layers.append(LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
+        layers.append(dense_cls(in_dim=81 * k_num, out_dim=1280 * k_num, **llkw))
+        layers.append(dense_cls(in_dim=1280 * k_num, out_dim=640 * k_num, **llkw))
+        layers.append(dense_cls(in_dim=640 * k_num, out_dim=320 * k_num, **llkw))
 
         super(ClgnMnist, self).__init__(*layers, GroupSum(k=10, tau=1.0))
 
@@ -200,10 +202,12 @@ class ClgnCifar10(torch.nn.Sequential):
     Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
     """
 
-    def __init__(self, n_bits: int, k_num: int, tau: float, **llkw):
+    def __init__(self, n_bits: int, k_num: int, tau: float, parametrization="raw", **llkw):
         layers = []
+        cnn_cls = setup_cnn_cls(parametrization)
+        dense_cls = setup_dense_cls(parametrization)
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
@@ -216,7 +220,7 @@ class ClgnCifar10(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # kx16x16
 
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=16,
                 channels=k_num,
                 num_kernels=4*k_num,
@@ -229,7 +233,7 @@ class ClgnCifar10(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # 4kx8x8
 
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=8,
                 channels=4*k_num,
                 num_kernels=16*k_num,
@@ -242,7 +246,7 @@ class ClgnCifar10(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # 16kx4x4
         
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=4,
                 channels=16*k_num,
                 num_kernels=32*k_num,
@@ -256,9 +260,9 @@ class ClgnCifar10(torch.nn.Sequential):
 
         layers.append(torch.nn.Flatten()) # 128k
 
-        layers.append(LogicDense(in_dim=128*k_num, out_dim=1280*k_num, **llkw))
-        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
-        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, **llkw))
+        layers.append(dense_cls(in_dim=128*k_num, out_dim=1280*k_num, **llkw))
+        layers.append(dense_cls(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
+        layers.append(dense_cls(in_dim=640*k_num, out_dim=320*k_num, **llkw))
 
         super(ClgnCifar10, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
@@ -271,7 +275,7 @@ class ClgnCifar10Res(torch.nn.Sequential):
     Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
     """
 
-    def __init__(self, n_bits: int, k_num: int, tau: float, **llkw):
+    def __init__(self, n_bits: int, k_num: int, tau: float, parametrization="raw", **llkw):
         layers = []
 
         layers.append(
@@ -283,15 +287,16 @@ class ClgnCifar10Res(torch.nn.Sequential):
                 receptive_field_size=3,
                 padding=1,
                 downsample=True,
+                parametrization=parametrization,
                 **llkw,
             )
         )
-    
+        dense_cls = setup_dense_cls(parametrization)
         layers.append(torch.nn.Flatten()) # 4x4x16k = 256k
 
-        layers.append(LogicDense(in_dim=256*2*k_num, out_dim=512*k_num, **llkw))
-        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, **llkw))
-        layers.append(LogicDense(in_dim=256*k_num, out_dim=320*k_num, **llkw))
+        layers.append(dense_cls(in_dim=256*2*k_num, out_dim=512*k_num, **llkw))
+        layers.append(dense_cls(in_dim=512*k_num, out_dim=256*k_num, **llkw))
+        layers.append(dense_cls(in_dim=256*k_num, out_dim=320*k_num, **llkw))
 
         super(ClgnCifar10Res, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
@@ -336,12 +341,14 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
     Takes 3-bit-thresholded inputs. 
     """
 
-    def __init__(self, k_num=64, **llkw):
+    def __init__(self, k_num=64, parametrization="raw", **llkw):
+        cnn_cls = setup_cnn_cls(parametrization)
+        dense_cls = setup_dense_cls(parametrization)
         n_bits = 3
         tau = 20
         layers = []
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
@@ -353,7 +360,7 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # kx14x14
 
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=14,
                 channels=k_num,
                 num_kernels=4*k_num,
@@ -367,9 +374,9 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
         layers.append(torch.nn.Flatten()) # 4kx6x6=144k
 
         # layers.append(LogicDense(in_dim=144*k_num, out_dim=1280*k_num, **llkw))
-        layers.append(LogicDense(in_dim=576*k_num, out_dim=1280*k_num, **llkw))
-        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
-        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, **llkw))
+        layers.append(dense_cls(in_dim=576*k_num, out_dim=1280*k_num, **llkw))
+        layers.append(dense_cls(in_dim=1280*k_num, out_dim=640*k_num, **llkw))
+        layers.append(dense_cls(in_dim=640*k_num, out_dim=320*k_num, **llkw))
 
         super(ClgnCifar10Tiny, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
@@ -397,12 +404,14 @@ class ClgnCifar10Mini(torch.nn.Sequential):
     Takes continuous (unthresholded) inputs. Only single conv layer.
     """
 
-    def __init__(self, k_num=64, tau=10, **llkw):
+    def __init__(self, k_num=64, tau=10, parametrization="raw", **llkw):
+        cnn_cls = setup_cnn_cls(parametrization)
+        dense_cls = setup_dense_cls(parametrization)
         n_bits = 3
         tau = 20
         layers = []
         layers.append(
-            LogicConv2d(
+            cnn_cls(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
@@ -414,10 +423,10 @@ class ClgnCifar10Mini(torch.nn.Sequential):
 
         layers.append(torch.nn.Flatten()) # kx29x29=841k
 
-        layers.append(LogicDense(in_dim=841*k_num, out_dim=512*k_num, **llkw))
-        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, **llkw))
-        layers.append(LogicDense(in_dim=256*k_num, out_dim=128*k_num, **llkw))
-        layers.append(LogicDense(in_dim=128*k_num, out_dim=60*k_num, **llkw))
+        layers.append(dense_cls(in_dim=841*k_num, out_dim=512*k_num, **llkw))
+        layers.append(dense_cls(in_dim=512*k_num, out_dim=256*k_num, **llkw))
+        layers.append(dense_cls(in_dim=256*k_num, out_dim=128*k_num, **llkw))
+        layers.append(dense_cls(in_dim=128*k_num, out_dim=60*k_num, **llkw))
 
         super(ClgnCifar10Mini, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
