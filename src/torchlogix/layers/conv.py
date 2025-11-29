@@ -590,11 +590,55 @@ class LogicConv2dWalsh(LogicConv2d):
 
 
 class LogicConv3d(nn.Module):
-    """3d convolutional layer with differentiable logic operations.
+    """3D convolutional layer with differentiable logic operations.
 
-    This layer implements a 3d convolution with differentiable logic operations.
-    It uses a binary tree structure to combine input features using logical
-    operations.
+    This layer implements a 3D convolution where each output location is
+    computed by evaluating a learned logic tree over a receptive field.
+    Instead of linear filters, it uses a binary tree of differentiable
+    logic operations (LUTs) applied to selected positions in the receptive
+    field, per kernel and per spatial location.
+
+    Args:
+        in_dim: Input spatial dimensions ``(height, width, depth)``.
+        device: Device on which the module parameters and buffers are
+            allocated (e.g. ``"cpu"`` or ``"cuda"``).
+        grad_factor: Factor applied to the gradient of intermediate logic
+            activations (e.g., via a custom autograd function) to control
+            the strength of gradient flow.
+        channels: Number of input channels.
+        num_kernels: Number of output logic kernels (analogous to output
+            channels in a standard convolution).
+        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses
+            ``2**d`` leaves per receptive field.
+        receptive_field_size: Spatial size (height, width and depth) of the
+            receptive field (assumed cubic).
+        connections: Strategy for wiring the receptive field positions into
+            the logic trees. Supported values:
+            - ``"random"``: Randomly sampled receptive field positions for
+                all leaves across kernels.
+            - ``"random-unique"``: Randomly sampled non-repeating positions
+                within each receptive field (unique connections).
+        weight_init: Weight initialization scheme for the LUT logits at
+            each tree node. Supported values:
+            - ``"residual"``: Residual-style init around a default LUT.
+            - ``"random"``: Unstructured random logits.
+        stride: Convolution stride in both spatial dimensions.
+        padding: Zero-padding applied symmetrically to height and width
+            before selecting receptive fields.
+        temperature: Temperature used by (Gumbel-)Softmax sampling of LUT
+            weights at each tree node.
+        forward_sampling: Sampling strategy for LUT weights. One of:
+            - ``"soft"``: Softmax with continuous relaxation.
+            - ``"hard"``: Straight-through hard selection.
+            - ``"gumbel_soft"``: Gumbel-Softmax relaxation.
+            - ``"gumbel_hard"``: Straight-through Gumbel-Softmax.
+        residual_init_param: Scalar controlling the strength of the
+            residual-style initialization when ``weight_init == "residual"``.
+        n_inputs: Arity of each logic gate (number of Boolean inputs per
+            node). Typically 2 for binary trees.
+        arbitrary_basis: If ``True``, allows more general bases for the LUT
+            parametrization (e.g., Walsh), rather than a fixed hard-coded
+            basis.
     """
 
     def __init__(
@@ -668,26 +712,36 @@ class LogicConv3d(nn.Module):
             "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
         }[self.forward_sampling]
         return tree_weights, forward_sampling_func
-
+    
     def forward(self, x):
-        """Implement the binary tree using the pre-selected indices."""
-        current_level = x
-        # apply zero padding
-        left_indices, right_indices = self.indices[0]
-        a_h, a_w, a_d, a_c = (
-            left_indices[..., 0],
-            left_indices[..., 1],
-            left_indices[..., 2],
-            left_indices[..., 3]
-        )
-        b_h, b_w, b_d, b_c = (
-            right_indices[..., 0],
-            right_indices[..., 1],
-            right_indices[..., 2],
-            right_indices[..., 3]
-        )
-        a = current_level[:, a_c, a_h, a_w, a_d]
-        b = current_level[:, b_c, b_h, b_w, b_d]
+        """Applies the logic convolution to the input.
+
+        The forward pass proceeds as follows:
+
+        1. Optionally pad the input spatially.
+        2. Select all receptive-field positions for the first tree level using
+           precomputed index tensors.
+        3. For each tree level:
+            a. Sample or select LUT weights for all nodes at that level.
+            b. Apply binary logic operations (via :func:`bin_op_cnn`) to the
+               child activations, reducing them up the tree.
+        4. Reshape the final per-kernel outputs into a 5D tensor of shape
+           ``(batch_size, num_kernels, out_height, out_width, out_depth)``.
+
+        Args:
+            x: Input tensor of shape ``(batch_size, channels, height, width, depth)``.
+
+        Returns:
+            Tensor of shape ``(batch_size, num_kernels, out_height, out_width, out_depth)``,
+            where ``out_height``, ``out_width``, and ``out_depth`` are determined by the
+            convolution parameters:
+
+            * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
+            * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
+            * ``out_depth  = (in_depth  + 2 * padding - receptive_field_size) // stride + 1``.
+        """
+        ind_h, ind_w, ind_d, ind_c = self.indices[0][...,0], self.indices[0][...,1], self.indices[0][...,2], self.indices[0][...,3]
+        x = x[:, ind_c, ind_h, ind_w, ind_d]
 
         # Process first level
         level_weights = torch.stack(
@@ -695,46 +749,40 @@ class LogicConv3d(nn.Module):
             dim=0,
         )
         if not self.training:
-            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
                 torch.float32
             )
 
-        current_level = bin_op_cnn(a, b, level_weights)
+        x = bin_op_cnn(x[:, 0], x[:, 1], level_weights)
 
         # Process remaining levels
         for level in range(1, self.tree_depth + 1):
-            left_indices, right_indices = self.indices[level]
-            a = current_level[..., left_indices]
-            b = current_level[..., right_indices]
+            x = x[..., self.indices[level]]
             level_weights = torch.stack(
-                [
-                    torch.nn.functional.softmax(w, dim=-1)
-                    for w in self.tree_weights[level]
-                ],
-                dim=0,
+                [self.forward_sampling_func(w) for w in self.tree_weights[level]], dim=0,
             )
 
             if not self.training:
-                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
+                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
                     torch.float32
                 )
 
-            current_level = bin_op_cnn(a, b, level_weights)
+            x = bin_op_cnn(x[..., 0, :], x[..., 1, :], level_weights)
 
         # Reshape flattened output
         reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size[0]) // self.stride + 1
         reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size[1]) // self.stride + 1
         reshape_d = (self.in_dim[2] + 2*self.padding - self.receptive_field_size[2]) // self.stride + 1
 
-        current_level = current_level.view(
-            current_level.shape[0],
-            current_level.shape[1],
+        x = x.view(
+            x.shape[0],
+            x.shape[1],
             reshape_h,
             reshape_w,
             reshape_d
         )
 
-        return current_level
+        return x
     
     def _get_random_receptive_field_tensor(self):
         """Generate random index tensor within the receptive field for each kernel.
@@ -889,6 +937,33 @@ class LogicConv3d(nn.Module):
             base = torch.arange(size, device=self.device).view(-1, self.n_inputs).transpose(0, 1)
             indices.append(base)
         return indices
+    
+    def get_lut_ids(self):
+        """Computes the most probable LUT and its ID for each neuron by choosing maximum weight over all
+        possible Boolean functions.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** n_inputs)``,
+                  where each row is the most probable LUT truth table for a
+                  neuron (entry is True for output 1, False for 0).
+                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
+                  entry is the integer ID of the corresponding LUT, obtained by
+                  interpreting its truth table as a binary number.
+        """
+        tree_ids = []
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_ids = []
+            level_luts = []
+            for w in self.tree_weights[level]:
+                ids = w.argmax(axis=1)
+                luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+                level_ids.append(ids)
+                level_luts.append(luts)
+            tree_ids.append(level_ids)
+            tree_luts.append(level_luts)
+        return tree_luts, tree_ids
 
 
 class OrPooling(torch.nn.Module):
