@@ -95,6 +95,29 @@ def test_xor_model_walsh():
         assert np.isclose(pred, expected)
 
 
+def test_n_inputs_walsh():
+    """Test scaling up to multiple inputs, that is n=4 and n=6."""
+    x = 1 - 2 * torch.rand((1, 12))
+    n_inputs = 4
+    out_dim = x.shape[1] // n_inputs
+    layer = LogicDenseWalsh(in_dim=x.shape[1], out_dim=out_dim, n_inputs=n_inputs, **llkw)
+    luts, ids = layer.get_lut_ids()
+    assert luts.shape == (out_dim, 1 << n_inputs)
+    model = torch.nn.Sequential(layer)
+    y = model(x)
+    assert y.shape == (x.shape[0], out_dim)
+
+    n_inputs = 6
+    out_dim = x.shape[1] // n_inputs
+    layer = LogicDenseWalsh(in_dim=x.shape[1], out_dim=out_dim, n_inputs=n_inputs, **llkw)
+    luts, ids = layer.get_lut_ids()
+    assert luts.shape == (out_dim, 1 << n_inputs)
+    model = torch.nn.Sequential(layer)
+    y = model(x)
+    assert y.shape == (x.shape[0], out_dim)
+
+
+
 def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(

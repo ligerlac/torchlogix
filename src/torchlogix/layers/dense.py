@@ -195,9 +195,7 @@ class LogicDense(torch.nn.Module):
             c = c.to(torch.int64).to(self.device)
             return c
         elif connections == "unique":
-            if self.n_inputs != 2:
-                raise ValueError("Unique connections only supported for n_inputs=2, not yet implemented!")
-            return get_unique_connections(self.in_dim, self.out_dim, self.device)
+            return get_unique_connections(self.in_dim, self.out_dim, self.n_inputs, self.device)
         else:
             raise ValueError(connections)
 
