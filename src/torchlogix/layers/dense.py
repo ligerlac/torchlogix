@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-from .parametrization import RawLUTParametrization, WalshLUTParametrization
-from .sampling import SoftmaxSampler, SigmoidSampler
+from ..parametrization import RawLUTParametrization, WalshLUTParametrization
+from ..sampling import SoftmaxSampler, SigmoidSampler
 from ..functional import GradFactor, get_random_unique_connections
 from ..packbitstensor import PackBitsTensor
 
@@ -70,7 +70,6 @@ class LogicDense(torch.nn.Module):
         self.device = device
         self.grad_factor = grad_factor
         self.lut_rank = lut_rank
-        self.lut_entries = 1 << lut_rank
 
         # Create parametrization component
         if parametrization == "raw":

@@ -1,6 +1,6 @@
 import torch
 
-from ..functional import (
+from .functional import (
     WALSH_COEFFICIENTS,
     walsh_hadamard_transform,
 )

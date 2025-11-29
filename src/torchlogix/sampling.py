@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 import torch
 from torch.nn.functional import gumbel_softmax
 
-from ..functional import softmax, sigmoid, gumbel_sigmoid
+from .functional import softmax, sigmoid, gumbel_sigmoid
 
 
 class Sampler(ABC):

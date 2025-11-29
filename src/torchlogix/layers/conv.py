@@ -6,8 +6,8 @@ import torch.nn as nn
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from .parametrization import RawLUTParametrization, WalshLUTParametrization
-from .sampling import SoftmaxSampler, SigmoidSampler
+from ..parametrization import RawLUTParametrization, WalshLUTParametrization
+from ..sampling import SoftmaxSampler, SigmoidSampler
 
 
 class LogicConv2d(nn.Module):
@@ -102,15 +102,14 @@ class LogicConv2d(nn.Module):
         self.padding = padding
         self.connections = connections
         self.lut_rank = lut_rank
-        self.lut_entries = 1 << lut_rank
 
         # Create parametrization component
         if parametrization == "raw":
             self.parametrization = RawLUTParametrization(lut_rank, arbitrary_basis)
-            sampler = SoftmaxSampler(forward_sampling, temperature)
+            self.sampler = SoftmaxSampler(forward_sampling, temperature)
         elif parametrization == "walsh":
             self.parametrization = WalshLUTParametrization(lut_rank, arbitrary_basis)
-            sampler = SigmoidSampler(forward_sampling, temperature)
+            self.sampler = SigmoidSampler(forward_sampling, temperature)
         else:
             raise ValueError(
                 f"Unsupported parametrization: {parametrization}. "
@@ -130,7 +129,6 @@ class LogicConv2d(nn.Module):
 
         # Initialize tree weights using parametrization
         self.tree_weights = torch.nn.ModuleList()
-        self.samplers = []
         for i in reversed(range(tree_depth + 1)):
             level_weights = torch.nn.ParameterList()
             for _ in range(lut_rank**i):
@@ -139,11 +137,7 @@ class LogicConv2d(nn.Module):
                 )
                 level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
-            # Each level gets its own sampler instance
-            if parametrization == "raw":
-                self.samplers.append(SoftmaxSampler(forward_sampling, temperature))
-            else:
-                self.samplers.append(SigmoidSampler(forward_sampling, temperature))
+
 
     def forward(self, x):
         """Applies the logic convolution to the input.
@@ -185,14 +179,14 @@ class LogicConv2d(nn.Module):
 
         # Process first level
         x = self.parametrization.forward_conv_first_level(
-            x, self.tree_weights[0], self.samplers[0], self.training
+            x, self.tree_weights[0], self.sampler, self.training
         )
 
         # Process remaining levels
         for level in range(1, self.tree_depth + 1):
             x = x[..., self.indices[level]]
             x = self.parametrization.forward_conv_deep_level(
-                x, self.tree_weights[level], self.samplers[level], self.training
+                x, self.tree_weights[level], self.sampler, self.training
             )
 
         # Reshape flattened output
@@ -458,7 +452,6 @@ class LogicConv3d(nn.Module):
         self.padding = padding
         self.connections = connections
         self.lut_rank = lut_rank
-        self.lut_entries = 1 << lut_rank
 
         assert (
             (stride <= self.receptive_field_size[0]) and
@@ -472,10 +465,10 @@ class LogicConv3d(nn.Module):
         # Create parametrization component
         if parametrization == "raw":
             self.parametrization = RawLUTParametrization(lut_rank, arbitrary_basis)
-            sampler = SoftmaxSampler(forward_sampling, temperature)
+            self.sampler = SoftmaxSampler(forward_sampling, temperature)
         elif parametrization == "walsh":
             self.parametrization = WalshLUTParametrization(lut_rank, arbitrary_basis)
-            sampler = SigmoidSampler(forward_sampling, temperature)
+            self.sampler = SigmoidSampler(forward_sampling, temperature)
         else:
             raise ValueError(
                 f"Unsupported parametrization: {parametrization}. "
@@ -494,7 +487,6 @@ class LogicConv3d(nn.Module):
 
         # Initialize tree weights using parametrization
         self.tree_weights = torch.nn.ModuleList()
-        self.samplers = []
         for i in reversed(range(tree_depth + 1)):
             level_weights = torch.nn.ParameterList()
             for _ in range(lut_rank**i):
@@ -503,11 +495,7 @@ class LogicConv3d(nn.Module):
                 )
                 level_weights.append(torch.nn.Parameter(weights))
             self.tree_weights.append(level_weights)
-            # Each level gets its own sampler instance
-            if parametrization == "raw":
-                self.samplers.append(SoftmaxSampler(forward_sampling, temperature))
-            else:
-                self.samplers.append(SigmoidSampler(forward_sampling, temperature))
+
 
     def forward(self, x):
         """Applies the logic convolution to the input.
@@ -549,14 +537,14 @@ class LogicConv3d(nn.Module):
 
         # Process first level
         x = self.parametrization.forward_conv_first_level(
-            x, self.tree_weights[0], self.samplers[0], self.training
+            x, self.tree_weights[0], self.sampler, self.training
         )
 
         # Process remaining levels
         for level in range(1, self.tree_depth + 1):
             x = x[..., self.indices[level]]
             x = self.parametrization.forward_conv_deep_level(
-                x, self.tree_weights[level], self.samplers[level], self.training
+                x, self.tree_weights[level], self.sampler, self.training
             )
 
         # Reshape flattened output

@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 import torch
 
 from .initialization import initialize_weights_raw, initialize_weights_walsh
-from ..functional import (
+from .functional import (
     bin_op_s,
     bin_op_cnn,
     walsh_basis_hard,
