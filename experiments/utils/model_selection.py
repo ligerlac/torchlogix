@@ -14,7 +14,7 @@ def get_model(args):
         "temperature": args.temperature,
         "weight_init": args.weight_init,
         "residual_init_param": args.residual_init_param,
-        "n_inputs": args.n_inputs,
+        "lut_rank": args.lut_rank,
         "arbitrary_basis": args.arbitrary_basis
     }
     model_cls = torchlogix.models.__dict__[args.architecture]

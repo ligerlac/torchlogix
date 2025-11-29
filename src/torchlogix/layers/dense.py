@@ -56,7 +56,7 @@ class LogicDense(torch.nn.Module):
             Supported values are:
             - ``"random"``: Randomly sampled connections per neuron.
             - ``"random-unique"``: Random, non-overlapping connections
-                (currently only for ``n_inputs == 2``).
+                (currently only for ``lut_rank == 2``).
         weight_init: Initialization scheme for LUT weights. Supported values:
             - ``"residual"``: Residual-style initialization around a default LUT.
             - ``"random"``: Fully random logits for each possible LUT.
@@ -70,8 +70,8 @@ class LogicDense(torch.nn.Module):
             - ``"hard"``: Straight-through hard selection via Softmax.
             - ``"gumbel_soft"``: Gumbel-Softmax (continuous).
             - ``"gumbel_hard"``: Straight-through Gumbel-Softmax (discrete).
-        n_inputs: Number of inputs per logic gate (arity of the LUT). The
-            number of possible entries in the LUT is ``2 ** n_inputs``.
+        lut_rank: Number of inputs per logic gate (arity of the LUT). The
+            number of possible entries in the LUT is ``2 ** lut_rank``.
         arbitrary_basis: If True, allows a non-hardcoded basis for LUT
             parametrization (e.g., an arbitrary Walsh basis). If False,
             uses a fixed / hardcoded basis.
@@ -88,7 +88,7 @@ class LogicDense(torch.nn.Module):
         residual_init_param: float = 1.0,
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         super().__init__()
@@ -96,16 +96,16 @@ class LogicDense(torch.nn.Module):
         self.forward_sampling = forward_sampling
         self.weight_init = weight_init
         self.residual_init_param = residual_init_param
-        self.n_inputs = n_inputs
-        self.n_exp = 1 << n_inputs
+        self.lut_rank = lut_rank
+        self.lut_entries = 1 << lut_rank
         self.arbitrary_basis = arbitrary_basis
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.device = device
         self.grad_factor = grad_factor
-        idx = torch.arange(self.n_exp, device=self.device)
-        bits = ((idx.unsqueeze(1) >> torch.arange(self.n_inputs, device=self.device)) & 1)
-        bits = bits.flip(1).view(1, 1, self.n_exp, self.n_inputs)
+        idx = torch.arange(self.lut_entries, device=self.device)
+        bits = ((idx.unsqueeze(1) >> torch.arange(self.lut_rank, device=self.device)) & 1)
+        bits = bits.flip(1).view(1, 1, self.lut_entries, self.lut_rank)
         self.register_buffer("bits", bits.to(torch.float))
         weights, forward_sampling_func = self._init_weights()
         self.weight = torch.nn.Parameter(weights)
@@ -118,8 +118,8 @@ class LogicDense(torch.nn.Module):
         self.num_weights = out_dim
 
     def _init_weights(self):
-        assert self.n_inputs == 2, "Raw parametrization only supports 2 inputs."
-        weights = initialize_weights_raw(self.weight_init, self.out_dim, self.n_inputs, self.residual_init_param, self.device)
+        assert self.lut_rank == 2, "Raw parametrization only supports 2 inputs."
+        weights = initialize_weights_raw(self.weight_init, self.out_dim, self.lut_rank, self.residual_init_param, self.device)
         forward_sampling_func = {
             "soft": lambda w: softmax(w, tau=self.temperature, hard=False),
             "hard": lambda w: softmax(w, tau=self.temperature, hard=True),
@@ -132,7 +132,7 @@ class LogicDense(torch.nn.Module):
         """Applies the LogicDense transformation to the input.
 
         For each neuron, the layer:
-        1. Selects ``n_inputs`` input features according to the connection
+        1. Selects ``lut_rank`` input features according to the connection
            pattern in ``self.indices``.
         2. Samples (or selects) LUT weights based on ``self.weight`` and
            ``self.forward_sampling_func``.
@@ -154,7 +154,7 @@ class LogicDense(torch.nn.Module):
             w = self.forward_sampling_func(self.weight)
             x = bin_op_s(a, b, w)
         else:
-            w = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.n_exp).to(
+            w = torch.nn.functional.one_hot(self.weight.argmax(-1), 1 << self.lut_entries).to(
                 torch.float32
             )
             x = bin_op_s(a, b, w)
@@ -174,28 +174,28 @@ class LogicDense(torch.nn.Module):
     def _get_connections(self, connections):
         """Constructs input–neuron connection indices.
 
-        Each neuron takes ``n_inputs`` input features. This function returns a
+        Each neuron takes ``lut_rank`` input features. This function returns a
         tensor encoding which input indices are connected to which neuron.
 
         Args:
             connections: Strategy for building connections. Supported values:
-                - ``"random"``: Randomly sample ``n_inputs`` input indices for
+                - ``"random"``: Randomly sample ``lut_rank`` input indices for
                   each of the ``out_dim`` neurons.
                 - ``"random-unique"``: Use a deterministic, non-overlapping pattern of
-                  connections (currently only for ``n_inputs == 2``).
+                  connections (currently only for ``lut_rank == 2``).
 
         Returns:
-            A tensor of shape ``(n_inputs, out_dim)`` with integer indices into
+            A tensor of shape ``(lut_rank, out_dim)`` with integer indices into
             the last dimension of the input.
         """
         if connections == "random":
-            c = torch.randperm(self.n_inputs * self.out_dim) % self.in_dim
+            c = torch.randperm(self.lut_rank * self.out_dim) % self.in_dim
             c = torch.randperm(self.in_dim)[c]
-            c = c.reshape(self.n_inputs, self.out_dim)
+            c = c.reshape(self.lut_rank, self.out_dim)
             c = c.to(torch.int64).to(self.device)
             return c
         elif connections == "random-unique":
-            return get_random_unique_connections(self.in_dim, self.out_dim, self.n_inputs, self.device)
+            return get_random_unique_connections(self.in_dim, self.out_dim, self.lut_rank, self.device)
         else:
             raise ValueError(connections)
 
@@ -205,7 +205,7 @@ class LogicDense(torch.nn.Module):
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]:
-                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** n_inputs)``,
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,
                   where each row is the most probable LUT truth table for a
                   neuron (entry is True for output 1, False for 0).
                 - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
@@ -213,7 +213,7 @@ class LogicDense(torch.nn.Module):
                   interpreting its truth table as a binary number.
         """
         ids = self.weight.argmax(axis=1)
-        luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+        luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.lut_rank, device=ids.device)) & 1).flip(1)
         return luts, ids
     
 
@@ -246,7 +246,7 @@ class LogicDenseWalsh(LogicDense):
         temperature: Temperature used in the sampling function.
         forward_sampling: Sampling strategy used in the forward pass.
             One of {``"soft"``, ``"hard"``, ``"gumbel_soft"``, ``"gumbel_hard"``}.
-        n_inputs: Arity of the Boolean function (size of LUT input).
+        lut_rank: Arity of the Boolean function (size of LUT input).
         arbitrary_basis: If ``True``, a flexible user-defined basis is used
             instead of a hardcoded Walsh basis.
     """
@@ -262,7 +262,7 @@ class LogicDenseWalsh(LogicDense):
         residual_init_param: float = 1.0,
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         super().__init__(in_dim=in_dim, 
@@ -274,12 +274,12 @@ class LogicDenseWalsh(LogicDense):
                          residual_init_param=residual_init_param,
                          temperature=temperature, 
                          forward_sampling=forward_sampling, 
-                         n_inputs=n_inputs,
+                         lut_rank=lut_rank,
                          arbitrary_basis=arbitrary_basis)
 
     def _init_weights(self):
-        assert self.arbitrary_basis or (self.n_inputs in [2, 4, 6]), "Hard basis only supports n=2, n=4 and n=6 for Walsh parametrization."
-        weights = initialize_weights_walsh(self.weight_init, self.out_dim, self.n_inputs, self.residual_init_param, self.device)
+        assert self.arbitrary_basis or (self.lut_rank in [2, 4, 6]), "Hard basis only supports n=2, n=4 and n=6 for Walsh parametrization."
+        weights = initialize_weights_walsh(self.weight_init, self.out_dim, self.lut_rank, self.residual_init_param, self.device)
         forward_sampling_func = {
             "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
             "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
@@ -312,7 +312,7 @@ class LogicDenseWalsh(LogicDense):
         self.indices = self.indices.long()
         x = 1 - 2 * x
         if not self.arbitrary_basis:
-            basis = walsh_basis_hard(x, self.indices, self.n_inputs)
+            basis = walsh_basis_hard(x, self.indices, self.lut_rank)
         else:
             x = x[..., self.indices_T]
             bits = self.bits
@@ -337,15 +337,18 @@ class LogicDenseWalsh(LogicDense):
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]:
-                - ``luts``: Boolean tensor of shape ``(out_dim, 2**n_inputs)``.
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2**lut_rank)``.
                 - ``ids``: Integer tensor of shape ``(out_dim,)`` where each ID
                   is the binary encoding of the corresponding truth table
                   (MSB first).
         """
-        luts = walsh_hadamard_transform(self.weight, self.n_inputs)
+        luts = walsh_hadamard_transform(self.weight, self.lut_rank)
         luts = luts < 0
-        ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
-        ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+        if self.lut_rank <= 4:
+            ids = 2 ** torch.arange((1 << self.lut_rank) - 1, -1, -1, device=luts.device)
+            ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+        else:
+            ids = None
         return luts, ids
 
 
@@ -371,7 +374,7 @@ class LogicDenseCuda(LogicDense):
         residual_init_param: float = 1.0,
         temperature: float = 1.0,
         forward_sampling: str = "soft",  # "soft", "hard", "gumbel_soft", "gumbel_hard"
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         super().__init__(in_dim=in_dim, 
@@ -383,7 +386,7 @@ class LogicDenseCuda(LogicDense):
                          residual_init_param=residual_init_param,
                          temperature=temperature, 
                          forward_sampling=forward_sampling, 
-                         n_inputs=n_inputs,
+                         lut_rank=lut_rank,
                          arbitrary_basis=arbitrary_basis)
         # Defining additional indices for improving the efficiency 
         # of the backward of the CUDA implementation.

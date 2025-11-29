@@ -381,7 +381,7 @@ def main():
     )
 
     parser.add_argument(
-        "--n-inputs", type=int, default=2, choices=[2, 4, 6],
+        "--lut-rank", type=int, default=2, choices=[2, 4, 6],
         help="Number of inputs to each LUT node"
     )
 
@@ -392,7 +392,7 @@ def main():
     
     parser.add_argument(
         "--verbose", type=int, default=0, choices=[0, 1],
-        help="Verbosity during training, allowed only for n_inputs=2. 0 = silent, 1 = verbose"
+        help="Verbosity during training, allowed only for lut_rank=2. 0 = silent, 1 = verbose"
     )
 
     args = parser.parse_args()

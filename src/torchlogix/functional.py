@@ -183,27 +183,27 @@ def bin_op_cnn_walsh(a, b, i_s):
 ##########################################################################
 
 
-def get_random_unique_connections(in_dim, out_dim, n_inputs=2, device="cuda"):
+def get_random_unique_connections(in_dim, out_dim, lut_rank=2, device="cuda"):
     """Return unique input index tuples for each output neuron, fully in torch.
 
-    Each output neuron gets n_inputs distinct input indices.
+    Each output neuron gets lut_rank distinct input indices.
     No two neurons share the same tuple (unordered).
 
     Args:
         in_dim: Number of input features.
         out_dim: Number of output neurons.
-        n_inputs: Number of inputs per neuron.
+        lut_rank: Number of inputs per neuron.
         device: Target device for returned tensor.
 
     Returns:
-        Tensor of shape (n_inputs, out_dim), dtype int64.
+        Tensor of shape (lut_rank, out_dim), dtype int64.
     """
     # Feasibility checks
-    assert out_dim * n_inputs >= in_dim, (
-        f"Need out_dim * n_inputs >= in_dim to cover all inputs "
-        f"({out_dim} * {n_inputs} < {in_dim})."
+    assert out_dim * lut_rank >= in_dim, (
+        f"Need out_dim * lut_rank >= in_dim to cover all inputs "
+        f"({out_dim} * {lut_rank} < {in_dim})."
     )
-    n_max = math.comb(in_dim, n_inputs)
+    n_max = math.comb(in_dim, lut_rank)
     assert out_dim <= n_max, (
         f"Requested {out_dim} unique tuples, but only {n_max} combinations exist."
     )
@@ -211,15 +211,15 @@ def get_random_unique_connections(in_dim, out_dim, n_inputs=2, device="cuda"):
     # Create input range
     x = torch.arange(in_dim, device=device)
 
-    # Create all n_inputs-combinations in lexicographic order:
-    # shape = (n_max, n_inputs)
-    combos = torch.combinations(x, r=n_inputs, with_replacement=False)
+    # Create all lut_rank-combinations in lexicographic order:
+    # shape = (n_max, lut_rank)
+    combos = torch.combinations(x, r=lut_rank, with_replacement=False)
 
     # Randomly select out_dim unique tuples
     perm = torch.randperm(combos.size(0), device=device)
-    selected = combos[perm[:out_dim]]  # (out_dim, n_inputs)
+    selected = combos[perm[:out_dim]]  # (out_dim, lut_rank)
 
-    # Return shape (n_inputs, out_dim)
+    # Return shape (lut_rank, out_dim)
     return selected.t().contiguous()
 
 
@@ -281,20 +281,20 @@ def fwht(x: torch.Tensor, n: int) -> torch.Tensor:
     Fast Walsh–Hadamard transform on the last dimension.
     x: (..., n) with n a power of 2
     """
-    n_exp = x.size(-1)
-    y = x.reshape(-1, n_exp)  # collapse batch dims
+    lut_entries = x.size(-1)
+    y = x.reshape(-1, lut_entries)  # collapse batch dims
     for s in range(n):
         step = 1 << s       # 2^s
         block = step << 1   # 2^(s+1)
 
         # shape: (batch, n / block, block)
-        y = y.view(-1, n_exp // block, block)
+        y = y.view(-1, lut_entries // block, block)
 
         a = y[..., :step]
         b = y[..., step:block]
 
         y = torch.cat((a + b, a - b), dim=-1)  # still (batch, n/block, block)
-        y = y.reshape(-1, n_exp)
+        y = y.reshape(-1, lut_entries)
 
     return y.view_as(x)
 
@@ -354,61 +354,61 @@ def walsh_cnn(r, i_s):
     i_s = i_s.permute(0, 3, 2, 1, 4)
     return (r * i_s).sum(dim=-1)
 
-def walsh_basis_hard(x, indices, n_inputs):
-    if n_inputs == 2:
+def walsh_basis_hard(x, indices, lut_rank):
+    if lut_rank == 2:
         A, B = x[..., indices[0]], x[..., indices[1]]
         basis = walsh_basis_2(A, B)
-    elif n_inputs == 4:
+    elif lut_rank == 4:
         A, B, C, D = (x[..., indices[0]], x[..., indices[1]], 
                         x[..., indices[2]], x[..., indices[3]]
                         )
         basis = walsh_basis_4(A, B, C, D)
-    elif n_inputs == 6:
+    elif lut_rank == 6:
         A, B, C, D, E, F = (
             x[..., indices[0]], x[..., indices[1]], x[..., indices[2]],
             x[..., indices[3]], x[..., indices[4]], x[..., indices[5]],
         )
         basis = walsh_basis_6(A, B, C, D, E, F)
     else:
-        raise ValueError(f"Hard basis not supported for n_inputs={n_inputs}")
+        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
 
-def walsh_basis_hard_cnn_first_level(x, n_inputs):
-    if n_inputs == 2:
+def walsh_basis_hard_cnn_first_level(x, lut_rank):
+    if lut_rank == 2:
         A, B = x[:, 0], x[:, 1]
         basis = walsh_basis_2(A, B)
-    elif n_inputs == 4:
+    elif lut_rank == 4:
         A, B, C, D = (x[:, 0], x[:, 1], 
                         x[:, 2], x[:, 3]
                         )
         basis = walsh_basis_4(A, B, C, D)
-    elif n_inputs == 6:
+    elif lut_rank == 6:
         A, B, C, D, E, F = (
             x[:, 0], x[:, 1], x[:, 2],
             x[:, 3], x[:, 4], x[:, 5],
         )
         basis = walsh_basis_6(A, B, C, D, E, F)
     else:
-        raise ValueError(f"Hard basis not supported for n_inputs={n_inputs}")
+        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
 
-def walsh_basis_hard_cnn_deep_level(x, n_inputs):
-    if n_inputs == 2:
+def walsh_basis_hard_cnn_deep_level(x, lut_rank):
+    if lut_rank == 2:
         A, B = x[..., 0,:], x[..., 1,:]
         basis = walsh_basis_2(A, B)
-    elif n_inputs == 4:
+    elif lut_rank == 4:
         A, B, C, D = (x[..., 0,:], x[..., 1,:], 
                         x[..., 2,:], x[..., 3,:]
                         )
         basis = walsh_basis_4(A, B, C, D)
-    elif n_inputs == 6:
+    elif lut_rank == 6:
         A, B, C, D, E, F = (
             x[..., 0,:], x[..., 1,:], x[..., 2,:],
             x[..., 3,:], x[..., 4,:], x[..., 5,:],
         )
         basis = walsh_basis_6(A, B, C, D, E, F)
     else:
-        raise ValueError(f"Hard basis not supported for n_inputs={n_inputs}")
+        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
 
 def walsh_basis_2(A, B) -> torch.Tensor:

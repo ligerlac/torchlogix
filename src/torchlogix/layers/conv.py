@@ -79,7 +79,7 @@ class LogicConv2d(nn.Module):
             - ``"gumbel_hard"``: Straight-through Gumbel-Softmax.
         residual_init_param: Scalar controlling the strength of the
             residual-style initialization when ``weight_init == "residual"``.
-        n_inputs: Arity of each logic gate (number of Boolean inputs per
+        lut_rank: Arity of each logic gate (number of Boolean inputs per
             node). Typically 2 for binary trees.
         arbitrary_basis: If ``True``, allows more general bases for the LUT
             parametrization (e.g., Walsh), rather than a fixed hard-coded
@@ -102,13 +102,13 @@ class LogicConv2d(nn.Module):
         temperature: float = 1.0,
         forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
         residual_init_param: float = 1.0,
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         super().__init__()
         self.forward_sampling = forward_sampling
-        self.n_inputs = n_inputs
-        self.n_exp = 1 << n_inputs
+        self.lut_rank = lut_rank
+        self.lut_entries = 1 << lut_rank
         self.residual_init_param = residual_init_param
         assert stride <= receptive_field_size, (
             f"Stride ({stride}) cannot be larger than receptive field size "
@@ -142,9 +142,9 @@ class LogicConv2d(nn.Module):
         tree_weights = torch.nn.ModuleList()
         for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
-            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
+            for _ in range(self.lut_rank**i):  # Iterate over nodes at this level
                 weights = initialize_weights_raw(self.weight_init, self.num_kernels, 
-                                                 self.n_inputs, self.residual_init_param, self.device)
+                                                 self.lut_rank, self.residual_init_param, self.device)
                 level_weights.append(torch.nn.Parameter(weights))
             tree_weights.append(level_weights)
         forward_sampling_func = {
@@ -196,7 +196,7 @@ class LogicConv2d(nn.Module):
             [self.forward_sampling_func(w) for w in self.tree_weights[0]], dim=0
         )
         if not self.training:
-            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
+            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.lut_entries).to(
                 torch.float32
             )
         x = bin_op_cnn(x[:, 0], x[:, 1], level_weights)
@@ -208,7 +208,7 @@ class LogicConv2d(nn.Module):
                 [self.forward_sampling_func(w) for w in self.tree_weights[level]], dim=0
             )
             if not self.training:
-                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
+                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.lut_entries).to(
                     torch.float32
                 )
             x = bin_op_cnn(x[..., 0, :], x[..., 1, :], level_weights)
@@ -231,21 +231,21 @@ class LogicConv2d(nn.Module):
         May contain self connections and duplicate connections.
 
         Returns:
-            indices: (num_kernels, n_inputs, sample_size, 3)
+            indices: (num_kernels, lut_rank, sample_size, 3)
                     where the last dim is (h, w, c)
         """
         c = self.channels
         h_k = self.receptive_field_size
         w_k = self.receptive_field_size
-        sample_size = self.n_inputs ** self.tree_depth
+        sample_size = self.lut_rank ** self.tree_depth
 
-        size = (self.num_kernels, self.n_inputs, sample_size)
+        size = (self.num_kernels, self.lut_rank, sample_size)
 
         h_indices = torch.randint(0, h_k, size, device=self.device)
         w_indices = torch.randint(0, w_k, size, device=self.device)
         c_indices = torch.randint(0, c,   size, device=self.device)
 
-        # shape: (num_kernels, n_inputs, sample_size, 3)
+        # shape: (num_kernels, lut_rank, sample_size, 3)
         indices = torch.stack((h_indices, w_indices, c_indices), dim=-1)
 
         return indices.transpose(0, 1)
@@ -262,7 +262,7 @@ class LogicConv2d(nn.Module):
                     for kernel k.
         """
         c, h_k, w_k = self.channels, self.receptive_field_size, self.receptive_field_size
-        sample_size = self.n_inputs ** self.tree_depth
+        sample_size = self.lut_rank ** self.tree_depth
         device = self.device
 
         # ---- 1) All RF positions as (h, w, c) ----
@@ -282,12 +282,12 @@ class LogicConv2d(nn.Module):
         # Each row in `comb` is a tuple (i0, i1, ..., i_{tuple_size-1}), i0 < i1 < ...,
         # with all indices in [0, num_positions).
         positions_1d = torch.arange(num_positions, device=device)
-        comb = torch.combinations(positions_1d, r=self.n_inputs, with_replacement=False)  # (T, tuple_size)
+        comb = torch.combinations(positions_1d, r=self.lut_rank, with_replacement=False)  # (T, tuple_size)
         total_tuples = comb.shape[0]
 
         if sample_size > total_tuples:
             raise ValueError(
-                f"Not enough unique {self.n_inputs}-tuples: need {sample_size}, have {total_tuples}"
+                f"Not enough unique {self.lut_rank}-tuples: need {sample_size}, have {total_tuples}"
             )
 
         K = self.num_kernels
@@ -314,11 +314,11 @@ class LogicConv2d(nn.Module):
     
     def _apply_sliding_window_tensor(self, tensor):
         """
-        tensor: torch.Tensor of shape (n_inputs, num_kernels, sample_size, 3)
+        tensor: torch.Tensor of shape (lut_rank, num_kernels, sample_size, 3)
             where last dim is (h, w, c).
 
         Returns:
-            out: torch.Tensor of shape (n_inputs, num_kernels, num_positions, sample_size, 3),
+            out: torch.Tensor of shape (lut_rank, num_kernels, num_positions, sample_size, 3),
                 with the sliding-window offsets applied.
         """
         h, w = self.in_dim[0], self.in_dim[1]
@@ -369,8 +369,8 @@ class LogicConv2d(nn.Module):
             self._apply_sliding_window_tensor(tensor)
         ]
         for level in range(self.tree_depth):
-            size = self.n_inputs ** (self.tree_depth - level)
-            base = torch.arange(size, device=self.device).view(-1, self.n_inputs).transpose(0, 1)
+            size = self.lut_rank ** (self.tree_depth - level)
+            base = torch.arange(size, device=self.device).view(-1, self.lut_rank).transpose(0, 1)
             indices.append(base)
         return indices
     
@@ -380,7 +380,7 @@ class LogicConv2d(nn.Module):
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]:
-                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** n_inputs)``,
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,
                   where each row is the most probable LUT truth table for a
                   neuron (entry is True for output 1, False for 0).
                 - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
@@ -394,7 +394,7 @@ class LogicConv2d(nn.Module):
             level_luts = []
             for w in self.tree_weights[level]:
                 ids = w.argmax(axis=1)
-                luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+                luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.lut_rank, device=ids.device)) & 1).flip(1)
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)
@@ -437,7 +437,7 @@ class LogicConv2dWalsh(LogicConv2d):
         forward_sampling: Sampling method for LUT outputs:
             - ``"soft"``, ``"hard"``, ``"gumbel_soft"``, ``"gumbel_hard"``.
         residual_init_param: Scalar controlling the “residual” Walsh init.
-        n_inputs: Arity of each logic node (usually 2).
+        lut_rank: Arity of each logic node (usually 2).
         arbitrary_basis: If ``True``, allows arbitrary basis functions
             rather than the built-in fast Walsh basis.
     """
@@ -458,7 +458,7 @@ class LogicConv2dWalsh(LogicConv2d):
         temperature: float = 1.0,
         forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
         residual_init_param: float = 1.0,
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         super().__init__(
@@ -476,7 +476,7 @@ class LogicConv2dWalsh(LogicConv2d):
             temperature=temperature,
             forward_sampling=forward_sampling,
             residual_init_param=residual_init_param,
-            n_inputs=n_inputs,
+            lut_rank=lut_rank,
             arbitrary_basis=arbitrary_basis,
         )
 
@@ -485,8 +485,8 @@ class LogicConv2dWalsh(LogicConv2d):
         tree_weights = torch.nn.ModuleList()
         for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
-            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
-                weights = initialize_weights_walsh(self.weight_init, self.num_kernels, self.n_inputs, self.residual_init_param, self.device)
+            for _ in range(self.lut_rank**i):  # Iterate over nodes at this level
+                weights = initialize_weights_walsh(self.weight_init, self.num_kernels, self.lut_rank, self.residual_init_param, self.device)
                 level_weights.append(torch.nn.Parameter(weights))
             tree_weights.append(level_weights)
         forward_sampling_func = {
@@ -531,7 +531,7 @@ class LogicConv2dWalsh(LogicConv2d):
 
         level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
         if not self.arbitrary_basis:
-            basis = walsh_basis_hard_cnn_first_level(x, self.n_inputs)
+            basis = walsh_basis_hard_cnn_first_level(x, self.lut_rank)
         else:
             raise NotImplementedError("Arbitrary basis not implemented yet")
         x = walsh_cnn(basis, level_weights)
@@ -545,7 +545,7 @@ class LogicConv2dWalsh(LogicConv2d):
             x = x[..., self.indices[level]]
             level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
             if not self.arbitrary_basis:
-                basis = walsh_basis_hard_cnn_deep_level(x, self.n_inputs)
+                basis = walsh_basis_hard_cnn_deep_level(x, self.lut_rank)
             else:
                 raise NotImplementedError("Arbitrary basis not implemented yet")
             x = walsh_cnn(basis, level_weights)
@@ -578,10 +578,13 @@ class LogicConv2dWalsh(LogicConv2d):
             level_ids = []
             level_luts = []
             for w in self.tree_weights[level]:
-                luts = walsh_hadamard_transform(w, self.n_inputs)
+                luts = walsh_hadamard_transform(w, self.lut_rank)
                 luts = luts < 0
-                ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
-                ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+                if self.lut_rank <= 4:
+                    ids = 2 ** torch.arange((1 << self.lut_rank) - 1, -1, -1, device=luts.device)
+                    ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+                else:
+                    ids = None
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)
@@ -634,7 +637,7 @@ class LogicConv3d(nn.Module):
             - ``"gumbel_hard"``: Straight-through Gumbel-Softmax.
         residual_init_param: Scalar controlling the strength of the
             residual-style initialization when ``weight_init == "residual"``.
-        n_inputs: Arity of each logic gate (number of Boolean inputs per
+        lut_rank: Arity of each logic gate (number of Boolean inputs per
             node). Typically 2 for binary trees.
         arbitrary_basis: If ``True``, allows more general bases for the LUT
             parametrization (e.g., Walsh), rather than a fixed hard-coded
@@ -657,15 +660,15 @@ class LogicConv3d(nn.Module):
         temperature: float = 1.0,
         forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
         residual_init_param: float = 1.0,
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     
     ):
         super().__init__()
         self.receptive_field_size = _triple(receptive_field_size)
         self.forward_sampling = forward_sampling
-        self.n_inputs = n_inputs
-        self.n_exp = 1 << n_inputs
+        self.lut_rank = lut_rank
+        self.lut_entries = 1 << lut_rank
         self.residual_init_param = residual_init_param
         self.weight_init = weight_init
         self.in_dim = _triple(in_dim)
@@ -700,9 +703,9 @@ class LogicConv3d(nn.Module):
         tree_weights = torch.nn.ModuleList()
         for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
-            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
+            for _ in range(self.lut_rank**i):  # Iterate over nodes at this level
                 weights = initialize_weights_raw(self.weight_init, self.num_kernels, 
-                                                 self.n_inputs, self.residual_init_param, self.device)
+                                                 self.lut_rank, self.residual_init_param, self.device)
                 level_weights.append(torch.nn.Parameter(weights))
             tree_weights.append(level_weights)
         forward_sampling_func = {
@@ -749,7 +752,7 @@ class LogicConv3d(nn.Module):
             dim=0,
         )
         if not self.training:
-            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
+            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.lut_entries).to(
                 torch.float32
             )
 
@@ -763,7 +766,7 @@ class LogicConv3d(nn.Module):
             )
 
             if not self.training:
-                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.n_exp).to(
+                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 1 << self.lut_entries).to(
                     torch.float32
                 )
 
@@ -789,23 +792,23 @@ class LogicConv3d(nn.Module):
         May contain self connections and duplicate connections.
 
         Returns:
-            indices: (num_kernels, n_inputs, sample_size, 4)
+            indices: (num_kernels, lut_rank, sample_size, 4)
                     where the last dim is (h, w, d, c)
         """
         c = self.channels
         h_k = self.receptive_field_size[0]
         w_k = self.receptive_field_size[1]
         d_k = self.receptive_field_size[2]
-        sample_size = self.n_inputs ** self.tree_depth
+        sample_size = self.lut_rank ** self.tree_depth
 
-        size = (self.num_kernels, self.n_inputs, sample_size)
+        size = (self.num_kernels, self.lut_rank, sample_size)
 
         h_indices = torch.randint(0, h_k, size, device=self.device)
         w_indices = torch.randint(0, w_k, size, device=self.device)
         d_indices = torch.randint(0, d_k,   size, device=self.device)
         c_indices = torch.randint(0, c,   size, device=self.device)
 
-        # shape: (num_kernels, n_inputs, sample_size, 4)
+        # shape: (num_kernels, lut_rank, sample_size, 4)
         indices = torch.stack((h_indices, w_indices, d_indices, c_indices), dim=-1)
         return indices.transpose(0, 1)
     
@@ -821,7 +824,7 @@ class LogicConv3d(nn.Module):
                     for kernel k.
         """
         c, h_k, w_k, d_k = self.channels, *self.receptive_field_size
-        sample_size = self.n_inputs ** self.tree_depth
+        sample_size = self.lut_rank ** self.tree_depth
         device = self.device
 
         # ---- 1) All RF positions as (h, w, c) ----
@@ -842,12 +845,12 @@ class LogicConv3d(nn.Module):
         # Each row in `comb` is a tuple (i0, i1, ..., i_{tuple_size-1}), i0 < i1 < ...,
         # with all indices in [0, num_positions).
         positions_1d = torch.arange(num_positions, device=device)
-        comb = torch.combinations(positions_1d, r=self.n_inputs, with_replacement=False)  # (T, tuple_size)
+        comb = torch.combinations(positions_1d, r=self.lut_rank, with_replacement=False)  # (T, tuple_size)
         total_tuples = comb.shape[0]
 
         if sample_size > total_tuples:
             raise ValueError(
-                f"Not enough unique {self.n_inputs}-tuples: need {sample_size}, have {total_tuples}"
+                f"Not enough unique {self.lut_rank}-tuples: need {sample_size}, have {total_tuples}"
             )
 
         K = self.num_kernels
@@ -873,11 +876,11 @@ class LogicConv3d(nn.Module):
     
     def _apply_sliding_window_tensor(self, tensor):
         """
-        tensor: torch.Tensor of shape (n_inputs, num_kernels, sample_size, 4)
+        tensor: torch.Tensor of shape (lut_rank, num_kernels, sample_size, 4)
             where last dim is (h, w, c, d).
 
         Returns:
-            out: torch.Tensor of shape (n_inputs, num_kernels, num_positions, sample_size, 4),
+            out: torch.Tensor of shape (lut_rank, num_kernels, num_positions, sample_size, 4),
                 with the sliding-window offsets applied.
         """
         h, w, d = self.in_dim[0], self.in_dim[1], self.in_dim[2]
@@ -933,8 +936,8 @@ class LogicConv3d(nn.Module):
             self._apply_sliding_window_tensor(tensor)
         ]
         for level in range(self.tree_depth):
-            size = self.n_inputs ** (self.tree_depth - level)
-            base = torch.arange(size, device=self.device).view(-1, self.n_inputs).transpose(0, 1)
+            size = self.lut_rank ** (self.tree_depth - level)
+            base = torch.arange(size, device=self.device).view(-1, self.lut_rank).transpose(0, 1)
             indices.append(base)
         return indices
     
@@ -944,7 +947,7 @@ class LogicConv3d(nn.Module):
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]:
-                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** n_inputs)``,
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,
                   where each row is the most probable LUT truth table for a
                   neuron (entry is True for output 1, False for 0).
                 - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
@@ -958,7 +961,7 @@ class LogicConv3d(nn.Module):
             level_luts = []
             for w in self.tree_weights[level]:
                 ids = w.argmax(axis=1)
-                luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.n_inputs, device=ids.device)) & 1).flip(1)
+                luts = ((ids.unsqueeze(-1) >> torch.arange(1 << self.lut_rank, device=ids.device)) & 1).flip(1)
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)
@@ -1001,7 +1004,7 @@ class LogicConv3dWalsh(LogicConv3d):
         forward_sampling: Sampling method for LUT outputs:
             - ``"soft"``, ``"hard"``, ``"gumbel_soft"``, ``"gumbel_hard"``.
         residual_init_param: Scalar controlling the “residual” Walsh init.
-        n_inputs: Arity of each logic node (usually 2).
+        lut_rank: Arity of each logic node (usually 2).
         arbitrary_basis: If ``True``, allows arbitrary basis functions
             rather than the built-in fast Walsh basis.
     """
@@ -1022,7 +1025,7 @@ class LogicConv3dWalsh(LogicConv3d):
         temperature: float = 1.0,
         forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
         residual_init_param: float = 1.0,
-        n_inputs: int = 2,
+        lut_rank: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
         super().__init__(
@@ -1040,7 +1043,7 @@ class LogicConv3dWalsh(LogicConv3d):
             temperature=temperature,
             forward_sampling=forward_sampling,
             residual_init_param=residual_init_param,
-            n_inputs=n_inputs,
+            lut_rank=lut_rank,
             arbitrary_basis=arbitrary_basis,
         )
 
@@ -1049,8 +1052,8 @@ class LogicConv3dWalsh(LogicConv3d):
         tree_weights = torch.nn.ModuleList()
         for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
             level_weights = torch.nn.ParameterList()
-            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
-                weights = initialize_weights_walsh(self.weight_init, self.num_kernels, self.n_inputs, self.residual_init_param, self.device)
+            for _ in range(self.lut_rank**i):  # Iterate over nodes at this level
+                weights = initialize_weights_walsh(self.weight_init, self.num_kernels, self.lut_rank, self.residual_init_param, self.device)
                 level_weights.append(torch.nn.Parameter(weights))
             tree_weights.append(level_weights)
         forward_sampling_func = {
@@ -1095,7 +1098,7 @@ class LogicConv3dWalsh(LogicConv3d):
 
         level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
         if not self.arbitrary_basis:
-            basis = walsh_basis_hard_cnn_first_level(x, self.n_inputs)
+            basis = walsh_basis_hard_cnn_first_level(x, self.lut_rank)
         else:
             raise NotImplementedError("Arbitrary basis not implemented yet")
         x = walsh_cnn(basis, level_weights)
@@ -1109,7 +1112,7 @@ class LogicConv3dWalsh(LogicConv3d):
             x = x[..., self.indices[level]]
             level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
             if not self.arbitrary_basis:
-                basis = walsh_basis_hard_cnn_deep_level(x, self.n_inputs)
+                basis = walsh_basis_hard_cnn_deep_level(x, self.lut_rank)
             else:
                 raise NotImplementedError("Arbitrary basis not implemented yet")
             x = walsh_cnn(basis, level_weights)
@@ -1144,10 +1147,13 @@ class LogicConv3dWalsh(LogicConv3d):
             level_ids = []
             level_luts = []
             for w in self.tree_weights[level]:
-                luts = walsh_hadamard_transform(w, self.n_inputs)
+                luts = walsh_hadamard_transform(w, self.lut_rank)
                 luts = luts < 0
-                ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
-                ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+                if self.lut_rank <= 4:
+                    ids = 2 ** torch.arange((1 << self.lut_rank) - 1, -1, -1, device=luts.device)
+                    ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+                else:
+                    ids = None
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)
