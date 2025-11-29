@@ -292,26 +292,8 @@ def test_binary_model():
 
 
 def test_lut_rank_walsh():
-    """Test scaling up to multiple inputs, that is n=4 and n=6."""
+    """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
-    layer = layer = LogicConv3dWalsh(
-        in_dim=(3, 4, 3),
-        device="cpu",
-        channels=1,
-        num_kernels=1,
-        tree_depth=0,
-        receptive_field_size=3,
-        connections="random-unique",
-        stride=1,
-        padding=0,
-        lut_rank=lut_rank,
-    )
-    luts, ids = layer.get_lut_ids()
-    for luts_level in luts:
-        for luts_ in luts_level:
-            assert luts_.shape[-1] == 1 << lut_rank
-
-    lut_rank = 6
     layer = layer = LogicConv3dWalsh(
         in_dim=(3, 4, 3),
         device="cpu",

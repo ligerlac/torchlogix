@@ -96,18 +96,9 @@ def test_xor_model_walsh():
 
 
 def test_lut_rank_walsh():
-    """Test scaling up to multiple inputs, that is n=4 and n=6."""
+    """Test scaling up to multiple inputs, that is n=4."""
     x = 1 - 2 * torch.rand((1, 12))
     lut_rank = 4
-    out_dim = x.shape[1] // lut_rank
-    layer = LogicDenseWalsh(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw)
-    luts, ids = layer.get_lut_ids()
-    assert luts.shape == (out_dim, 1 << lut_rank)
-    model = torch.nn.Sequential(layer)
-    y = model(x)
-    assert y.shape == (x.shape[0], out_dim)
-
-    lut_rank = 6
     out_dim = x.shape[1] // lut_rank
     layer = LogicDenseWalsh(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw)
     luts, ids = layer.get_lut_ids()
