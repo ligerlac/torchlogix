@@ -191,11 +191,13 @@ def test_and_model():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0, 0], [0, 1, 0, 0]]]),
-        torch.tensor([[[0, 0, 1, 0], [0, 1, 1, 0]]]),
+    kernels = torch.tensor(
+        [
+        [[[0, 0, 0, 0], [0, 1, 0, 0]]],
+        [[[0, 0, 1, 0], [0, 1, 1, 0]]],
+        ]
     )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -253,11 +255,11 @@ def test_binary_model():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
-        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
+    kernels = torch.tensor(
+        [[[[0, 0, 0, 0], [1, 0, 0, 0]]],
+        [[[0, 1, 0, 0], [1, 1, 0, 0]]]],
     )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to BARELY select AND operation
     with torch.no_grad():
@@ -302,11 +304,11 @@ def test_conv_model():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
-        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
+    kernels = torch.tensor(
+        [[[[0, 0, 0, 0], [1, 0, 0, 0]]],
+        [[[0, 1, 0, 0], [1, 1, 0, 0]]]],
     )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -374,11 +376,11 @@ def test_conv_model_rect():
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
-        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
+    kernels = torch.tensor(
+        [[[[0, 0, 0, 0], [1, 0, 0, 0]]],
+        [[[0, 1, 0, 0], [1, 1, 0, 0]]]],
     )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
