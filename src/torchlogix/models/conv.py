@@ -6,7 +6,7 @@ from ..layers import OrPooling, GroupSum, setup_cnn_cls, setup_dense_cls
 class CNN(torch.nn.Module):
     """An implementation of a logic gate convolutional neural network."""
 
-    def __init__(self, class_count, tau, parametrization, **llkw):
+    def __init__(self, class_count, tau, parametrization="raw", **llkw):
         super(CNN, self).__init__()
         cnn_cls = setup_cnn_cls(parametrization)
         dense_cls = setup_dense_cls(parametrization)
