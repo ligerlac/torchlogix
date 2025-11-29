@@ -366,7 +366,7 @@ class LogicConv2d(nn.Module):
     
     def _get_indices_from_kernel_tensor(self, tensor):
         indices = [
-            self.apply_sliding_window_tensor(tensor)
+            self._apply_sliding_window_tensor(tensor)
         ]
         for level in range(self.tree_depth):
             size = self.n_inputs ** (self.tree_depth - level)
@@ -744,9 +744,7 @@ class LogicConv3d(nn.Module):
         """
         c, h_k, w_k, d_k = (
             self.channels,
-            self.receptive_field_size[0],
-            self.receptive_field_size[1],
-            self.receptive_field_size[2]
+            *self.receptive_field_size
         )
         sample_size = 2**self.tree_depth
 
@@ -773,6 +771,31 @@ class LogicConv3d(nn.Module):
 
         # Stack all kernel pairs: shape (num_kernels, sample_size, 4)
         return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
+    
+    def _get_random_receptive_field_tensor(self):
+        """Generate random index tensor within the receptive field for each kernel.
+        May contain self connections and duplicate connections.
+
+        Returns:
+            indices: (num_kernels, n_inputs, sample_size, 4)
+                    where the last dim is (h, w, d, c)
+        """
+        c = self.channels
+        h_k = self.receptive_field_size[0]
+        w_k = self.receptive_field_size[1]
+        d_k = self.receptive_field_size[2]
+        sample_size = self.n_inputs ** self.tree_depth
+
+        size = (self.num_kernels, self.n_inputs, sample_size)
+
+        h_indices = torch.randint(0, h_k, size, device=self.device)
+        w_indices = torch.randint(0, w_k, size, device=self.device)
+        d_indices = torch.randint(0, d_k,   size, device=self.device)
+        c_indices = torch.randint(0, c,   size, device=self.device)
+
+        # shape: (num_kernels, n_inputs, sample_size, 4)
+        indices = torch.stack((h_indices, w_indices, d_indices, c_indices), dim=-1)
+        return indices.transpose(0, 1)
 
 
     def get_random_unique_receptive_field_pairs(self):
@@ -781,9 +804,7 @@ class LogicConv3d(nn.Module):
         """
         c, h_k, w_k, d_k = (
             self.channels,
-            self.receptive_field_size[0],
-            self.receptive_field_size[1],
-            self.receptive_field_size[2]
+            *self.receptive_field_size
         )
         sample_size = 2**self.tree_depth
 
@@ -830,6 +851,67 @@ class LogicConv3d(nn.Module):
 
         # Stack all kernel pairs: shape (num_kernels, sample_size, 4)
         return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
+    
+    def _get_random_unique_receptive_field_tensor(self):
+        """
+        Generate random unique index tensor within the receptive field for each kernel.
+        - No self-connections inside a tuple (all positions distinct).
+        - No duplicate tuples within each kernel (unordered combinations).
+
+        Returns:
+            coords: tensor of shape (tuple_size, num_kernels, sample_size, 3)
+                    coords[t, k, s] is the (h, w, c) of the t-th element of the s-th tuple
+                    for kernel k.
+        """
+        c, h_k, w_k, d_k = self.channels, *self.receptive_field_size
+        sample_size = self.n_inputs ** self.tree_depth
+        device = self.device
+
+        # ---- 1) All RF positions as (h, w, c) ----
+        h_rf = torch.arange(0, h_k, device=device)
+        w_rf = torch.arange(0, w_k, device=device)
+        d_rf = torch.arange(0, d_k, device=device)
+        c_rf = torch.arange(0, c,   device=device)
+
+        h_rf_grid, w_rf_grid, d_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, d_rf, c_rf, indexing="ij")
+        all_positions = torch.stack(
+            [h_rf_grid.flatten(), w_rf_grid.flatten(), d_rf_grid.flatten(), c_rf_grid.flatten()],
+            dim=1,  # (num_positions, 3)
+        )
+
+        num_positions = h_k * w_k * d_k * c
+
+        # ---- 2) All unique unordered index tuples of size `tuple_size` ----
+        # Each row in `comb` is a tuple (i0, i1, ..., i_{tuple_size-1}), i0 < i1 < ...,
+        # with all indices in [0, num_positions).
+        positions_1d = torch.arange(num_positions, device=device)
+        comb = torch.combinations(positions_1d, r=self.n_inputs, with_replacement=False)  # (T, tuple_size)
+        total_tuples = comb.shape[0]
+
+        if sample_size > total_tuples:
+            raise ValueError(
+                f"Not enough unique {self.n_inputs}-tuples: need {sample_size}, have {total_tuples}"
+            )
+
+        K = self.num_kernels
+
+        # ---- 3) Sample `sample_size` tuples per kernel, without replacement ----
+        selected_idx = torch.multinomial(
+            torch.ones(K, total_tuples, device=device),
+            sample_size,
+            replacement=False
+        )
+
+        # Selected tuples of indices into all_positions: (K, sample_size, tuple_size)
+        tuple_indices = comb[selected_idx]
+
+        # ---- 4) Map to (h, w, c) coordinates ----
+        coords = all_positions[tuple_indices]  # (K, sample_size, tuple_size, 4)
+
+        # ---- 5) Put tuple axis first, to mirror your old (A, B) output style ----
+        # Old pairs: (A, B) each (K, S, 4)
+        # New tuples: coords[t] is like "A", "B", "C", ...:
+        coords = coords.permute(2, 0, 1, 3)    # (tuple_size, K, sample_size, 4)
 
 
     def apply_sliding_window(self, pairs_tuple):

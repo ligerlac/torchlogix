@@ -191,7 +191,7 @@ def test_and_model():
         [[[0, 0, 0], [1, 0, 0]]],
         [[[0, 1, 0], [1, 1, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -253,7 +253,7 @@ def test_get_lut_ids_and():
         [[[0, 0, 0], [1, 0, 0]]],
         [[[0, 1, 0], [1, 1, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -296,7 +296,7 @@ def test_get_lut_ids_and_walsh():
         [[[0, 0, 0], [1, 0, 0]]],
         [[[0, 1, 0], [1, 1, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -337,7 +337,7 @@ def test_and_model_walsh():
         [[[0, 0, 0], [1, 0, 0]]],
         [[[0, 1, 0], [1, 1, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -395,7 +395,7 @@ def test_binary_model():
         [[[0, 0, 0], [1, 0, 0]]],
         [[[0, 1, 0], [1, 1, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to BARELY select AND operation
     with torch.no_grad():
@@ -445,7 +445,7 @@ def test_conv_model():
         [[[0, 0, 0], [1, 0, 0]]],
         [[[0, 1, 0], [1, 1, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -504,7 +504,7 @@ def test_conv_model_rect():
         [[[0, 0, 0, 0], [1, 0, 0, 0]]],
         [[[0, 1, 0, 0], [1, 1, 0, 0]]]
     ])
-    layer.indices = layer.get_indices_from_kernel_tensor(kernels)
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
