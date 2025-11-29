@@ -342,7 +342,7 @@ def walsh_basis_hard(x, lut_rank):
         A, B = x[:, 0], x[:, 1]
         basis = walsh_basis_2(A, B)
     elif lut_rank == 4:
-        A, B, C, D = (x[:, 0], x[:, 1], 
+        A, B, C, D = (x[:, 0], x[:, 1],
                         x[:, 2], x[:, 3]
                         )
         basis = walsh_basis_4(A, B, C, D)
@@ -350,26 +350,6 @@ def walsh_basis_hard(x, lut_rank):
         A, B, C, D, E, F = (
             x[:, 0], x[:, 1], x[:, 2],
             x[:, 3], x[:, 4], x[:, 5],
-        )
-        basis = walsh_basis_6(A, B, C, D, E, F)
-    else:
-        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
-    return basis
-
-
-def walsh_basis_hard_cnn_deep_level(x, lut_rank):
-    if lut_rank == 2:
-        A, B = x[..., 0,:], x[..., 1,:]
-        basis = walsh_basis_2(A, B)
-    elif lut_rank == 4:
-        A, B, C, D = (x[..., 0,:], x[..., 1,:], 
-                        x[..., 2,:], x[..., 3,:]
-                        )
-        basis = walsh_basis_4(A, B, C, D)
-    elif lut_rank == 6:
-        A, B, C, D, E, F = (
-            x[..., 0,:], x[..., 1,:], x[..., 2,:],
-            x[..., 3,:], x[..., 4,:], x[..., 5,:],
         )
         basis = walsh_basis_6(A, B, C, D, E, F)
     else:

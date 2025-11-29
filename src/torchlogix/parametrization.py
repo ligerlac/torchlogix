@@ -13,7 +13,6 @@ from .functional import (
     bin_op_s,
     bin_op_cnn,
     walsh_basis_hard,
-    walsh_basis_hard_cnn_deep_level,
     walsh_cnn,
     walsh_hadamard_transform
 )
@@ -105,27 +104,6 @@ class LUTParametrization(ABC):
         pass
 
     @abstractmethod
-    def forward_conv_deep_level(
-        self,
-        x: torch.Tensor,
-        weight: torch.Tensor,
-        sampler,
-        training: bool
-    ) -> torch.Tensor:
-        """Compute forward pass for deeper levels of convolutional logic tree.
-
-        Args:
-            x: Input tensor from previous tree level.
-            weight: Weight parameters for this level.
-            sampler: Sampler instance.
-            training: Whether in training mode.
-
-        Returns:
-            Output tensor from this tree level.
-        """
-        pass
-
-    @abstractmethod
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Extract LUT truth tables and IDs from weights.
 
@@ -197,22 +175,6 @@ class RawLUTParametrization(LUTParametrization):
             )
 
         return bin_op_cnn(x[:, 0], x[:, 1], level_weights)
-
-    def forward_conv_deep_level(
-        self,
-        x: torch.Tensor,
-        weight: torch.Tensor,
-        sampler,
-        training: bool
-    ) -> torch.Tensor:
-        if training:
-            level_weights = torch.stack([sampler.sample_train(w) for w in weight], dim=0)
-        else:
-            level_weights = torch.stack(
-                [sampler.sample_eval(w, self.num_functions) for w in weight], dim=0
-            )
-
-        return bin_op_cnn(x[..., 0, :], x[..., 1, :], level_weights)
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ids = weight.argmax(axis=1)
@@ -294,28 +256,6 @@ class WalshLUTParametrization(LUTParametrization):
 
         return x
 
-    def forward_conv_deep_level(
-        self,
-        x: torch.Tensor,
-        weight: torch.Tensor,
-        sampler,
-        training: bool
-    ) -> torch.Tensor:
-        level_weights = torch.stack([w for w in weight], dim=0)
-
-        if not self.arbitrary_basis:
-            basis = walsh_basis_hard_cnn_deep_level(x, self.lut_rank)
-        else:
-            raise NotImplementedError("Arbitrary basis not implemented yet")
-
-        x = walsh_cnn(basis, level_weights)
-
-        if training:
-            x = sampler.sample_train(-x)
-        else:
-            x = sampler.sample_eval(-x)
-
-        return x
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         luts = walsh_hadamard_transform(weight, self.lut_rank)
