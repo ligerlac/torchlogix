@@ -964,6 +964,195 @@ class LogicConv3d(nn.Module):
             tree_ids.append(level_ids)
             tree_luts.append(level_luts)
         return tree_luts, tree_ids
+    
+
+class LogicConv3dWalsh(LogicConv3d):
+    """3D convolutional layer using Walsh–Hadamard–parametrized logic operations.
+
+    This class extends :class:`LogicConv3d` by replacing the raw-LUT
+    parametrization with a Walsh–Hadamard basis (or optionally an arbitrary
+    user-defined basis). Each logic gate in the convolution's binary tree is
+    parameterized by Walsh coefficients rather than direct truth-table logits.
+
+    This provides a smoother optimization landscape and better structure
+    for Boolean functions, especially for parity-like computations.
+
+    This constructor calls :class:`LogicConv2d` first to set up the
+    receptive-field connection structure and binary-tree indexing. The
+    Walsh-specific weight initialization is then performed by overriding
+    :meth:`_init_weights`.
+
+    Args:
+        in_dim: Input spatial dimensions ``(height, width, depth)``.
+        device: Device for parameter storage (e.g. ``"cpu"``, ``"cuda"``).
+        grad_factor: Gradient scaling factor applied inside the logic tree.
+        channels: Number of input channels.
+        num_kernels: Number of output kernels (analogous to output channels).
+        tree_depth: Depth of the binary logic tree.
+        receptive_field_size: Spatial size of the receptive field (square).
+        connections: Receptive-field sampling mode:
+            - ``"random"``: Random RF positions.
+            - ``"random-unique"``: Non-overlapping unique positions.
+        weight_init: Weight initialization method for Walsh coefficients.
+            One of ``"residual"`` or ``"random"``.
+        stride: Convolution stride.
+        padding: Zero-padding on all sides before RF extraction.
+        temperature: Temperature for (Gumbel-)sigmoid sampling.
+        forward_sampling: Sampling method for LUT outputs:
+            - ``"soft"``, ``"hard"``, ``"gumbel_soft"``, ``"gumbel_hard"``.
+        residual_init_param: Scalar controlling the “residual” Walsh init.
+        n_inputs: Arity of each logic node (usually 2).
+        arbitrary_basis: If ``True``, allows arbitrary basis functions
+            rather than the built-in fast Walsh basis.
+    """
+
+    def __init__(
+        self,
+        in_dim: _size_3_t,
+        device: str = "cuda",
+        grad_factor: float = 1.0,
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: _size_3_t = None,
+        connections: str = "random",  # or 'random-unique'
+        weight_init: str = "residual",  # "residual" or "random"
+        stride: int = 1,
+        padding: int = 0,
+        temperature: float = 1.0,
+        forward_sampling: str = "soft", # or "hard", "gumbel_soft", or "gumbel_hard"
+        residual_init_param: float = 1.0,
+        n_inputs: int = 2,
+        arbitrary_basis: bool = False  # Whether to use hard-coded basis
+    ):
+        super().__init__(
+            in_dim=in_dim,
+            device=device,
+            grad_factor=grad_factor,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            connections=connections,
+            weight_init=weight_init,
+            stride=stride,
+            padding=padding,
+            temperature=temperature,
+            forward_sampling=forward_sampling,
+            residual_init_param=residual_init_param,
+            n_inputs=n_inputs,
+            arbitrary_basis=arbitrary_basis,
+        )
+
+
+    def _init_weights(self):
+        tree_weights = torch.nn.ModuleList()
+        for i in reversed(range(self.tree_depth + 1)):  # Iterate over tree levels
+            level_weights = torch.nn.ParameterList()
+            for _ in range(self.n_inputs**i):  # Iterate over nodes at this level
+                weights = initialize_weights_walsh(self.weight_init, self.num_kernels, self.n_inputs, self.residual_init_param, self.device)
+                level_weights.append(torch.nn.Parameter(weights))
+            tree_weights.append(level_weights)
+        forward_sampling_func = {
+            "soft": lambda w: sigmoid(w, tau=self.temperature, hard=False),
+            "hard": lambda w: sigmoid(w, tau=self.temperature, hard=True),
+            "gumbel_soft": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=False),
+            "gumbel_hard": lambda w: gumbel_sigmoid(w, tau=self.temperature, hard=True),
+        }[self.forward_sampling]
+        return tree_weights, forward_sampling_func
+    
+    def forward(self, x):
+        """Applies the Walsh-based logic convolution to the input.
+
+        The computation mirrors :meth:`LogicConv3d.forward`, but replaces raw
+        truth-table operations with fast Walsh–Hadamard-domain operations.
+
+        Workflow:
+            1. Pad the input if needed.
+            2. Extract receptive-field slices for the first tree level.
+            3. Compute Walsh basis activations using specialized kernels.
+            4. For each tree node:
+                - Apply Walsh coefficients to the basis.
+                - Aggregate the results upward in the tree.
+            5. Reshape the output into ``(batch, num_kernels, H_out, W_out, D_out)``.
+
+        Args:
+            x: Input tensor of shape ``(batch_size, channels, height, width, depth)``.
+
+        Returns:
+            Tensor of shape ``(batch_size, num_kernels, out_height, out_width, out_depth)``.
+        """
+        if self.padding > 0:
+            x = torch.nn.functional.pad(
+                x,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
+            )
+        # first level tree indices
+        ind_h, ind_w, ind_d, ind_c = self.indices[0][...,0], self.indices[0][...,1], self.indices[0][...,2], self.indices[0][...,3]
+        x = x[:, ind_c, ind_h, ind_w, ind_d]
+
+        level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
+        if not self.arbitrary_basis:
+            basis = walsh_basis_hard_cnn_first_level(x, self.n_inputs)
+        else:
+            raise NotImplementedError("Arbitrary basis not implemented yet")
+        x = walsh_cnn(basis, level_weights)
+        if self.training:
+            x = self.forward_sampling_func(-x)
+        else:
+            x = (-x > 0).to(torch.float32)
+
+        # Process remaining levels
+        for level in range(1, self.tree_depth + 1):
+            x = x[..., self.indices[level]]
+            level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
+            if not self.arbitrary_basis:
+                basis = walsh_basis_hard_cnn_deep_level(x, self.n_inputs)
+            else:
+                raise NotImplementedError("Arbitrary basis not implemented yet")
+            x = walsh_cnn(basis, level_weights)
+            if self.training:
+                x = self.forward_sampling_func(-x)
+            else:
+                x = (-x > 0).to(torch.float32)
+
+        # Reshape flattened output
+        reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        reshape_d = (self.in_dim[2] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+
+        x = x.view(
+            x.shape[0],
+            x.shape[1],
+            reshape_h,
+            reshape_w,
+            reshape_d,
+        )
+
+        return x
+    
+    def get_lut_ids(self):
+        """
+        Computes most-probable LUT for each learned set of weights.
+        Returns tuple with most probable LUTs and their IDs.
+        """
+        tree_ids = []
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_ids = []
+            level_luts = []
+            for w in self.tree_weights[level]:
+                luts = walsh_hadamard_transform(w, self.n_inputs)
+                luts = luts < 0
+                ids = 2 ** torch.arange((1 << self.n_inputs) - 1, -1, -1, device=luts.device)
+                ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+                level_ids.append(ids)
+                level_luts.append(luts)
+            tree_ids.append(level_ids)
+            tree_luts.append(level_luts)
+        return tree_luts, tree_ids
 
 
 class OrPooling(torch.nn.Module):
