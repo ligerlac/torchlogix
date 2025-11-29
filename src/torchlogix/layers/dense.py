@@ -96,7 +96,6 @@ class LogicDense(torch.nn.Module):
             f"connections must be 'random' or 'random-unique', got {connections}"
         )
         self.indices = self._get_connections(connections)
-        self.indices_T = self.indices.transpose(0, 1)
 
         # Legacy attributes for compatibility
         self.num_neurons = out_dim
@@ -119,14 +118,24 @@ class LogicDense(torch.nn.Module):
         Returns:
             A tensor of shape ``(..., out_dim)`` containing the neuron outputs.
         """
+        assert x.ndim >= 2, x.ndim
         assert x.shape[-1] == self.in_dim, (x.shape[-1], self.in_dim)
 
         if self.grad_factor != 1.0:
             x = GradFactor.apply(x, self.grad_factor)
 
+        # Extract inputs according to connection pattern
+        indices = self.indices.long()
+        
+        print(f"{x.shape=}\n{indices.shape=}")
+
+        x = x[:, indices]  # Shape: (batch_size, lut_rank, out_dim)
+
+        print(f"{x.shape=}")
+
         # Delegate to parametrization
         return self.parametrization.forward_dense(
-            x, self.indices, self.weight, self.sampler, self.training
+            x, self.weight, self.sampler, self.training
         )
 
     def extra_repr(self):

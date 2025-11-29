@@ -329,32 +329,15 @@ def kron_pairwise_basis(x):
 
     return out
 
+
 def walsh_cnn(r, i_s):
     i_s = i_s.unsqueeze(0).unsqueeze(2)
     i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
     i_s = i_s.permute(0, 3, 2, 1, 4)
     return (r * i_s).sum(dim=-1)
 
-def walsh_basis_hard(x, indices, lut_rank):
-    if lut_rank == 2:
-        A, B = x[..., indices[0]], x[..., indices[1]]
-        basis = walsh_basis_2(A, B)
-    elif lut_rank == 4:
-        A, B, C, D = (x[..., indices[0]], x[..., indices[1]], 
-                        x[..., indices[2]], x[..., indices[3]]
-                        )
-        basis = walsh_basis_4(A, B, C, D)
-    elif lut_rank == 6:
-        A, B, C, D, E, F = (
-            x[..., indices[0]], x[..., indices[1]], x[..., indices[2]],
-            x[..., indices[3]], x[..., indices[4]], x[..., indices[5]],
-        )
-        basis = walsh_basis_6(A, B, C, D, E, F)
-    else:
-        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
-    return basis
 
-def walsh_basis_hard_cnn_first_level(x, lut_rank):
+def walsh_basis_hard(x, lut_rank):
     if lut_rank == 2:
         A, B = x[:, 0], x[:, 1]
         basis = walsh_basis_2(A, B)
@@ -372,6 +355,7 @@ def walsh_basis_hard_cnn_first_level(x, lut_rank):
     else:
         raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
+
 
 def walsh_basis_hard_cnn_deep_level(x, lut_rank):
     if lut_rank == 2:
@@ -391,6 +375,7 @@ def walsh_basis_hard_cnn_deep_level(x, lut_rank):
     else:
         raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
+
 
 def walsh_basis_2(A, B) -> torch.Tensor:
     #A = 1- 2 * a

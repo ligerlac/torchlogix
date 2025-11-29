@@ -92,7 +92,7 @@ def test_xor_model():
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:
-        assert np.isclose(model(torch.tensor([x, y])).item(), expected)
+        assert np.isclose(model(torch.tensor([[x, y]])).item(), expected)
 
 
 def test_xor_model_walsh():
@@ -108,7 +108,7 @@ def test_xor_model_walsh():
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:
-        pred = model(torch.tensor([x, y])).item()
+        pred = model(torch.tensor([[x, y]])).item()
         assert np.isclose(pred, expected)
 
 
@@ -131,13 +131,13 @@ def test_compiled_model():
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="random-unique",
+            connections="random",
             device="cpu",
         ),
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="random-unique",
+            connections="random",
             device="cpu",
         ),
         GroupSum(1),

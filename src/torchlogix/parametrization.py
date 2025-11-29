@@ -13,7 +13,6 @@ from .functional import (
     bin_op_s,
     bin_op_cnn,
     walsh_basis_hard,
-    walsh_basis_hard_cnn_first_level,
     walsh_basis_hard_cnn_deep_level,
     walsh_cnn,
     walsh_hadamard_transform
@@ -64,8 +63,8 @@ class LUTParametrization(ABC):
     @abstractmethod
     def forward_dense(
         self,
-        x: torch.Tensor,
-        indices: torch.Tensor,
+        a: torch.Tensor,
+        b: torch.Tensor,
         weight: torch.Tensor,
         sampler,
         training: bool
@@ -73,8 +72,8 @@ class LUTParametrization(ABC):
         """Compute forward pass for dense logic layer.
 
         Args:
-            x: Input tensor of shape (..., in_dim).
-            indices: Connection indices of shape (lut_rank, out_dim).
+            a: First input tensor of shape (..., out_dim).
+            b: Second input tensor of shape (..., out_dim).
             weight: Weight parameters.
             sampler: Sampler instance for weight sampling.
             training: Whether in training mode.
@@ -170,13 +169,11 @@ class RawLUTParametrization(LUTParametrization):
     def forward_dense(
         self,
         x: torch.Tensor,
-        indices: torch.Tensor,
         weight: torch.Tensor,
         sampler,
         training: bool
     ) -> torch.Tensor:
-        indices = indices.long()
-        a, b = x[..., indices[0]], x[..., indices[1]]
+        a, b = x[:, 0], x[:, 1]
 
         if training:
             w = sampler.sample_train(weight)
@@ -252,16 +249,14 @@ class WalshLUTParametrization(LUTParametrization):
     def forward_dense(
         self,
         x: torch.Tensor,
-        indices: torch.Tensor,
         weight: torch.Tensor,
         sampler,
         training: bool
     ) -> torch.Tensor:
-        indices = indices.long()
         x = 1 - 2 * x  # Convert to {-1, +1}
 
         if not self.arbitrary_basis:
-            basis = walsh_basis_hard(x, indices, self.lut_rank)
+            basis = walsh_basis_hard(x, self.lut_rank)
         else:
             # Generic basis computation using precomputed bits
             # This would require access to self.bits from the layer
@@ -286,7 +281,7 @@ class WalshLUTParametrization(LUTParametrization):
         level_weights = torch.stack([w for w in weight], dim=0)
 
         if not self.arbitrary_basis:
-            basis = walsh_basis_hard_cnn_first_level(x, self.lut_rank)
+            basis = walsh_basis_hard(x, self.lut_rank)
         else:
             raise NotImplementedError("Arbitrary basis not implemented yet")
 
