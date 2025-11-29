@@ -60,13 +60,15 @@ def test_xor_model_walsh():
         assert np.isclose(pred, expected)
 
 
-def test_compiled_model():
+@pytest.mark.parametrize("weight_init", ["random", "residual"])
+def test_compiled_model(weight_init):
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
         LogicDense(
             in_dim=42,
             out_dim=42,
             connections="unique",
+            weight_init=weight_init,
             implementation="python",
             device="cpu",
         ),
@@ -74,13 +76,14 @@ def test_compiled_model():
             in_dim=42,
             out_dim=42,
             connections="unique",
+            weight_init=weight_init,
             implementation="python",
             device="cpu",
         ),
         GroupSum(1),
     )
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(42,), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
 
@@ -103,7 +106,7 @@ def test_large_compiled_model():
         GroupSum(8),
     )
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(81 * k_num,), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
 

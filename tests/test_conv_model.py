@@ -27,7 +27,7 @@ def test_clgn_model():
     assert isinstance(preds, torch.Tensor)
 
     compiled_model = CompiledLogicNet(
-        model=model.model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model.model, input_shape=(1, 28, 28), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="compiled_clgn_model.so", verbose=False)
 
