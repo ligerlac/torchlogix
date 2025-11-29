@@ -35,11 +35,55 @@ def setup_cnn_cls(parametrization: str) -> torch.nn.Module:
     
 
 class LogicConv2d(nn.Module):
-    """2d convolutional layer with differentiable logic operations.
+    """2D convolutional layer with differentiable logic operations.
 
-    This layer implements a 2d convolution with differentiable logic operations.
-    It uses a binary tree structure to combine input features using logical
-    operations.
+    This layer implements a 2D convolution where each output location is
+    computed by evaluating a learned logic tree over a receptive field.
+    Instead of linear filters, it uses a binary tree of differentiable
+    logic operations (LUTs) applied to selected positions in the receptive
+    field, per kernel and per spatial location.
+
+    Args:
+        in_dim: Input spatial dimensions ``(height, width)``.
+        device: Device on which the module parameters and buffers are
+            allocated (e.g. ``"cpu"`` or ``"cuda"``).
+        grad_factor: Factor applied to the gradient of intermediate logic
+            activations (e.g., via a custom autograd function) to control
+            the strength of gradient flow.
+        channels: Number of input channels.
+        num_kernels: Number of output logic kernels (analogous to output
+            channels in a standard convolution).
+        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses
+            ``2**d`` leaves per receptive field.
+        receptive_field_size: Spatial size (height and width) of the
+            receptive field (assumed square).
+        connections: Strategy for wiring the receptive field positions into
+            the logic trees. Supported values:
+            - ``"random"``: Randomly sampled receptive field positions for
+                all leaves across kernels.
+            - ``"random-unique"``: Randomly sampled non-repeating positions
+                within each receptive field (unique connections).
+        weight_init: Weight initialization scheme for the LUT logits at
+            each tree node. Supported values:
+            - ``"residual"``: Residual-style init around a default LUT.
+            - ``"random"``: Unstructured random logits.
+        stride: Convolution stride in both spatial dimensions.
+        padding: Zero-padding applied symmetrically to height and width
+            before selecting receptive fields.
+        temperature: Temperature used by (Gumbel-)Softmax sampling of LUT
+            weights at each tree node.
+        forward_sampling: Sampling strategy for LUT weights. One of:
+            - ``"soft"``: Softmax with continuous relaxation.
+            - ``"hard"``: Straight-through hard selection.
+            - ``"gumbel_soft"``: Gumbel-Softmax relaxation.
+            - ``"gumbel_hard"``: Straight-through Gumbel-Softmax.
+        residual_init_param: Scalar controlling the strength of the
+            residual-style initialization when ``weight_init == "residual"``.
+        n_inputs: Arity of each logic gate (number of Boolean inputs per
+            node). Typically 2 for binary trees.
+        arbitrary_basis: If ``True``, allows more general bases for the LUT
+            parametrization (e.g., Walsh), rather than a fixed hard-coded
+            basis.
     """
 
     def __init__(
@@ -61,24 +105,6 @@ class LogicConv2d(nn.Module):
         n_inputs: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
-        """Initialize the 2d logic convolutional layer.
-
-        Args:
-            in_dim: Input dimensions (height, width)
-            device: Device to run the layer on
-            grad_factor: Gradient factor for the logic operations
-            channels: Number of input channels
-            num_kernels: Number of output kernels
-            tree_depth: Depth of the binary tree
-            receptive_field_size: Size of the receptive field
-            implementation: Implementation type ("python" or "cuda")
-            connections: Connection type: "random" or "unique". The latter will overwrite
-                the tree_depth parameter and use a full binary tree of all possible connections
-                within the receptive field.
-            stride: Stride of the convolution
-            padding: Padding of the convolution
-            parametrization: Parametrization to use ("raw" or "walsh")
-        """
         super().__init__()
         self.forward_sampling = forward_sampling
         self.n_inputs = n_inputs
@@ -101,13 +127,13 @@ class LogicConv2d(nn.Module):
         self.padding = padding
         self.connections = connections
         if connections == "random":
-            self.kernels = self.get_random_receptive_field_tensor()
+            self.kernels = self._get_random_receptive_field_tensor()
         elif connections == "random-unique":
-            self.kernels = self.get_random_unique_receptive_field_tensor()
+            self.kernels = self._get_random_unique_receptive_field_tensor()
         else:
             raise ValueError(f"Unknown connections type: {connections}")
         # list of tensors, one tensor for each tree depth
-        self.indices = self.get_indices_from_kernel_tensor(self.kernels)
+        self.indices = self._get_indices_from_kernel_tensor(self.kernels)
         self.temperature = temperature
         self.arbitrary_basis = arbitrary_basis
         self.tree_weights, self.forward_sampling_func = self._init_weights()
@@ -130,7 +156,31 @@ class LogicConv2d(nn.Module):
         return tree_weights, forward_sampling_func
 
     def forward(self, x):
-        """Implement the binary tree using the pre-selected indices."""
+        """Applies the logic convolution to the input.
+
+        The forward pass proceeds as follows:
+
+        1. Optionally pad the input spatially.
+        2. Select all receptive-field positions for the first tree level using
+           precomputed index tensors.
+        3. For each tree level:
+            a. Sample or select LUT weights for all nodes at that level.
+            b. Apply binary logic operations (via :func:`bin_op_cnn`) to the
+               child activations, reducing them up the tree.
+        4. Reshape the final per-kernel outputs into a 4D tensor of shape
+           ``(batch_size, num_kernels, out_height, out_width)``.
+
+        Args:
+            x: Input tensor of shape ``(batch_size, channels, height, width)``.
+
+        Returns:
+            Tensor of shape ``(batch_size, num_kernels, out_height, out_width)``,
+            where ``out_height`` and ``out_width`` are determined by the
+            convolution parameters:
+
+            * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
+            * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
+        """
         if self.padding > 0:
             x = torch.nn.functional.pad(
                 x,
@@ -176,7 +226,7 @@ class LogicConv2d(nn.Module):
 
         return x
 
-    def get_random_receptive_field_tensor(self):
+    def _get_random_receptive_field_tensor(self):
         """Generate random index tensor within the receptive field for each kernel.
         May contain self connections and duplicate connections.
 
@@ -200,7 +250,7 @@ class LogicConv2d(nn.Module):
 
         return indices.transpose(0, 1)
 
-    def get_random_unique_receptive_field_tensor(self):
+    def _get_random_unique_receptive_field_tensor(self):
         """
         Generate random unique index tensor within the receptive field for each kernel.
         - No self-connections inside a tuple (all positions distinct).
@@ -262,7 +312,7 @@ class LogicConv2d(nn.Module):
 
         return coords
     
-    def apply_sliding_window_tensor(self, tensor):
+    def _apply_sliding_window_tensor(self, tensor):
         """
         tensor: torch.Tensor of shape (n_inputs, num_kernels, sample_size, 3)
             where last dim is (h, w, c).
@@ -314,7 +364,7 @@ class LogicConv2d(nn.Module):
         out = all_indices.permute(2, 0, 1, 3, 4)
         return out
     
-    def get_indices_from_kernel_tensor(self, tensor):
+    def _get_indices_from_kernel_tensor(self, tensor):
         indices = [
             self.apply_sliding_window_tensor(tensor)
         ]
@@ -325,9 +375,17 @@ class LogicConv2d(nn.Module):
         return indices
     
     def get_lut_ids(self):
-        """
-        Computes most-probable LUT for each learned set of weights.
-        Returns tuple with most probable LUTs and their IDs.
+        """Computes the most probable LUT and its ID for each neuron by choosing maximum weight over all
+        possible Boolean functions.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** n_inputs)``,
+                  where each row is the most probable LUT truth table for a
+                  neuron (entry is True for output 1, False for 0).
+                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
+                  entry is the integer ID of the corresponding LUT, obtained by
+                  interpreting its truth table as a binary number.
         """
         tree_ids = []
         tree_luts = []
@@ -345,11 +403,43 @@ class LogicConv2d(nn.Module):
     
 
 class LogicConv2dWalsh(LogicConv2d):
-    """2d convolutional layer with differentiable logic operations.
+    """2D convolutional layer using Walsh–Hadamard–parametrized logic operations.
 
-    This layer implements a 2d convolution with differentiable logic operations.
-    It uses a binary tree structure to combine input features using logical
-    operations.
+    This class extends :class:`LogicConv2d` by replacing the raw-LUT
+    parametrization with a Walsh–Hadamard basis (or optionally an arbitrary
+    user-defined basis). Each logic gate in the convolution's binary tree is
+    parameterized by Walsh coefficients rather than direct truth-table logits.
+
+    This provides a smoother optimization landscape and better structure
+    for Boolean functions, especially for parity-like computations.
+
+    This constructor calls :class:`LogicConv2d` first to set up the
+    receptive-field connection structure and binary-tree indexing. The
+    Walsh-specific weight initialization is then performed by overriding
+    :meth:`_init_weights`.
+
+    Args:
+        in_dim: Input spatial dimensions ``(height, width)``.
+        device: Device for parameter storage (e.g. ``"cpu"``, ``"cuda"``).
+        grad_factor: Gradient scaling factor applied inside the logic tree.
+        channels: Number of input channels.
+        num_kernels: Number of output kernels (analogous to output channels).
+        tree_depth: Depth of the binary logic tree.
+        receptive_field_size: Spatial size of the receptive field (square).
+        connections: Receptive-field sampling mode:
+            - ``"random"``: Random RF positions.
+            - ``"random-unique"``: Non-overlapping unique positions.
+        weight_init: Weight initialization method for Walsh coefficients.
+            One of ``"residual"`` or ``"random"``.
+        stride: Convolution stride.
+        padding: Zero-padding on all sides before RF extraction.
+        temperature: Temperature for (Gumbel-)sigmoid sampling.
+        forward_sampling: Sampling method for LUT outputs:
+            - ``"soft"``, ``"hard"``, ``"gumbel_soft"``, ``"gumbel_hard"``.
+        residual_init_param: Scalar controlling the “residual” Walsh init.
+        n_inputs: Arity of each logic node (usually 2).
+        arbitrary_basis: If ``True``, allows arbitrary basis functions
+            rather than the built-in fast Walsh basis.
     """
 
     def __init__(
@@ -371,23 +461,6 @@ class LogicConv2dWalsh(LogicConv2d):
         n_inputs: int = 2,
         arbitrary_basis: bool = False  # Whether to use hard-coded basis
     ):
-        """Initialize the 2d logic convolutional layer.
-
-        Args:
-            in_dim: Input dimensions (height, width)
-            device: Device to run the layer on
-            grad_factor: Gradient factor for the logic operations
-            channels: Number of input channels
-            num_kernels: Number of output kernels
-            tree_depth: Depth of the binary tree
-            receptive_field_size: Size of the receptive field
-            implementation: Implementation type ("python" or "cuda")
-            connections: Connection type: "random" or "unique". The latter will overwrite
-                the tree_depth parameter and use a full binary tree of all possible connections
-                within the receptive field.
-            stride: Stride of the convolution
-            padding: Padding of the convolution
-        """
         super().__init__(
             in_dim=in_dim,
             device=device,
@@ -425,7 +498,26 @@ class LogicConv2dWalsh(LogicConv2d):
         return tree_weights, forward_sampling_func
     
     def forward(self, x):
-        """Implement the binary tree using the pre-selected indices."""
+        """Applies the Walsh-based logic convolution to the input.
+
+        The computation mirrors :meth:`LogicConv2d.forward`, but replaces raw
+        truth-table operations with fast Walsh–Hadamard-domain operations.
+
+        Workflow:
+            1. Pad the input if needed.
+            2. Extract receptive-field slices for the first tree level.
+            3. Compute Walsh basis activations using specialized kernels.
+            4. For each tree node:
+                - Apply Walsh coefficients to the basis.
+                - Aggregate the results upward in the tree.
+            5. Reshape the output into ``(batch, num_kernels, H_out, W_out)``.
+
+        Args:
+            x: Input tensor of shape ``(batch_size, channels, height, width)``.
+
+        Returns:
+            Tensor of shape ``(batch_size, num_kernels, out_height, out_width)``.
+        """
         if self.padding > 0:
             x = torch.nn.functional.pad(
                 x,

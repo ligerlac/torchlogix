@@ -112,7 +112,7 @@ class LogicDense(torch.nn.Module):
         self.forward_sampling_func = forward_sampling_func
         self.connections = connections
         assert self.connections in ["random", "unique"], self.connections
-        self.indices = self.get_connections(self.connections)
+        self.indices = self._get_connections(self.connections)
         self.indices_T = self.indices.transpose(0, 1)
         self.num_neurons = out_dim
         self.num_weights = out_dim
@@ -171,7 +171,7 @@ class LogicDense(torch.nn.Module):
             self.in_dim, self.out_dim, "train" if self.training else "eval"
         )
 
-    def get_connections(self, connections):
+    def _get_connections(self, connections):
         """Constructs input–neuron connection indices.
 
         Each neuron takes ``n_inputs`` input features. This function returns a
