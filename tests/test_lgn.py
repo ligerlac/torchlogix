@@ -62,6 +62,22 @@ def test_trivial_layer():
         LogicDense(in_dim=2, out_dim=2, **llkw)
 
 
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_trivial_layer_walsh(lut_rank):
+    layer = LogicDenseWalsh(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, connections="random", device="cpu")
+    assert layer.indices.shape == (lut_rank, 1)
+    # the connections must be random permutation of all inputs
+    assert set(layer.indices[:, 0].tolist()) == set(range(lut_rank))
+    assert layer.weight.shape == (1, 2**lut_rank)
+
+
+@pytest.mark.parametrize("lut_rank", [4, 6])
+def test_in_dim_less_than_lut_rank(lut_rank):
+    """Test that an error is raised when in_dim < lut_rank."""
+    with pytest.raises(AssertionError):
+        LogicDenseWalsh(in_dim=2, out_dim=1, lut_rank=lut_rank, connections="random", device="cpu")
+
+
 def test_xor_model():
     """Test the XOR gate implementation.
 

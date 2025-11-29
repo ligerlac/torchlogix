@@ -188,6 +188,7 @@ class LogicDense(torch.nn.Module):
             A tensor of shape ``(lut_rank, out_dim)`` with integer indices into
             the last dimension of the input.
         """
+        assert self.in_dim >= self.lut_rank, f"Cannot have lut_rank > in_dim ({self.lut_rank} > {self.in_dim})"
         if connections == "random":
             c = torch.randperm(self.lut_rank * self.out_dim) % self.in_dim
             c = torch.randperm(self.in_dim)[c]
