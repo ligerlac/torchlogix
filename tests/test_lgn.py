@@ -10,7 +10,7 @@ import torch
 from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense, LogicDenseWalsh
 
-llkw = {"connections": "unique", "device": "cpu"}
+llkw = {"connections": "random-unique", "device": "cpu"}
 
 
 def test_get_lut_ids_xor_walsh():
@@ -117,20 +117,19 @@ def test_n_inputs_walsh():
     assert y.shape == (x.shape[0], out_dim)
 
 
-
 def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="unique",
+            connections="random-unique",
             device="cpu",
         ),
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="unique",
+            connections="random-unique",
             device="cpu",
         ),
         GroupSum(1),

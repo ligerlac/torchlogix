@@ -7,7 +7,7 @@ from .initialization import initialize_weights_raw, initialize_weights_walsh
 from ..functional import (
     GradFactor,
     bin_op_s,
-    get_unique_connections,
+    get_random_unique_connections,
     gumbel_sigmoid,
     softmax,
     sigmoid,
@@ -55,7 +55,7 @@ class LogicDense(torch.nn.Module):
         connections: Strategy for wiring input features to each neuron.
             Supported values are:
             - ``"random"``: Randomly sampled connections per neuron.
-            - ``"unique"``: Deterministic, non-overlapping connections
+            - ``"random-unique"``: Random, non-overlapping connections
                 (currently only for ``n_inputs == 2``).
         weight_init: Initialization scheme for LUT weights. Supported values:
             - ``"residual"``: Residual-style initialization around a default LUT.
@@ -83,7 +83,7 @@ class LogicDense(torch.nn.Module):
         out_dim: int,
         device: str = "cpu",
         grad_factor: float = 1.0,
-        connections: str = "random",
+        connections: str = "random-unique",
         weight_init: str = "residual",  # "residual" or "random"
         residual_init_param: float = 1.0,
         temperature: float = 1.0,
@@ -111,7 +111,7 @@ class LogicDense(torch.nn.Module):
         self.weight = torch.nn.Parameter(weights)
         self.forward_sampling_func = forward_sampling_func
         self.connections = connections
-        assert self.connections in ["random", "unique"], self.connections
+        assert self.connections in ["random", "random-unique"], self.connections
         self.indices = self._get_connections(self.connections)
         self.indices_T = self.indices.transpose(0, 1)
         self.num_neurons = out_dim
@@ -181,7 +181,7 @@ class LogicDense(torch.nn.Module):
             connections: Strategy for building connections. Supported values:
                 - ``"random"``: Randomly sample ``n_inputs`` input indices for
                   each of the ``out_dim`` neurons.
-                - ``"unique"``: Use a deterministic, non-overlapping pattern of
+                - ``"random-unique"``: Use a deterministic, non-overlapping pattern of
                   connections (currently only for ``n_inputs == 2``).
 
         Returns:
@@ -194,8 +194,8 @@ class LogicDense(torch.nn.Module):
             c = c.reshape(self.n_inputs, self.out_dim)
             c = c.to(torch.int64).to(self.device)
             return c
-        elif connections == "unique":
-            return get_unique_connections(self.in_dim, self.out_dim, self.n_inputs, self.device)
+        elif connections == "random-unique":
+            return get_random_unique_connections(self.in_dim, self.out_dim, self.n_inputs, self.device)
         else:
             raise ValueError(connections)
 

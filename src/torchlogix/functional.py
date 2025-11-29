@@ -5,10 +5,9 @@ operations in a differentiable manner. It includes implementations for binary
 operations, vectorized operations, and utility functions for building logic
 gate networks.
 """
-
+import math
 import numpy as np
 import torch
-from torch.distributions.gumbel import Gumbel
 
 BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
@@ -184,62 +183,44 @@ def bin_op_cnn_walsh(a, b, i_s):
 ##########################################################################
 
 
-def get_unique_connections(in_dim, out_dim, device="cuda"):
-    assert out_dim * 2 >= in_dim, (
-        "The number of neurons ({}) must not be smaller than half of the number of inputs "
-        "({}) because otherwise not all inputs could be used or considered.".format(
-            out_dim, in_dim
-        )
+def get_random_unique_connections(in_dim, out_dim, n_inputs=2, device="cuda"):
+    """Return unique input index tuples for each output neuron, fully in torch.
+
+    Each output neuron gets n_inputs distinct input indices.
+    No two neurons share the same tuple (unordered).
+
+    Args:
+        in_dim: Number of input features.
+        out_dim: Number of output neurons.
+        n_inputs: Number of inputs per neuron.
+        device: Target device for returned tensor.
+
+    Returns:
+        Tensor of shape (n_inputs, out_dim), dtype int64.
+    """
+    # Feasibility checks
+    assert out_dim * n_inputs >= in_dim, (
+        f"Need out_dim * n_inputs >= in_dim to cover all inputs "
+        f"({out_dim} * {n_inputs} < {in_dim})."
     )
-    n_max = int(in_dim * (in_dim - 1) / 2)
+    n_max = math.comb(in_dim, n_inputs)
     assert out_dim <= n_max, (
-        "The number of neurons ({}) must not be greater than the number of pair-wise combinations "
-        "of the inputs ({})".format(out_dim, n_max)
+        f"Requested {out_dim} unique tuples, but only {n_max} combinations exist."
     )
 
-    x = torch.arange(in_dim).long().unsqueeze(0)
+    # Create input range
+    x = torch.arange(in_dim, device=device)
 
-    # Take pairs (0, 1), (2, 3), (4, 5), ...
-    a, b = x[..., ::2], x[..., 1::2]
-    if a.shape[-1] != b.shape[-1]:
-        m = min(a.shape[-1], b.shape[-1])
-        a = a[..., :m]
-        b = b[..., :m]
+    # Create all n_inputs-combinations in lexicographic order:
+    # shape = (n_max, n_inputs)
+    combos = torch.combinations(x, r=n_inputs, with_replacement=False)
 
-    # If this was not enough, take pairs (1, 2), (3, 4), (5, 6), ...
-    if a.shape[-1] < out_dim:
-        a_, b_ = x[..., 1::2], x[..., 2::2]
-        a = torch.cat([a, a_], dim=-1)
-        b = torch.cat([b, b_], dim=-1)
-        if a.shape[-1] != b.shape[-1]:
-            m = min(a.shape[-1], b.shape[-1])
-            a = a[..., :m]
-            b = b[..., :m]
+    # Randomly select out_dim unique tuples
+    perm = torch.randperm(combos.size(0), device=device)
+    selected = combos[perm[:out_dim]]  # (out_dim, n_inputs)
 
-    # If this was not enough, take pairs with offsets >= 2:
-    offset = 2
-    while out_dim > a.shape[-1]:
-        a_, b_ = x[..., :-offset], x[..., offset:]
-        a = torch.cat([a, a_], dim=-1)
-        b = torch.cat([b, b_], dim=-1)
-        offset += 1
-        assert a.shape[-1] == b.shape[-1], (a.shape[-1], b.shape[-1])
-
-    if a.shape[-1] >= out_dim:
-        a = a[..., :out_dim]
-        b = b[..., :out_dim]
-    else:
-        assert False, (a.shape[-1], offset, out_dim)
-
-    perm = torch.randperm(out_dim)
-
-    a = a[:, perm].squeeze(0)
-    b = b[:, perm].squeeze(0)
-    c = torch.stack([a, b], dim=-2).to(dtype=torch.int64, device=device).contiguous()
-    #a, b = a.to(torch.int64), b.to(torch.int64)
-    #a, b = a.to(device), b.to(device)
-    #a, b = a.contiguous(), b.contiguous()
-    return c
+    # Return shape (n_inputs, out_dim)
+    return selected.t().contiguous()
 
 
 ##########################################################################
