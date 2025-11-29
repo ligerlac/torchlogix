@@ -1,6 +1,6 @@
 import torch
 
-from ..layers import GroupSum, setup_dense_cls
+from ..layers import GroupSum, LogicDense
 
 
 class Dlgn(torch.nn.Sequential):
@@ -13,13 +13,12 @@ class Dlgn(torch.nn.Sequential):
     ):
         super(Dlgn, self).__init__()
         layers = [torch.nn.Flatten()]
-        dense_cls = setup_dense_cls(parametrization)
         layers.append(
-            dense_cls(in_dim=in_dim, out_dim=neurons_per_layer, **llkw)
+            LogicDense(in_dim=in_dim, out_dim=neurons_per_layer, parametrization=parametrization, **llkw)
         )
         for _ in range(n_layers - 1):
             layers.append(
-                dense_cls(in_dim=neurons_per_layer, out_dim=neurons_per_layer, **llkw)
+                LogicDense(in_dim=neurons_per_layer, out_dim=neurons_per_layer, parametrization=parametrization, **llkw)
             )
         super(Dlgn, self).__init__(*layers, GroupSum(class_count, tau))
 
