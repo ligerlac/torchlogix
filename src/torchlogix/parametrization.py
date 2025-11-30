@@ -63,7 +63,8 @@ class LUTParametrization(ABC):
         x: torch.Tensor,
         weight: torch.Tensor,
         sampler,
-        training: bool
+        training: bool,
+        contraction: str
     ) -> torch.Tensor:
         """Compute forward pass (layer-agnostic).
 
@@ -72,6 +73,8 @@ class LUTParametrization(ABC):
             weight: Weight parameters
             sampler: Sampler instance for weight/output sampling
             training: Whether in training mode
+            contraction: Einsum pattern specifying how to combine basis/ops with weights
+                        (e.g., 'bnk,nk->bn' for dense, 'bcsfk,fck->bcsf' for conv)
 
         Returns:
             Output tensor with lut_rank dimension reduced
@@ -124,7 +127,8 @@ class RawLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         sampler,
-        training: bool
+        training: bool,
+        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -133,6 +137,7 @@ class RawLUTParametrization(LUTParametrization):
             weight: Weight parameters
             sampler: Sampler instance
             training: Whether in training mode
+            contraction: Einsum pattern for combining ops with weights
 
         Returns:
             Output with lut_rank dimension reduced
@@ -146,22 +151,18 @@ class RawLUTParametrization(LUTParametrization):
         else:
             w = sampler.sample_eval(weight, self.num_functions)
 
+        # Compute all logic operations
         ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
 
-        # Dispatch based on dimensionality
-        if ops.ndim == 3:
-            # Dense case: ops shape (batch, neurons, 16), weights shape (neurons, 16)
-            result = (w * ops).sum(dim=-1)
-            return result
-        elif ops.ndim == 5:
-            # Conv case: ops shape (batch, channel, spatial, feature, 16)
-            #            weights shape (feature, channel, 16)
-            return torch.einsum('bchdn,dcn->bchd', ops, w)
-        else:
-            raise ValueError(
-                f"Unsupported tensor dimensionality: ops has {ops.ndim} dimensions. "
-                f"Expected 3 (dense) or 5 (conv)."
-            )            
+        # Apply layer-provided contraction (no layer-type detection)
+        # Convert ops to same dtype as weights for einsum compatibility
+        ops = ops.to(w.dtype)
+
+        # Handle 1D weight case (single neuron) for backward compatibility
+        if w.ndim == 1:
+            w = w.unsqueeze(0)
+
+        return torch.einsum(contraction, ops, w)            
 
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -201,7 +202,8 @@ class WalshLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         sampler,
-        training: bool
+        training: bool,
+        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -210,6 +212,7 @@ class WalshLUTParametrization(LUTParametrization):
             weight: Weight parameters
             sampler: Sampler instance
             training: Whether in training mode
+            contraction: Einsum pattern for combining basis with weights
 
         Returns:
             Output with lut_rank dimension reduced
@@ -217,29 +220,20 @@ class WalshLUTParametrization(LUTParametrization):
 
         # Convert to [-1, +1]
         x = 1 - 2 * x
- 
+
         # Compute Walsh basis
         if not self.arbitrary_basis:
             basis = walsh_basis_hard(x, self.lut_rank)
         else:
             raise NotImplementedError("Arbitrary basis requires layer context")
 
-        # Dispatch based on dimensionality
-        if basis.ndim == 3:
-            # Dense case: basis (batch, neurons, num_basis), weight (neurons, num_basis)
-            # Use element-wise multiply with broadcasting
-            x = (weight * basis).sum(dim=-1)
-        elif basis.ndim == 5:
-            # Conv case: basis (batch, ch, spatial, feat, num_basis)
-            #            weight (feat, ch, num_basis)
-            # x[b, c, s, f] = Σ_k basis[b,c,s,f,k] * weight[f,c,k]
-            x = torch.einsum("bcsfk,fc k->bc s f", basis, weight)
+        # Handle 1D weight case (single neuron) for backward compatibility
+        if weight.ndim == 1:
+            weight = weight.unsqueeze(0)
 
-        else:
-            raise ValueError(
-                f"Unsupported tensor dimensionality: basis has {basis.ndim} dimensions. "
-                f"Expected 3 (dense) or 5 (conv)."
-            )
+        # Apply layer-provided contraction (no layer-type detection)
+        # Convert basis to same dtype as weights for einsum compatibility
+        x = torch.einsum(contraction, basis.to(weight.dtype), weight)
 
         # Sample output
         if training:

@@ -179,9 +179,11 @@ class LogicConv2d(nn.Module):
         ind_h, ind_w, ind_c = self.indices[0][..., 0], self.indices[0][..., 1], self.indices[0][..., 2]
         x = x[:, ind_c, ind_h, ind_w]
 
-        # Process first level
+        # Process first level with einsum contraction
+        # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
         x = self.parametrization.forward(
-            x, self.tree_weights[0], self.sampler, self.training
+            x, self.tree_weights[0], self.sampler, self.training,
+            contraction='bcsfk,fck->bcsf'
         )
 
         # Process remaining levels
@@ -189,7 +191,8 @@ class LogicConv2d(nn.Module):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
             x = self.parametrization.forward(
-                x, self.tree_weights[level], self.sampler, self.training
+                x, self.tree_weights[level], self.sampler, self.training,
+                contraction='bcsfk,fck->bcsf'
             )
 
         # Reshape flattened output
@@ -540,9 +543,11 @@ class LogicConv3d(nn.Module):
         )
         x = x[:, ind_c, ind_h, ind_w, ind_d]
 
-        # Process first level
+        # Process first level with einsum contraction
+        # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
         x = self.parametrization.forward(
-            x, self.tree_weights[0], self.sampler, self.training
+            x, self.tree_weights[0], self.sampler, self.training,
+            contraction='bcsfk,fck->bcsf'
         )
 
         # Process remaining levels
@@ -550,7 +555,8 @@ class LogicConv3d(nn.Module):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
             x = self.parametrization.forward(
-                x, self.tree_weights[level], self.sampler, self.training
+                x, self.tree_weights[level], self.sampler, self.training,
+                contraction='bcsfk,fck->bcsf'
             )
 
         # Reshape flattened output

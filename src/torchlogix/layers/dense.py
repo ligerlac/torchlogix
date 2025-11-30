@@ -128,9 +128,11 @@ class LogicDense(torch.nn.Module):
         indices = self.indices.long()
         x = x[:, indices]  # Shape: (batch_size, lut_rank, out_dim)
 
-        # Delegate to parametrization
+        # Delegate to parametrization with einsum contraction
+        # b=batch, n=neurons, k=num_basis/16
         return self.parametrization.forward(
-            x, self.weight, self.sampler, self.training
+            x, self.weight, self.sampler, self.training,
+            contraction='bnk,nk->bn'
         )
 
     def extra_repr(self):
