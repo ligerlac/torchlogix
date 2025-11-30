@@ -180,7 +180,7 @@ class LogicConv2d(nn.Module):
         x = x[:, ind_c, ind_h, ind_w]
 
         # Process first level
-        x = self.parametrization.forward_conv_one_level(
+        x = self.parametrization.forward(
             x, self.tree_weights[0], self.sampler, self.training
         )
 
@@ -188,7 +188,7 @@ class LogicConv2d(nn.Module):
         for level in range(1, self.tree_depth + 1):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
-            x = self.parametrization.forward_conv_one_level(
+            x = self.parametrization.forward(
                 x, self.tree_weights[level], self.sampler, self.training
             )
 
@@ -541,7 +541,7 @@ class LogicConv3d(nn.Module):
         x = x[:, ind_c, ind_h, ind_w, ind_d]
 
         # Process first level
-        x = self.parametrization.forward_conv_one_level(
+        x = self.parametrization.forward(
             x, self.tree_weights[0], self.sampler, self.training
         )
 
@@ -549,7 +549,7 @@ class LogicConv3d(nn.Module):
         for level in range(1, self.tree_depth + 1):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
-            x = self.parametrization.forward_conv_one_level(
+            x = self.parametrization.forward(
                 x, self.tree_weights[level], self.sampler, self.training
             )
 

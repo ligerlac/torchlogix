@@ -79,23 +79,6 @@ def bin_op(a, b, i):
     return ID_TO_OP[i](a, b)
 
 
-def bin_op_s(a, b, i_s):
-    assert a[0].shape == b[0].shape, (a[0].shape, b[0].shape)
-    if a.shape[0] > 1:
-        assert a[1].shape == b[1].shape, (a[1].shape, b[1].shape)
-    r = torch.zeros_like(a)
-    for i in range(16):
-        u = ID_TO_OP[i](a, b)
-        r = r + i_s[..., i] * u
-    return r
-
-
-# def bin_op_s(a, b, i_s):
-#     assert a.shape == b.shape, f"Mismatched shapes: {a.shape}, {b.shape}"
-#     r = torch.stack([ID_TO_OP[i](a, b) for i in range(16)], dim=-1)
-#     return torch.einsum('...i,...i->...', r, i_s)  # Vectorized multiplication
-
-
 def compute_all_logic_ops_vectorized(a, b):
     """Compute all 16 logic operations in a single vectorized operation.
     
@@ -130,35 +113,44 @@ def compute_all_logic_ops_vectorized(a, b):
     return ops
 
 
-def bin_op_cnn_slow(a, b, i_s):
-    """A slower, non-optimized version of bin_op_cnn for clarity."""
-    assert a.shape == b.shape, f"Mismatched shapes: {a.shape}, {b.shape}"
+def compute_logic_ops(a: torch.Tensor, b: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    """Unified logic operation computation for both dense and conv layers.
 
-    # Compute all 16 logic operations (final dimension = 16)
-    r = torch.stack(
-        [ID_TO_OP[i](a, b) for i in range(16)], dim=-1
-    )  # Shape: [100, 16, 576, 8, 16]
+    Automatically detects dense vs conv case based on tensor dimensionality
+    and applies the appropriate computation pattern.
 
-    # Reshape `i_s` to match the required shape for broadcasting
-    i_s = i_s.unsqueeze(0).unsqueeze(2)  # Shape: [1, 8, 1, 16, 16]
-    # Broadcast to [100, 8, 576, 16, 16]
-    i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
-    i_s = i_s.permute(0, 3, 2, 1, 4)  # Now i_s.shape = [100, 16, 576, 8, 16]
-    # Multiply & sum over the logic gates (dimension -1)
-    return (r * i_s).sum(dim=-1)  # Shape: [100, 16, 576, 8]
+    Args:
+        a, b: Input tensors (any shape, must match)
+        weights: Gate weights, shape (..., 16) where last dim is 16 logic operations
 
+    Returns:
+        Weighted sum of logic operations with same shape as inputs
 
-def bin_op_cnn(a, b, i_s):
-    assert a.shape == b.shape, f"Mismatched shapes: {a.shape}, {b.shape}"
+    Examples:
+        Dense: a,b shape (batch, neurons) -> weights (neurons, 16) -> output (batch, neurons)
+        Conv:  a,b shape (batch, ch, spatial, feat) -> weights (feat, ch, 16) -> output (batch, ch, spatial, feat)
+    """
+    # Compute all 16 logic operations (adds dimension of size 16 at the end)
+    ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
 
-    # Compute all 16 logic operations vectorized (final dimension = 16)
-    r = compute_all_logic_ops_vectorized(a, b)  # Shape: [100, 16, 576, 8, 16]
-    
-    # Optimized einsum: contract over channel and logic operation dimensions
-    # r: [batch, channel, spatial, feature, logic_ops] 
-    # i_s: [feature, channel, logic_ops]
-    # result: [batch, channel, spatial, feature]
-    return torch.einsum('bchdn,dcn->bchd', r, i_s)
+    # Dispatch based on dimensionality
+    if ops.ndim == 3:
+        # Dense case: ops shape (batch, neurons, 16), weights shape (neurons, 16)
+        # Use loop with broadcasting
+        result = torch.zeros_like(a)
+        for i in range(16):
+            result = result + weights[..., i] * ops[..., i]
+        return result
+    elif ops.ndim == 5:
+        # Conv case: ops shape (batch, channel, spatial, feature, 16)
+        #            weights shape (feature, channel, 16)
+        # Use specific einsum pattern (same as bin_op_cnn)
+        return torch.einsum('bchdn,dcn->bchd', ops, weights)
+    else:
+        raise ValueError(
+            f"Unsupported tensor dimensionality: ops has {ops.ndim} dimensions. "
+            f"Expected 3 (dense) or 5 (conv)."
+        )
 
 
 ##########################################################################

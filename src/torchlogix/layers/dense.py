@@ -126,15 +126,10 @@ class LogicDense(torch.nn.Module):
 
         # Extract inputs according to connection pattern
         indices = self.indices.long()
-        
-        print(f"{x.shape=}\n{indices.shape=}")
-
         x = x[:, indices]  # Shape: (batch_size, lut_rank, out_dim)
 
-        print(f"{x.shape=}")
-
         # Delegate to parametrization
-        return self.parametrization.forward_dense(
+        return self.parametrization.forward(
             x, self.weight, self.sampler, self.training
         )
 

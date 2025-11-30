@@ -10,8 +10,7 @@ import torch
 
 from .initialization import initialize_weights_raw, initialize_weights_walsh
 from .functional import (
-    bin_op_s,
-    bin_op_cnn,
+    compute_logic_ops,
     walsh_basis_hard,
     walsh_cnn,
     walsh_hadamard_transform
@@ -60,46 +59,23 @@ class LUTParametrization(ABC):
         pass
 
     @abstractmethod
-    def forward_dense(
-        self,
-        a: torch.Tensor,
-        b: torch.Tensor,
-        weight: torch.Tensor,
-        sampler,
-        training: bool
-    ) -> torch.Tensor:
-        """Compute forward pass for dense logic layer.
-
-        Args:
-            a: First input tensor of shape (..., out_dim).
-            b: Second input tensor of shape (..., out_dim).
-            weight: Weight parameters.
-            sampler: Sampler instance for weight sampling.
-            training: Whether in training mode.
-
-        Returns:
-            Output tensor of shape (..., out_dim).
-        """
-        pass
-
-    @abstractmethod
-    def forward_conv_one_level(
+    def forward(
         self,
         x: torch.Tensor,
         weight: torch.Tensor,
         sampler,
         training: bool
     ) -> torch.Tensor:
-        """Compute forward pass for first level of convolutional logic tree.
+        """Compute forward pass (layer-agnostic).
 
         Args:
-            x: Input tensor from receptive field extraction.
-            weight: Weight parameters for this level.
-            sampler: Sampler instance.
-            training: Whether in training mode.
+            x: Extracted inputs with lut_rank at dimension 1, shape (batch, lut_rank, ...)
+            weight: Weight parameters
+            sampler: Sampler instance for weight/output sampling
+            training: Whether in training mode
 
         Returns:
-            Output tensor from first tree level.
+            Output tensor with lut_rank dimension reduced
         """
         pass
 
@@ -144,35 +120,35 @@ class RawLUTParametrization(LUTParametrization):
             weight_init, num_neurons, self.lut_rank, residual_init_param, device
         )
 
-    def forward_dense(
+    def forward(
         self,
         x: torch.Tensor,
         weight: torch.Tensor,
         sampler,
         training: bool
     ) -> torch.Tensor:
+        """Layer-agnostic forward pass.
+
+        Args:
+            x: Extracted inputs, shape (batch, lut_rank, ...)
+            weight: Weight parameters
+            sampler: Sampler instance
+            training: Whether in training mode
+
+        Returns:
+            Output with lut_rank dimension reduced
+        """
+        # Extract inputs
         a, b = x[:, 0], x[:, 1]
 
+        # Sample weights
         if training:
             w = sampler.sample_train(weight)
         else:
             w = sampler.sample_eval(weight, self.num_functions)
 
-        return bin_op_s(a, b, w)
-
-    def forward_conv_one_level(
-        self,
-        x: torch.Tensor,
-        weight: torch.Tensor,
-        sampler,
-        training: bool
-    ) -> torch.Tensor:
-        if training:
-            level_weights = sampler.sample_train(weight)
-        else:
-            level_weights = sampler.sample_eval(weight, self.num_functions)
-
-        return bin_op_cnn(x[:, 0], x[:, 1], level_weights)
+        # Compute using unified function
+        return compute_logic_ops(a, b, w)
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ids = weight.argmax(axis=1)
@@ -206,54 +182,56 @@ class WalshLUTParametrization(LUTParametrization):
             weight_init, num_neurons, self.lut_rank, residual_init_param, device
         )
 
-    def forward_dense(
+    def forward(
         self,
         x: torch.Tensor,
         weight: torch.Tensor,
         sampler,
         training: bool
     ) -> torch.Tensor:
-        x = 1 - 2 * x  # Convert to {-1, +1}
+        """Layer-agnostic forward pass.
 
+        Args:
+            x: Extracted inputs, shape (batch, lut_rank, ...)
+            weight: Weight parameters
+            sampler: Sampler instance
+            training: Whether in training mode
+
+        Returns:
+            Output with lut_rank dimension reduced
+        """
+        # Convert to {-1, +1}
+        x = 1 - 2 * x
+
+        # Compute Walsh basis
         if not self.arbitrary_basis:
             basis = walsh_basis_hard(x, self.lut_rank)
         else:
-            # Generic basis computation using precomputed bits
-            # This would require access to self.bits from the layer
             raise NotImplementedError("Arbitrary basis requires layer context")
 
-        x = (weight * basis).sum(dim=-1)
+        # Dispatch based on dimensionality
+        if basis.ndim == 3:
+            # Dense case: basis (batch, neurons, num_basis), weight (neurons, num_basis)
+            # Use element-wise multiply with broadcasting
+            x = (weight * basis).sum(dim=-1)
+        elif basis.ndim == 5:
+            # Conv case: basis (batch, ch, spatial, feat, num_basis)
+            #            weight (feat, ch, num_basis)
+            # Use walsh_cnn helper (same as old code)
+            x = walsh_cnn(basis, weight)
+        else:
+            raise ValueError(
+                f"Unsupported tensor dimensionality: basis has {basis.ndim} dimensions. "
+                f"Expected 3 (dense) or 5 (conv)."
+            )
 
+        # Sample output
         if training:
             x = sampler.sample_train(-x)
         else:
             x = sampler.sample_eval(-x)
 
         return x
-
-    def forward_conv_one_level(
-        self,
-        x: torch.Tensor,
-        weight: torch.Tensor,
-        sampler,
-        training: bool
-    ) -> torch.Tensor:
-        level_weights = torch.stack([w for w in weight], dim=0)
-
-        if not self.arbitrary_basis:
-            basis = walsh_basis_hard(x, self.lut_rank)
-        else:
-            raise NotImplementedError("Arbitrary basis not implemented yet")
-
-        x = walsh_cnn(basis, level_weights)
-
-        if training:
-            x = sampler.sample_train(-x)
-        else:
-            x = sampler.sample_eval(-x)
-
-        return x
-
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         luts = walsh_hadamard_transform(weight, self.lut_rank)
