@@ -113,46 +113,6 @@ def compute_all_logic_ops_vectorized(a, b):
     return ops
 
 
-def compute_logic_ops(a: torch.Tensor, b: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
-    """Unified logic operation computation for both dense and conv layers.
-
-    Automatically detects dense vs conv case based on tensor dimensionality
-    and applies the appropriate computation pattern.
-
-    Args:
-        a, b: Input tensors (any shape, must match)
-        weights: Gate weights, shape (..., 16) where last dim is 16 logic operations
-
-    Returns:
-        Weighted sum of logic operations with same shape as inputs
-
-    Examples:
-        Dense: a,b shape (batch, neurons) -> weights (neurons, 16) -> output (batch, neurons)
-        Conv:  a,b shape (batch, ch, spatial, feat) -> weights (feat, ch, 16) -> output (batch, ch, spatial, feat)
-    """
-    # Compute all 16 logic operations (adds dimension of size 16 at the end)
-    ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
-
-    # Dispatch based on dimensionality
-    if ops.ndim == 3:
-        # Dense case: ops shape (batch, neurons, 16), weights shape (neurons, 16)
-        # Use loop with broadcasting
-        result = torch.zeros_like(a)
-        for i in range(16):
-            result = result + weights[..., i] * ops[..., i]
-        return result
-    elif ops.ndim == 5:
-        # Conv case: ops shape (batch, channel, spatial, feature, 16)
-        #            weights shape (feature, channel, 16)
-        # Use specific einsum pattern (same as bin_op_cnn)
-        return torch.einsum('bchdn,dcn->bchd', ops, weights)
-    else:
-        raise ValueError(
-            f"Unsupported tensor dimensionality: ops has {ops.ndim} dimensions. "
-            f"Expected 3 (dense) or 5 (conv)."
-        )
-
-
 ##########################################################################
 
 
@@ -320,13 +280,6 @@ def kron_pairwise_basis(x):
         size *= 2
 
     return out
-
-
-def walsh_cnn(r, i_s):
-    i_s = i_s.unsqueeze(0).unsqueeze(2)
-    i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
-    i_s = i_s.permute(0, 3, 2, 1, 4)
-    return (r * i_s).sum(dim=-1)
 
 
 def walsh_basis_hard(x, lut_rank):

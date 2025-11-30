@@ -10,10 +10,9 @@ import torch
 
 from .initialization import initialize_weights_raw, initialize_weights_walsh
 from .functional import (
-    compute_logic_ops,
     walsh_basis_hard,
-    walsh_cnn,
-    walsh_hadamard_transform
+    walsh_hadamard_transform,
+    compute_all_logic_ops_vectorized
 )
 
 
@@ -147,8 +146,23 @@ class RawLUTParametrization(LUTParametrization):
         else:
             w = sampler.sample_eval(weight, self.num_functions)
 
-        # Compute using unified function
-        return compute_logic_ops(a, b, w)
+        ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
+
+        # Dispatch based on dimensionality
+        if ops.ndim == 3:
+            # Dense case: ops shape (batch, neurons, 16), weights shape (neurons, 16)
+            result = (w * ops).sum(dim=-1)
+            return result
+        elif ops.ndim == 5:
+            # Conv case: ops shape (batch, channel, spatial, feature, 16)
+            #            weights shape (feature, channel, 16)
+            return torch.einsum('bchdn,dcn->bchd', ops, w)
+        else:
+            raise ValueError(
+                f"Unsupported tensor dimensionality: ops has {ops.ndim} dimensions. "
+                f"Expected 3 (dense) or 5 (conv)."
+            )            
+
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ids = weight.argmax(axis=1)
@@ -218,18 +232,8 @@ class WalshLUTParametrization(LUTParametrization):
         elif basis.ndim == 5:
             # Conv case: basis (batch, ch, spatial, feat, num_basis)
             #            weight (feat, ch, num_basis)
-            # Use walsh_cnn helper (same as old code)
-            # x = walsh_cnn(basis, weight)
-            weight = weight.unsqueeze(0).unsqueeze(2)
-            weight = weight.expand(basis.shape[0], -1, basis.shape[2], -1, -1)
-            weight = weight.permute(0, 3, 2, 1, 4)
-            x = (basis * weight).sum(dim=-1)
-
-            # def walsh_cnn(r, i_s):
-            #     i_s = i_s.unsqueeze(0).unsqueeze(2)
-            #     i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
-            #     i_s = i_s.permute(0, 3, 2, 1, 4)
-            #     return (r * i_s).sum(dim=-1)
+            # x[b, c, s, f] = Σ_k basis[b,c,s,f,k] * weight[f,c,k]
+            x = torch.einsum("bcsfk,fc k->bc s f", basis, weight)
 
         else:
             raise ValueError(
