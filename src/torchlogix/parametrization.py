@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 import torch
 import torch.nn.functional as F
 
-from .initialization import initialize_weights_raw, initialize_weights_walsh
 from .functional import (
     walsh_basis_hard,
     walsh_hadamard_transform,
