@@ -27,17 +27,33 @@ class LUTParametrization(ABC):
     outputs from inputs.
     """
 
-    def __init__(self, lut_rank: int, arbitrary_basis: bool = False):
+    def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
+                 forward_sampling: str = "soft", temperature: float = 1.0):
         """Initialize parametrization.
 
         Args:
             lut_rank: Number of inputs per logic gate (arity of the LUT).
             arbitrary_basis: If True, allows arbitrary basis functions
                 rather than hard-coded optimized implementations.
+            forward_sampling: Sampling strategy during forward pass. One of:
+                - "soft": Continuous relaxation via softmax/sigmoid
+                - "hard": Straight-through hard selection
+                - "gumbel_soft": Gumbel-Softmax/Sigmoid continuous relaxation
+                - "gumbel_hard": Gumbel-Softmax/Sigmoid straight-through
+            temperature: Temperature parameter for sampling operations.
         """
         self.lut_rank = lut_rank
         self.lut_entries = 1 << lut_rank
         self.arbitrary_basis = arbitrary_basis
+
+        # Validate and store sampling configuration
+        valid_modes = ["soft", "hard", "gumbel_soft", "gumbel_hard"]
+        if forward_sampling not in valid_modes:
+            raise ValueError(
+                f"forward_sampling must be one of {valid_modes}, got {forward_sampling}"
+            )
+        self.forward_sampling = forward_sampling
+        self.temperature = temperature
 
     @abstractmethod
     def init_weights(
@@ -107,20 +123,11 @@ class RawLUTParametrization(LUTParametrization):
 
     def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
                  forward_sampling: str = "soft", temperature: float = 1.0):
-        super().__init__(lut_rank, arbitrary_basis)
+        super().__init__(lut_rank, arbitrary_basis, forward_sampling, temperature)
         if lut_rank != 2:
             raise ValueError("Raw parametrization currently only supports lut_rank=2")
         # Number of possible Boolean functions (not just truth table entries)
         self.num_functions = 1 << self.lut_entries
-
-        # Sampler configuration (merged from SoftmaxSampler)
-        valid_modes = ["soft", "hard", "gumbel_soft", "gumbel_hard"]
-        if forward_sampling not in valid_modes:
-            raise ValueError(
-                f"forward_sampling must be one of {valid_modes}, got {forward_sampling}"
-            )
-        self.forward_sampling = forward_sampling
-        self.temperature = temperature
 
     def init_weights(
         self,
@@ -213,20 +220,11 @@ class WalshLUTParametrization(LUTParametrization):
 
     def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
                  forward_sampling: str = "soft", temperature: float = 1.0):
-        super().__init__(lut_rank, arbitrary_basis)
+        super().__init__(lut_rank, arbitrary_basis, forward_sampling, temperature)
         if not arbitrary_basis and lut_rank not in [2, 4, 6]:
             raise ValueError(
                 f"Hard-coded Walsh basis only supports lut_rank in [2, 4, 6], got {lut_rank}"
             )
-
-        # Sampler configuration (merged from SigmoidSampler)
-        valid_modes = ["soft", "hard", "gumbel_soft", "gumbel_hard"]
-        if forward_sampling not in valid_modes:
-            raise ValueError(
-                f"forward_sampling must be one of {valid_modes}, got {forward_sampling}"
-            )
-        self.forward_sampling = forward_sampling
-        self.temperature = temperature
 
     def init_weights(
         self,
