@@ -489,15 +489,17 @@ class LogicConv3d(nn.Module):
         self.indices = self._get_indices_from_kernel_tensor(self.kernels)
 
         # Initialize tree weights using parametrization
-        self.tree_weights = torch.nn.ModuleList()
+        self.tree_weights = torch.nn.ParameterList()
         for i in reversed(range(tree_depth + 1)):
-            level_weights = torch.nn.ParameterList()
-            for _ in range(lut_rank**i):
-                weights = self.parametrization.init_weights(
-                    num_kernels, weight_init, residual_init_param, device
-                )
-                level_weights.append(torch.nn.Parameter(weights))
-            self.tree_weights.append(level_weights)
+            # each tree level has lut_rank**i nodes per kernel
+            level_weights = torch.nn.Parameter(torch.stack(
+                [
+                    self.parametrization.init_weights(
+                        num_kernels, weight_init, residual_init_param, device
+                    ) for _ in range(lut_rank**i)
+                ]
+            ))
+            self.tree_weights.append(level_weights)            
 
 
     def forward(self, x):
