@@ -201,7 +201,7 @@ class RawLUTParametrization(LUTParametrization):
         """Select most probable LUT via argmax + one-hot."""
         return F.one_hot(
             weights.argmax(-1), self.num_functions
-        ).to(torch.float32)            
+        ).to(torch.float32)
 
 
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -317,6 +317,8 @@ class WalshLUTParametrization(LUTParametrization):
     def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         luts = walsh_hadamard_transform(weight, self.lut_rank)
         luts = luts < 0
+
+        print("LUTs:", luts)
 
         if self.lut_rank <= 4:
             ids = 2 ** torch.arange(self.lut_entries - 1, -1, -1, device=luts.device)
