@@ -1,9 +1,6 @@
 import torch
 
-from .functional import (
-    WALSH_COEFFICIENTS,
-    walsh_hadamard_transform,
-)
+from .functional import walsh_hadamard_transform
 
 
 def initialize_weights_raw(weight_init, out_dim, lut_rank, weight_init_param, device):
