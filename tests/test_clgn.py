@@ -322,8 +322,9 @@ def test_get_lut_ids_and_walsh():
     layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
+    # Correct Walsh weights for AND gate with {-1, +1} conversion
     with torch.no_grad():
-        and_weights = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
+        and_weights = torch.tensor([[50., 50., 50., -50.]])
         layer.tree_weights[0].data[0] = and_weights
         layer.tree_weights[0].data[1] = and_weights
         layer.tree_weights[1].data[0] = and_weights
@@ -364,9 +365,12 @@ def test_and_model_walsh():
     layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
+    # Correct Walsh weights for AND gate with {-1, +1} conversion
+    # Basis: [1, B, A, A*B] where inputs are converted via x = 1 - 2*x
+    # Sigmoid sampler negates: output = ((-x) > 0).float()
+    # Scale weights to make sigmoid outputs sharp (like raw parametrization uses 100.0)
     with torch.no_grad():
-        and_weights = -torch.tensor([-100., 50., 50., 50.]).reshape(1, 4)
-        # and_weights[0, 3] = 100.0  # Large value so softmax will make it close to 1
+        and_weights = torch.tensor([50., 50., 50., -50.]).reshape(1, 4)
         layer.tree_weights[0].data[0] = and_weights
         layer.tree_weights[0].data[1] = and_weights
         layer.tree_weights[1].data[0] = and_weights

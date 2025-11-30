@@ -200,9 +200,10 @@ class WalshLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-        # Convert to {-1, +1}
-        x = 1 - 2 * x
 
+        # Convert to [-1, +1]
+        x = 1 - 2 * x
+ 
         # Compute Walsh basis
         if not self.arbitrary_basis:
             basis = walsh_basis_hard(x, self.lut_rank)
@@ -218,7 +219,18 @@ class WalshLUTParametrization(LUTParametrization):
             # Conv case: basis (batch, ch, spatial, feat, num_basis)
             #            weight (feat, ch, num_basis)
             # Use walsh_cnn helper (same as old code)
-            x = walsh_cnn(basis, weight)
+            # x = walsh_cnn(basis, weight)
+            weight = weight.unsqueeze(0).unsqueeze(2)
+            weight = weight.expand(basis.shape[0], -1, basis.shape[2], -1, -1)
+            weight = weight.permute(0, 3, 2, 1, 4)
+            x = (basis * weight).sum(dim=-1)
+
+            # def walsh_cnn(r, i_s):
+            #     i_s = i_s.unsqueeze(0).unsqueeze(2)
+            #     i_s = i_s.expand(r.shape[0], -1, r.shape[2], -1, -1)
+            #     i_s = i_s.permute(0, 3, 2, 1, 4)
+            #     return (r * i_s).sum(dim=-1)
+
         else:
             raise ValueError(
                 f"Unsupported tensor dimensionality: basis has {basis.ndim} dimensions. "
