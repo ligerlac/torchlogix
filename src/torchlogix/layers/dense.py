@@ -2,7 +2,6 @@ import numpy as np
 import torch
 
 from ..parametrization import RawLUTParametrization, WalshLUTParametrization
-from ..sampling import SoftmaxSampler, SigmoidSampler
 from ..functional import GradFactor, get_random_unique_connections
 from ..packbitstensor import PackBitsTensor
 
@@ -71,13 +70,15 @@ class LogicDense(torch.nn.Module):
         self.grad_factor = grad_factor
         self.lut_rank = lut_rank
 
-        # Create parametrization component
+        # Create parametrization component (sampler merged into parametrization)
         if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(lut_rank, arbitrary_basis)
-            self.sampler = SoftmaxSampler(forward_sampling, temperature)
+            self.parametrization = RawLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(lut_rank, arbitrary_basis)
-            self.sampler = SigmoidSampler(forward_sampling, temperature)
+            self.parametrization = WalshLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         else:
             raise ValueError(
                 f"Unsupported parametrization: {parametrization}. "
@@ -131,7 +132,7 @@ class LogicDense(torch.nn.Module):
         # Delegate to parametrization with einsum contraction
         # b=batch, n=neurons, k=num_basis/16
         return self.parametrization.forward(
-            x, self.weight, self.sampler, self.training,
+            x, self.weight, self.training,
             contraction='bnk,nk->bn'
         )
 

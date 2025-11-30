@@ -7,7 +7,6 @@ from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
 from ..parametrization import RawLUTParametrization, WalshLUTParametrization
-from ..sampling import SoftmaxSampler, SigmoidSampler
 
 
 class LogicConv2d(nn.Module):
@@ -103,13 +102,15 @@ class LogicConv2d(nn.Module):
         self.connections = connections
         self.lut_rank = lut_rank
 
-        # Create parametrization component
+        # Create parametrization component (sampler merged into parametrization)
         if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(lut_rank, arbitrary_basis)
-            self.sampler = SoftmaxSampler(forward_sampling, temperature)
+            self.parametrization = RawLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(lut_rank, arbitrary_basis)
-            self.sampler = SigmoidSampler(forward_sampling, temperature)
+            self.parametrization = WalshLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         else:
             raise ValueError(
                 f"Unsupported parametrization: {parametrization}. "
@@ -182,7 +183,7 @@ class LogicConv2d(nn.Module):
         # Process first level with einsum contraction
         # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
         x = self.parametrization.forward(
-            x, self.tree_weights[0], self.sampler, self.training,
+            x, self.tree_weights[0], self.training,
             contraction='bcsfk,fck->bcsf'
         )
 
@@ -191,7 +192,7 @@ class LogicConv2d(nn.Module):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
             x = self.parametrization.forward(
-                x, self.tree_weights[level], self.sampler, self.training,
+                x, self.tree_weights[level], self.training,
                 contraction='bcsfk,fck->bcsf'
             )
 
@@ -468,13 +469,15 @@ class LogicConv3d(nn.Module):
             f"({receptive_field_size})"
         )
 
-        # Create parametrization component
+        # Create parametrization component (sampler merged into parametrization)
         if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(lut_rank, arbitrary_basis)
-            self.sampler = SoftmaxSampler(forward_sampling, temperature)
+            self.parametrization = RawLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(lut_rank, arbitrary_basis)
-            self.sampler = SigmoidSampler(forward_sampling, temperature)
+            self.parametrization = WalshLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         else:
             raise ValueError(
                 f"Unsupported parametrization: {parametrization}. "
@@ -546,7 +549,7 @@ class LogicConv3d(nn.Module):
         # Process first level with einsum contraction
         # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
         x = self.parametrization.forward(
-            x, self.tree_weights[0], self.sampler, self.training,
+            x, self.tree_weights[0], self.training,
             contraction='bcsfk,fck->bcsf'
         )
 
@@ -555,7 +558,7 @@ class LogicConv3d(nn.Module):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
             x = self.parametrization.forward(
-                x, self.tree_weights[level], self.sampler, self.training,
+                x, self.tree_weights[level], self.training,
                 contraction='bcsfk,fck->bcsf'
             )
 
