@@ -83,7 +83,7 @@ class LUTParametrization(ABC):
         pass
 
     @abstractmethod
-    def forward_conv_first_level(
+    def forward_conv_one_level(
         self,
         x: torch.Tensor,
         weight: torch.Tensor,
@@ -160,7 +160,7 @@ class RawLUTParametrization(LUTParametrization):
 
         return bin_op_s(a, b, w)
 
-    def forward_conv_first_level(
+    def forward_conv_one_level(
         self,
         x: torch.Tensor,
         weight: torch.Tensor,
@@ -168,11 +168,9 @@ class RawLUTParametrization(LUTParametrization):
         training: bool
     ) -> torch.Tensor:
         if training:
-            level_weights = torch.stack([sampler.sample_train(w) for w in weight], dim=0)
+            level_weights = sampler.sample_train(weight)
         else:
-            level_weights = torch.stack(
-                [sampler.sample_eval(w, self.num_functions) for w in weight], dim=0
-            )
+            level_weights = sampler.sample_eval(weight, self.num_functions)
 
         return bin_op_cnn(x[:, 0], x[:, 1], level_weights)
 
@@ -233,7 +231,7 @@ class WalshLUTParametrization(LUTParametrization):
 
         return x
 
-    def forward_conv_first_level(
+    def forward_conv_one_level(
         self,
         x: torch.Tensor,
         weight: torch.Tensor,

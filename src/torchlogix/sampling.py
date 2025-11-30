@@ -74,6 +74,8 @@ class SoftmaxSampler(Sampler):
             )
 
     def sample_train(self, weights: torch.Tensor) -> torch.Tensor:
+        print(f"sample_train: {weights.shape=}")
+        print(f"sample_train: {weights=}")
         if self.forward_sampling == "soft":
             return softmax(weights, tau=self.temperature, hard=False)
         elif self.forward_sampling == "hard":

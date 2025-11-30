@@ -219,9 +219,9 @@ def test_and_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -281,9 +281,9 @@ def test_get_lut_ids_and():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     luts, ids = layer.get_lut_ids()
     assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
@@ -324,9 +324,9 @@ def test_get_lut_ids_and_walsh():
     # Set weights to select AND operation
     with torch.no_grad():
         and_weights = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     luts, ids = layer.get_lut_ids()
     assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
@@ -367,9 +367,9 @@ def test_and_model_walsh():
     with torch.no_grad():
         and_weights = -torch.tensor([-100., 50., 50., 50.]).reshape(1, 4)
         # and_weights[0, 3] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -425,9 +425,9 @@ def test_binary_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 1.0  # Pick 1 instead of 100 here
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     layer.train(False)  # Switch model to eval mode
     
@@ -475,9 +475,9 @@ def test_conv_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 
@@ -534,9 +534,9 @@ def test_conv_model_rect():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 

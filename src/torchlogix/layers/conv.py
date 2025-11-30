@@ -128,14 +128,16 @@ class LogicConv2d(nn.Module):
         self.indices = self._get_indices_from_kernel_tensor(self.kernels)
 
         # Initialize tree weights using parametrization
-        self.tree_weights = torch.nn.ModuleList()
+        self.tree_weights = torch.nn.ParameterList()
         for i in reversed(range(tree_depth + 1)):
-            level_weights = torch.nn.ParameterList()
-            for _ in range(lut_rank**i):
-                weights = self.parametrization.init_weights(
-                    num_kernels, weight_init, residual_init_param, device
-                )
-                level_weights.append(torch.nn.Parameter(weights))
+            # each tree level has lut_rank**i nodes per kernel
+            level_weights = torch.nn.Parameter(torch.stack(
+                [
+                    self.parametrization.init_weights(
+                        num_kernels, weight_init, residual_init_param, device
+                    ) for _ in range(lut_rank**i)
+                ]
+            ))
             self.tree_weights.append(level_weights)
 
 
@@ -178,7 +180,7 @@ class LogicConv2d(nn.Module):
         x = x[:, ind_c, ind_h, ind_w]
 
         # Process first level
-        x = self.parametrization.forward_conv_first_level(
+        x = self.parametrization.forward_conv_one_level(
             x, self.tree_weights[0], self.sampler, self.training
         )
 
@@ -186,7 +188,7 @@ class LogicConv2d(nn.Module):
         for level in range(1, self.tree_depth + 1):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
-            x = self.parametrization.forward_conv_first_level(
+            x = self.parametrization.forward_conv_one_level(
                 x, self.tree_weights[level], self.sampler, self.training
             )
 
@@ -537,7 +539,7 @@ class LogicConv3d(nn.Module):
         x = x[:, ind_c, ind_h, ind_w, ind_d]
 
         # Process first level
-        x = self.parametrization.forward_conv_first_level(
+        x = self.parametrization.forward_conv_one_level(
             x, self.tree_weights[0], self.sampler, self.training
         )
 
@@ -545,7 +547,7 @@ class LogicConv3d(nn.Module):
         for level in range(1, self.tree_depth + 1):
             x = x[..., self.indices[level]]
             x = x.movedim(-2, 1)
-            x = self.parametrization.forward_conv_first_level(
+            x = self.parametrization.forward_conv_one_level(
                 x, self.tree_weights[level], self.sampler, self.training
             )
 
