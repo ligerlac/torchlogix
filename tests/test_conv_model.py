@@ -13,7 +13,7 @@ from torchlogix import CompiledLogicNet
 def test_clgn_model():
     """Test the CLGN model with a simple input."""
     # Create a simple CNN model
-    model = CNN(class_count=10, tau=1, implementation="python", device="cpu")
+    model = CNN(class_count=10, tau=1, device="cpu")
     model.train(False)  # Switch model to eval mode
 
     # Create a dummy input tensor with 8 mnist-like images

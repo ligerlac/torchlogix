@@ -10,7 +10,43 @@ import torch
 from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
 
-llkw = {"connections": "unique", "implementation": "python", "device": "cpu"}
+llkw = {"connections": "random-unique", "device": "cpu"}
+llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}
+
+
+def test_get_luts_and_ids_xor_walsh():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer.weight.data = torch.zeros((1, 4))
+    layer.weight.data[0, 3] = 1
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(ids, torch.tensor([6]))
+    assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 1, 1, 0]]]))
+
+
+def test_get_luts_and_ids_and_walsh():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(ids, torch.tensor([1]))
+    assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 0, 0, 1]]]))
+    
+
+def test_get_luts_and_ids_xor():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
+    layer.weight.data = torch.zeros((1, 16))
+    layer.weight.data[0, 6] = 100
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(ids, torch.tensor([6]))
+    assert torch.allclose(luts, torch.tensor([[[0, 1, 1, 0]]]))
+
+
+def test_get_luts_and_ids_and():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
+    layer.weight.data = torch.zeros((1, 16))
+    layer.weight.data[0, 1] = 100
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(ids, torch.tensor([1]))
+    assert torch.allclose(luts, torch.tensor([[[0, 0, 0, 1]]]))
 
 
 def test_trivial_layer():
@@ -21,10 +57,26 @@ def test_trivial_layer():
     It should not be possible to have more than one connection (==out_dim).
     """
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
-    assert layer.indices == (0, 1) or layer.indices == (1, 0)
+    assert torch.allclose(layer.indices, torch.tensor(((0,), (1,)))) or torch.allclose(layer.indices, torch.tensor(((1,), (0,))))
     assert layer.weight.shape == (1, 16)
     with pytest.raises(AssertionError):
         LogicDense(in_dim=2, out_dim=2, **llkw)
+
+
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_trivial_layer_walsh(lut_rank):
+    layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, parametrization="walsh", connections="random", device="cpu")
+    assert layer.indices.shape == (lut_rank, 1)
+    # the connections must be random permutation of all inputs
+    assert set(layer.indices[:, 0].tolist()) == set(range(lut_rank))
+    assert layer.weight.shape == (1, 2**lut_rank)
+
+
+@pytest.mark.parametrize("lut_rank", [4, 6])
+def test_in_dim_less_than_lut_rank(lut_rank):
+    """Test that an error is raised when in_dim < lut_rank."""
+    with pytest.raises(AssertionError):
+        LogicDense(in_dim=2, out_dim=1, lut_rank=lut_rank, parametrization="walsh", connections="random", device="cpu")
 
 
 def test_xor_model():
@@ -40,7 +92,7 @@ def test_xor_model():
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:
-        assert np.isclose(model(torch.tensor([x, y])).item(), expected)
+        assert np.isclose(model(torch.tensor([[x, y]])).item(), expected)
 
 
 def test_xor_model_walsh():
@@ -50,13 +102,13 @@ def test_xor_model_walsh():
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw, parametrization="walsh")
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
     layer.weight.data = torch.zeros(4)
-    layer.weight.data[3] = -100
+    layer.weight.data[3] = 100
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:
-        pred = model(torch.tensor([x, y])).item()
+        pred = model(torch.tensor([[x, y]])).item()
         assert np.isclose(pred, expected)
 
 
@@ -67,17 +119,15 @@ def test_compiled_model(weight_init):
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="unique",
+            connections="random",
             weight_init=weight_init,
-            implementation="python",
             device="cpu",
         ),
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="unique",
+            connections="random",
             weight_init=weight_init,
-            implementation="python",
             device="cpu",
         ),
         GroupSum(1),
@@ -100,9 +150,9 @@ def test_large_compiled_model():
     """Test model compilation and inference."""
     k_num = 16
     model = torch.nn.Sequential(
-        LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu", implementation="python"),
-        LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu", implementation="python"),
-        LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu", implementation="python"),
+        LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu"),
+        LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu"),
+        LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu"),
         GroupSum(8),
     )
     compiled_model = CompiledLogicNet(

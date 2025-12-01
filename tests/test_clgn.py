@@ -23,7 +23,6 @@ def layer(
         "num_kernels": num_kernels,
         "tree_depth": tree_depth,
         "receptive_field_size": receptive_field_size,
-        "implementation": "python",
         "connections": connections,
         "stride": stride,
         "padding": padding,
@@ -171,6 +170,28 @@ class TestIndeces:
                         f"Kernel {kernel_idx}, position {pos_idx}: Found self-connection {left_tuple}"
 
 
+def test_lut_rank_walsh():
+    """Test scaling up to multiple inputs, that is n=4."""
+    lut_rank = 4
+    layer = layer = LogicConv2d(
+        in_dim=(3, 4),
+        parametrization="walsh",
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=0,
+        receptive_field_size=3,
+        connections="random-unique",
+        stride=1,
+        padding=0,
+        lut_rank=lut_rank,
+    )
+    luts, ids = layer.get_luts_and_ids()
+    for luts_level in luts:
+        for luts_ in luts_level:
+            assert luts_.shape[-1] == 1 << lut_rank
+    
+
 def test_and_model():
     """Test the AND gate implementation.
 
@@ -185,25 +206,24 @@ def test_and_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -234,8 +254,7 @@ def test_and_model():
             expected
         )
 
-
-def test_and_model_walsh():
+def test_get_luts_and_ids_and():
     """Test the AND gate implementation.
 
     AND is the 1-st gate:
@@ -249,26 +268,114 @@ def test_and_model_walsh():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
-        parametrization="walsh",
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
-        and_weights = torch.tensor([-100., 50., 50., 50.]).reshape(1, 4)
-        # and_weights[0, 3] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        and_weights = torch.zeros(1, 16)
+        and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
+
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[0][1].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[1][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(ids[0][0], torch.tensor([1]))
+    assert torch.allclose(ids[0][1], torch.tensor([1]))
+    assert torch.allclose(ids[1][0], torch.tensor([1]))
+    
+
+
+def test_get_luts_and_ids_and_walsh():
+    """Test the AND gate implementation.
+
+    AND is the 1-st gate:
+    - set the weights to 0, except for the 1-st element (set to some high value)
+    - test some possible inputs
+    """
+    layer = LogicConv2d(
+        in_dim=3,
+        parametrization="walsh",
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        connections="random-unique",
+        stride=1,
+        padding=0,
+    )
+
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
+
+    # Set weights to select AND operation
+    # Correct Walsh weights for AND gate with {-1, +1} conversion
+    with torch.no_grad():
+        and_weights = torch.tensor([[50., 50., 50., -50.]])
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
+
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[0][1].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(luts[1][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
+    assert torch.allclose(ids[0][0], torch.tensor([1]))
+    assert torch.allclose(ids[0][1], torch.tensor([1]))
+    assert torch.allclose(ids[1][0], torch.tensor([1]))
+    
+
+def test_and_model_walsh():
+    """Test the AND gate implementation.
+
+    AND is the 1-st gate:
+    - set the weights to 0, except for the 1-st element (set to some high value)
+    - test some possible inputs
+    """
+    layer = LogicConv2d(
+        in_dim=3,
+        parametrization="walsh",
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=1,
+        receptive_field_size=2,
+        connections="random-unique",
+        stride=1,
+        padding=0,
+    )
+
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
+
+    # Set weights to select AND operation
+    # Correct Walsh weights for AND gate with {-1, +1} conversion
+    # Basis: [1, B, A, A*B] where inputs are converted via x = 1 - 2*x
+    # Sigmoid sampler negates: output = ((-x) > 0).float()
+    # Scale weights to make sigmoid outputs sharp (like raw parametrization uses 100.0)
+    with torch.no_grad():
+        and_weights = torch.tensor([50., 50., 50., -50.]).reshape(1, 4)
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -309,25 +416,24 @@ def test_binary_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to BARELY select AND operation
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 1.0  # Pick 1 instead of 100 here
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     layer.train(False)  # Switch model to eval mode
     
@@ -359,26 +465,25 @@ def test_conv_model():
         channels=1,
         num_kernels=1,
         tree_depth=1,
-            receptive_field_size=2,
-            implementation="python",
-            connections="random-unique",
-            stride=1,
-            padding=0,
+        receptive_field_size=2,
+        connections="random-unique",
+        stride=1,
+        padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0], [1, 0, 0]]]),
-        torch.tensor([[[0, 1, 0], [1, 1, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0], [1, 0, 0]]],
+        [[[0, 1, 0], [1, 1, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 
@@ -420,25 +525,24 @@ def test_conv_model_rect():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        implementation="python",
         connections="random-unique",
         stride=1,
         padding=0,
     )
 
-    kernel_pairs = (
-        torch.tensor([[[0, 0, 0, 0], [1, 0, 0, 0]]]),
-        torch.tensor([[[0, 1, 0, 0], [1, 1, 0, 0]]]),
-    )
-    layer.indices = layer.get_indices_from_kernel_pairs(kernel_pairs)
+    kernels = torch.tensor([
+        [[[0, 0, 0, 0], [1, 0, 0, 0]]],
+        [[[0, 1, 0, 0], [1, 1, 0, 0]]]
+    ])
+    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0][0].data = and_weights
-        layer.tree_weights[0][1].data = and_weights
-        layer.tree_weights[1][0].data = and_weights
+        layer.tree_weights[0].data[0] = and_weights
+        layer.tree_weights[0].data[1] = and_weights
+        layer.tree_weights[1].data[0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 
@@ -487,8 +591,7 @@ def test_compiled_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
-            connections="random-unique",
+            connections="random",
             stride=1,
             padding=0,
         ),
@@ -528,7 +631,6 @@ def test_compiled_model_rect():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
             connections="random-unique",
             stride=1,
             padding=0,
@@ -605,7 +707,6 @@ def test_compiled_pooling_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
             connections="random-unique",
             stride=1,
             padding=0,
@@ -651,8 +752,7 @@ def test_compiled_model_with_thresholding():
             num_kernels=2,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
-            connections="random-unique",
+            connections="random",
             stride=1,
             padding=0,
         ),
@@ -708,8 +808,7 @@ def test_thresholding_with_bitpacking_raises_error():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            implementation="python",
-            connections="random-unique",
+            connections="random",
             stride=1,
             padding=0,
         ),

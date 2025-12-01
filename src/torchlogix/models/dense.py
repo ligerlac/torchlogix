@@ -9,16 +9,16 @@ class Dlgn(torch.nn.Sequential):
     'Deep Differentiable Logic Gate Networks'.
     """
     def __init__(
-        self, in_dim: int, n_layers: int, neurons_per_layer: int, class_count: int, tau: float, **llkw
+        self, parametrization: str, in_dim: int, n_layers: int, neurons_per_layer: int, class_count: int, tau: float, **llkw
     ):
         super(Dlgn, self).__init__()
         layers = [torch.nn.Flatten()]
         layers.append(
-            LogicDense(in_dim=in_dim, out_dim=neurons_per_layer, **llkw)
+            LogicDense(in_dim=in_dim, out_dim=neurons_per_layer, parametrization=parametrization, **llkw)
         )
         for _ in range(n_layers - 1):
             layers.append(
-                LogicDense(in_dim=neurons_per_layer, out_dim=neurons_per_layer, **llkw)
+                LogicDense(in_dim=neurons_per_layer, out_dim=neurons_per_layer, parametrization=parametrization, **llkw)
             )
         super(Dlgn, self).__init__(*layers, GroupSum(class_count, tau))
 
@@ -40,6 +40,9 @@ class DlgnMnist(Dlgn):
             **llkw
         )
 
+class DlgnMnistTiny(DlgnMnist):
+    def __init__(self, **llkw):
+        super(DlgnMnistTiny, self).__init__(neurons_per_layer=1000, tau=1./0.1, **llkw)
 
 class DlgnMnistSmall(DlgnMnist):
     def __init__(self, **llkw):
