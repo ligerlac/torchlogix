@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
+from torchlogix.layers import LogicConv, OrPooling, GroupSum, LearnableThermometerThresholding
 from torchlogix import CompiledLogicNet
 
 
@@ -32,19 +32,19 @@ def layer(
     # itself or the min of the tuple
     if receptive_field_size > (min(in_dim) if isinstance(in_dim, tuple) else in_dim):
         with pytest.raises(AssertionError):
-            LogicConv2d(**params)
+            LogicConv(**params)
         pytest.skip("Receptive field size should be smaller than input dimension")
     if stride > receptive_field_size:
         with pytest.raises(AssertionError):
-            LogicConv2d(**params)
+            LogicConv(**params)
         pytest.skip("Stride should be smaller than receptive field size")
     kernel_volume = receptive_field_size ** 2 * channels
     if connections == "random-unique":
         if kernel_volume * (kernel_volume - 1) / 2 < 2** tree_depth:
             # with pytest.raises(AssertionError):
-            #     LogicConv2d(**params)
+            #     LogicConv(**params)
             pytest.skip("Kernel volume should be large enough to support the tree depth")
-    return LogicConv2d(**params)
+    return LogicConv(**params)
 
 
 @pytest.mark.parametrize("in_dim", [2, 7, (18, 14)])
@@ -173,7 +173,7 @@ class TestIndeces:
 def test_lut_rank_walsh():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
-    layer = layer = LogicConv2d(
+    layer = layer = LogicConv(
         in_dim=(3, 4),
         parametrization="walsh",
         device="cpu",
@@ -199,7 +199,7 @@ def test_and_model():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=3,
         device="cpu",
         channels=1,
@@ -261,7 +261,7 @@ def test_get_luts_and_ids_and():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=3,
         device="cpu",
         channels=1,
@@ -304,7 +304,7 @@ def test_get_luts_and_ids_and_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=3,
         parametrization="walsh",
         device="cpu",
@@ -347,7 +347,7 @@ def test_and_model_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=3,
         parametrization="walsh",
         device="cpu",
@@ -409,7 +409,7 @@ def test_and_model_walsh():
 
 
 def test_binary_model():
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=2,
         device="cpu",
         channels=1,
@@ -459,7 +459,7 @@ def test_binary_model():
 
     
 def test_conv_model():
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=3,
         device="cpu",
         channels=1,
@@ -518,7 +518,7 @@ def test_conv_model():
 
 
 def test_conv_model_rect():
-    layer = LogicConv2d(
+    layer = LogicConv(
         in_dim=(3, 4),
         device="cpu",
         channels=1,
@@ -584,7 +584,7 @@ def test_conv_model_rect():
 def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicConv2d(
+        LogicConv(
             in_dim=3,
             device="cpu",
             channels=1,
@@ -624,7 +624,7 @@ def test_compiled_model():
 def test_compiled_model_rect():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicConv2d(
+        LogicConv(
             in_dim=(3,4),
             device="cpu",
             channels=1,
@@ -700,7 +700,7 @@ def test_pooling_layer():
 def test_compiled_pooling_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicConv2d(
+        LogicConv(
             in_dim=3,
             device="cpu",
             channels=1,
@@ -745,7 +745,7 @@ def test_compiled_model_with_thresholding():
     # Create a simple model: Thresholding -> Conv -> Flatten -> GroupSum
     model = torch.nn.Sequential(
         thresholding_layer,
-        LogicConv2d(
+        LogicConv(
             in_dim=3,
             device="cpu",
             channels=5,  # Must match number of thresholds
@@ -801,7 +801,7 @@ def test_thresholding_with_bitpacking_raises_error():
     # Create a simple model with thresholding
     model = torch.nn.Sequential(
         thresholding_layer,
-        LogicConv2d(
+        LogicConv(
             in_dim=3,
             device="cpu",
             channels=3,

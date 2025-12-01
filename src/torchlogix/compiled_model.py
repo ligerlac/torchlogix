@@ -10,7 +10,7 @@ import numpy as np
 import numpy.typing
 import torch
 
-from .layers.conv import LogicConv2d, LogicConv3d, OrPooling
+from .layers.conv import LogicConv, OrPooling
 from .layers.dense import LogicDense
 from .layers.groupsum import GroupSum
 from .layers.thresholding import LearnableThermometerThresholding
@@ -110,11 +110,7 @@ class CompiledLogicNet(torch.nn.Module):
                     raise ValueError("LearnableThermometerThresholding layer must appear first in layer order.")
                 thresholding_info = self._extract_thresholding_layer_info(layer)
                 self.thresholding_layer = thresholding_info  # there will only be one thresholding layer
-            elif isinstance(layer, LogicConv2d):
-                conv_info = self._extract_conv_layer_info(layer)
-                self.conv_layers.append(conv_info)
-                self.layer_order.append(('conv', len(self.conv_layers) - 1))
-            elif isinstance(layer, LogicConv3d):
+            elif isinstance(layer, LogicConv):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
@@ -145,7 +141,7 @@ class CompiledLogicNet(torch.nn.Module):
 
         # Validate model structure
         if not self.conv_layers and not self.linear_layers:
-            raise ValueError("Model must contain at least one LogicConv2d, LogicConv3d, or LogicDense layer.")
+            raise ValueError("Model must contain at least one LogicConv, or LogicDense layer.")
 
     def _extract_thresholding_layer_info(self, layer: LearnableThermometerThresholding) -> Dict[str, Any]:
         """Extract information from a thresholding layer for compilation."""
@@ -154,8 +150,8 @@ class CompiledLogicNet(torch.nn.Module):
             'thresholds': layer.get_thresholds(),
         }
 
-    def _extract_conv_layer_info(self, layer: Union[LogicConv2d, LogicConv3d]) -> Dict[str, Any]:
-        """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
+    def _extract_conv_layer_info(self, layer: LogicConv) -> Dict[str, Any]:
+        """Extract information from a LogicConv layer for compilation."""
         tree_operations = []
         for level_idx, level_weights in enumerate(layer.tree_weights):
             level_ops = []

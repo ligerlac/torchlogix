@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from ..layers import OrPooling, GroupSum, LogicConv2d, LogicDense
+from ..layers import OrPooling, GroupSum, LogicConv, LogicDense
 
 
 class CNN(torch.nn.Module):
@@ -12,7 +12,7 @@ class CNN(torch.nn.Module):
         # specifically written for mnist
         k_num = 16
         logic_layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=28,
                 num_kernels=k_num,
                 channels=1,
@@ -26,7 +26,7 @@ class CNN(torch.nn.Module):
         logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=0))
 
         logic_layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=12,
                 channels=k_num,
                 num_kernels=3 * k_num,
@@ -40,7 +40,7 @@ class CNN(torch.nn.Module):
         logic_layers.append(OrPooling(kernel_size=2, stride=2, padding=1))
 
         logic_layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=6,
                 channels=3 * k_num,
                 num_kernels=9 * k_num,
@@ -84,7 +84,7 @@ class ResidualLogicBlock(nn.Module):
         stride = 2 if downsample else 1
 
         self.main = nn.Sequential(
-            LogicConv2d(
+            LogicConv(
                 in_dim=in_dim,
                 channels=in_channels,
                 num_kernels=out_channels,
@@ -101,7 +101,7 @@ class ResidualLogicBlock(nn.Module):
         # we can either project the input to the output channels, or use a standard skip connection
         if downsample or in_channels != out_channels:
             self.shortcut = nn.Sequential(
-                LogicConv2d(
+                LogicConv(
                     in_dim=in_dim,
                     channels=in_channels,
                     num_kernels=out_channels,
@@ -130,7 +130,7 @@ class ClgnMnist(torch.nn.Sequential):
         self.k_num = k_num
         layers = []
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=28,
                 num_kernels=k_num,
                 channels=1,
@@ -144,7 +144,7 @@ class ClgnMnist(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2, padding=0))
 
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=12,
                 channels=k_num,
                 num_kernels=3 * k_num,
@@ -158,7 +158,7 @@ class ClgnMnist(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2, padding=1))
 
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=6,
                 channels=3 * k_num,
                 num_kernels=9 * k_num,
@@ -209,7 +209,7 @@ class ClgnCifar10(torch.nn.Sequential):
     def __init__(self, n_bits: int, k_num: int, tau: float, parametrization="raw", **llkw):
         layers = []
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
@@ -223,7 +223,7 @@ class ClgnCifar10(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # kx16x16
 
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=16,
                 channels=k_num,
                 num_kernels=4*k_num,
@@ -237,7 +237,7 @@ class ClgnCifar10(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # 4kx8x8
 
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=8,
                 channels=4*k_num,
                 num_kernels=16*k_num,
@@ -251,7 +251,7 @@ class ClgnCifar10(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # 16kx4x4
         
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=4,
                 channels=16*k_num,
                 num_kernels=32*k_num,
@@ -351,7 +351,7 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
         tau = 20
         layers = []
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
@@ -364,7 +364,7 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
         layers.append(OrPooling(kernel_size=2, stride=2)) # kx14x14
 
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=14,
                 channels=k_num,
                 num_kernels=4*k_num,
@@ -414,7 +414,7 @@ class ClgnCifar10Mini(torch.nn.Sequential):
         tau = 20
         layers = []
         layers.append(
-            LogicConv2d(
+            LogicConv(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,

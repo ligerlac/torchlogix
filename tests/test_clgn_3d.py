@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch.nn.modules.utils import _triple
 
-from torchlogix.layers import LogicConv3d, OrPooling, GroupSum
+from torchlogix.layers import LogicConv, OrPooling, GroupSum
 from torchlogix import CompiledLogicNet
 
 
@@ -28,6 +28,7 @@ def layer(
         "connections": connections,
         "stride": stride,
         "padding": padding,
+        "conv_dimension": 3
     }
     receptive_field_size_tuple = _triple(receptive_field_size)
     in_dim_tuple = _triple(in_dim)
@@ -40,18 +41,18 @@ def layer(
             (receptive_field_size_tuple[2] > in_dim_tuple[2])
     ):
         with pytest.raises(AssertionError):
-            LogicConv3d(**params)
+            LogicConv(**params)
         pytest.skip("Receptive field size should be smaller than input dimension")
 
     if stride > min(receptive_field_size_tuple):
         with pytest.raises(AssertionError):
-            LogicConv3d(**params)
+            LogicConv(**params)
         pytest.skip("Stride should be smaller than receptive field size")
     kernel_volume = math.prod(receptive_field_size_tuple) * channels
     if connections == "random-unique":
         if kernel_volume * (kernel_volume - 1) / 2 < 2** tree_depth:
             pytest.skip("Kernel volume should be large enough to support the tree depth")
-    return LogicConv3d(**params)
+    return LogicConv(**params)
 
 
 @pytest.mark.parametrize("in_dim", [2, 7, (18, 14, 6)])
@@ -179,7 +180,7 @@ def test_and_model():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    layer = LogicConv3d(
+    layer = LogicConv(
         in_dim=3,
         device="cpu",
         channels=1,
@@ -189,6 +190,7 @@ def test_and_model():
         connections="random-unique",
         stride=1,
         padding=0,
+        conv_dimension=3,
     )
 
     kernels = torch.tensor(
@@ -243,7 +245,7 @@ def test_and_model():
         )
 
 def test_binary_model():
-    layer = LogicConv3d(
+    layer = LogicConv(
         in_dim=2,
         device="cpu",
         channels=1,
@@ -253,6 +255,7 @@ def test_binary_model():
         connections="random-unique",
         stride=1,
         padding=0,
+        conv_dimension=3
     )
 
     kernels = torch.tensor(
@@ -294,7 +297,7 @@ def test_binary_model():
 def test_lut_rank_walsh():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
-    layer = LogicConv3d(
+    layer = LogicConv(
         in_dim=(3, 4, 3),
         device="cpu",
         channels=1,
@@ -306,6 +309,7 @@ def test_lut_rank_walsh():
         stride=1,
         padding=0,
         lut_rank=lut_rank,
+        conv_dimension=3
     )
     luts, ids = layer.get_luts_and_ids()
     for luts_level in luts:
@@ -314,7 +318,7 @@ def test_lut_rank_walsh():
 
 
 def test_conv_model():
-    layer = LogicConv3d(
+    layer = LogicConv(
         in_dim=3,
         device="cpu",
         channels=1,
@@ -324,6 +328,7 @@ def test_conv_model():
         connections="random-unique",
         stride=1,
         padding=0,
+        conv_dimension=3
     )
 
     kernels = torch.tensor(
@@ -386,7 +391,7 @@ def test_conv_model():
         )
 
 def test_conv_model_rect():
-    layer = LogicConv3d(
+    layer = LogicConv(
         in_dim=(4,3,3),
         device="cpu",
         channels=1,
@@ -396,6 +401,7 @@ def test_conv_model_rect():
         connections="random-unique",
         stride=1,
         padding=0,
+        conv_dimension=3
     )
 
     kernels = torch.tensor(
@@ -528,7 +534,7 @@ def test_pooling_layer():
 def test_compiled_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicConv3d(
+        LogicConv(
             in_dim=3,
             device="cpu",
             channels=1,
@@ -538,6 +544,7 @@ def test_compiled_model():
             connections="random-unique",
             stride=1,
             padding=0,
+            conv_dimension=3,
         ),
         torch.nn.Flatten(),
         GroupSum(1),
@@ -561,7 +568,7 @@ def test_compiled_model():
 def test_compiled_model_rect():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicConv3d(
+        LogicConv(
             in_dim=(3,4,3),
             device="cpu",
             channels=1,
@@ -571,6 +578,7 @@ def test_compiled_model_rect():
             connections="random-unique",
             stride=1,
             padding=0,
+            conv_dimension=3,
         ),
         torch.nn.Flatten(),
         GroupSum(1),
@@ -593,7 +601,7 @@ def test_compiled_model_rect():
 def test_compiled_pooling_model():
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
-        LogicConv3d(
+        LogicConv(
             in_dim=3,
             device="cpu",
             channels=1,
@@ -603,6 +611,7 @@ def test_compiled_pooling_model():
             connections="random-unique",
             stride=1,
             padding=0,
+            conv_dimension=3,
         ),
         OrPooling(kernel_size=2, stride=2, padding=0),
         torch.nn.Flatten(),
