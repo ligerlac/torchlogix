@@ -40,7 +40,7 @@ def test_weight_init_raw(num_neurons):
     weights = param.init_weights(
         weight_init="random",
         num_neurons=num_neurons,
-        residual_init_param=0.3,
+        residual_probability=0.3,
         device="cpu"
     )
     assert weights.shape == (num_neurons, 16)
@@ -53,7 +53,7 @@ def test_weight_init_walsh(lut_rank, num_neurons):
     weights = param.init_weights(
         weight_init="random",
         num_neurons=num_neurons,
-        residual_init_param=0.3,
+        residual_probability=0.3,
         device="cpu"
     )
     assert weights.shape == (num_neurons, 2**lut_rank)

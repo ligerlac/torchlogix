@@ -374,10 +374,9 @@ def main():
     )
 
     parser.add_argument(
-        "--residual-init-param", type=float, default=1.0,
+        "--residual-probability", type=float, default=0.9,
         help="Parameter for residual weight initialization. " \
-        "Raw: Corresponds to scale given to identity function times 5." \
-        "Walsh: Corresponds to percentage of LUTs initialized to identity function times 0.5."
+        "Corresponds to percentage of LUTs initialized to identity function times."
     )
 
     parser.add_argument(

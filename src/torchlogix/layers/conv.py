@@ -53,7 +53,7 @@ class LogicConv(LogicBase):
             - ``"hard"``: Straight-through hard selection.
             - ``"gumbel_soft"``: Gumbel-Softmax/Sigmoid relaxation.
             - ``"gumbel_hard"``: Straight-through Gumbel-Softmax/Sigmoid.
-        residual_init_param: Scalar controlling the strength of the
+        residual_probability: Scalar controlling the strength of the
             residual-style initialization when ``weight_init == "residual"``.
         lut_rank: Arity of each logic gate (number of Boolean inputs per
             node). Typically 2 for binary trees.
@@ -79,7 +79,7 @@ class LogicConv(LogicBase):
         conv_dimension: int = 2,
         temperature: float = 1.0,
         forward_sampling: str = "soft",
-        residual_init_param: float = 1.0,
+        residual_probability: float = 0.9,
         lut_rank: int = 2,
         arbitrary_basis: bool = False
     ):
@@ -93,7 +93,7 @@ class LogicConv(LogicBase):
             arbitrary_basis=arbitrary_basis,
             connections=connections,
             weight_init=weight_init,
-            residual_init_param=residual_init_param,
+            residual_probability=residual_probability,
             )
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
@@ -127,7 +127,7 @@ class LogicConv(LogicBase):
                     self.parametrization.init_weights(
                         self.num_kernels, 
                         self.weight_init, 
-                        self.residual_init_param, 
+                        self.residual_probability, 
                         self.device
                     ) for _ in range(self.lut_rank**i)
                 ]

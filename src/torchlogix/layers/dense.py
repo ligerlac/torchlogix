@@ -30,7 +30,7 @@ class LogicDense(LogicBase):
         weight_init: Initialization scheme for LUT weights. Supported values:
             - ``"residual"``: Residual-style initialization around a default LUT.
             - ``"random"``: Fully random logits for each possible LUT.
-        residual_init_param: Scalar parameter controlling the strength of the
+        residual_probability: Scalar parameter controlling the strength of the
             residual initialization when ``weight_init == "residual"``.
         temperature: Temperature parameter used for (Gumbel-)Softmax/Sigmoid
             sampling of LUT weights during training.
@@ -56,7 +56,7 @@ class LogicDense(LogicBase):
         grad_factor: float = 1.0,
         connections: str = "random",
         weight_init: str = "residual",
-        residual_init_param: float = 1.0,
+        residual_probability: float = 0.9,
         temperature: float = 1.0,
         forward_sampling: str = "soft",
         lut_rank: int = 2,
@@ -72,7 +72,7 @@ class LogicDense(LogicBase):
             arbitrary_basis=arbitrary_basis,
             connections=connections,
             weight_init=weight_init,
-            residual_init_param=residual_init_param,
+            residual_probability=residual_probability,
             )
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -85,7 +85,7 @@ class LogicDense(LogicBase):
     def _init_weights(self, out_dim):
         # Initialize weights using parametrization
         weights = self.parametrization.init_weights(
-            out_dim, self.weight_init, self.residual_init_param, self.device
+            out_dim, self.weight_init, self.residual_probability, self.device
         )
         return torch.nn.Parameter(weights)
 

@@ -22,7 +22,7 @@ class LogicBase(torch.nn.Module, ABC):
         arbitrary_basis: bool = False,
         connections: str = "random",
         weight_init: str = "residual",
-        residual_init_param: float = 1.0,
+        residual_probability: float = 0.9,
     ):
         super().__init__()
         # Create parametrization component (sampler merged into parametrization)
@@ -44,7 +44,7 @@ class LogicBase(torch.nn.Module, ABC):
         self.lut_rank = lut_rank
         self.connections = connections
         self.weight_init = weight_init
-        self.residual_init_param = residual_init_param
+        self.residual_probability = residual_probability
 
     @abstractmethod
     def _init_weights(self, **kwargs):

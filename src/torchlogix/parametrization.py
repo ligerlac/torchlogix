@@ -6,6 +6,7 @@ basis coefficients.
 """
 
 from abc import ABC, abstractmethod
+import math
 import torch
 import torch.nn.functional as F
 
@@ -60,7 +61,7 @@ class LUTParametrization(ABC):
         self,
         num_neurons: int,
         weight_init: str,
-        residual_init_param: float,
+        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         """Initialize weights for this parametrization.
@@ -68,7 +69,7 @@ class LUTParametrization(ABC):
         Args:
             num_neurons: Number of neurons/kernels.
             weight_init: Initialization strategy ("residual" or "random").
-            residual_init_param: Parameter controlling residual initialization.
+            residual_probability: Parameter controlling residual initialization.
             device: Device to allocate weights on.
 
         Returns:
@@ -145,14 +146,21 @@ class RawLUTParametrization(LUTParametrization):
         self,
         num_neurons: int,
         weight_init: str,
-        residual_init_param: float,
+        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         lut_entries = 1 << self.lut_rank
         if weight_init == "residual":
-            # all weights to 0 except for weight number lut_entries - 1, which is set to 5 * weight_init_param
+            # all weights to 0 except for weight number lut_entries - 1, 
+            # which is set to residual_probability corresponding to a probability
+            # If we want to sample the identity function with probability p, the param is:
+            if lut_entries < 5:
+                param = - math.log(1 - residual_probability) + math.log(residual_probability) + math.log((1 << lut_entries) - 1)
+            else:
+                param = - math.log(1 - residual_probability) + math.log(residual_probability) + lut_entries * math.log(2)
+            # Original DGN paper set this parameter to 5, which leads to a probability of ~0.9082 for lut_rank=2
             weights = torch.zeros((num_neurons, 1 << lut_entries), device=device)
-            weights[:, lut_entries - 1] = 5.0 * residual_init_param
+            weights[:, lut_entries - 1] = param
             return weights
         elif weight_init == "random":
             return torch.randn(num_neurons, 1 << lut_entries, device=device)
@@ -246,12 +254,12 @@ class WalshLUTParametrization(LUTParametrization):
         self,
         num_neurons: int,
         weight_init: str,
-        residual_init_param: float,
+        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         lut_entries = 1 << self.lut_rank
         if weight_init == "residual":
-            n = int((num_neurons * residual_init_param) // 2) % (num_neurons + 1)
+            n = int((num_neurons * residual_probability)) % (num_neurons + 1)
             weights = torch.empty((num_neurons, lut_entries), device=device)
             # identity representation, corresponds to Boolean function, which maps MSB (last single variable) to itself
             identity = torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
