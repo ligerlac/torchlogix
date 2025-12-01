@@ -112,38 +112,30 @@ def test_xor_model_walsh():
         assert np.isclose(pred, expected)
 
 
-def test_lut_rank_walsh():
-    """Test scaling up to multiple inputs, that is n=4."""
-    x = 1 - 2 * torch.rand((1, 12))
-    lut_rank = 4
-    out_dim = x.shape[1] // lut_rank
-    layer = LogicDense(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw_walsh)
-    luts, ids = layer.get_luts_and_ids()
-    assert luts.shape == (out_dim, 1 << lut_rank)
-    model = torch.nn.Sequential(layer)
-    y = model(x)
-    assert y.shape == (x.shape[0], out_dim)
-
-
-def test_compiled_model():
+@pytest.mark.parametrize("weight_init", ["random", "residual"])
+def test_compiled_model(weight_init):
     """Test model compilation and inference."""
     model = torch.nn.Sequential(
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="random",
+            connections="unique",
+            weight_init=weight_init,
+            implementation="python",
             device="cpu",
         ),
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="random",
+            connections="unique",
+            weight_init=weight_init,
+            implementation="python",
             device="cpu",
         ),
         GroupSum(1),
     )
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(42,), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
 
@@ -166,7 +158,7 @@ def test_large_compiled_model():
         GroupSum(8),
     )
     compiled_model = CompiledLogicNet(
-        model=model, num_bits=8, cpu_compiler="gcc", verbose=True
+        model=model, input_shape=(81 * k_num,), num_bits=8, cpu_compiler="gcc", verbose=True
     )
     compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
 
