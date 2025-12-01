@@ -70,7 +70,7 @@ class LogicConv2d(LogicBase):
         channels: int = 1,
         num_kernels: int = 16,
         tree_depth: int = None,
-        receptive_field_size: int = None,
+        receptive_field_size: _size_2_t = 2,
         connections: str = "random",
         weight_init: str = "residual",
         stride: int = 1,
@@ -102,7 +102,7 @@ class LogicConv2d(LogicBase):
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
         self.channels = channels
-        self.receptive_field_size = receptive_field_size
+        self.receptive_field_size = _pair(receptive_field_size)
         self.stride = stride
         self.padding = padding
         self.tree_weights = self._init_weights()
@@ -192,10 +192,12 @@ class LogicConv2d(LogicBase):
             )
 
         # Reshape flattened output
-        reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
-        reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
+                   for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
+        #reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        #reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
 
-        x = x.view(x.shape[0], x.shape[1], reshape_h, reshape_w)
+        x = x.view(x.shape[0], x.shape[1], *reshape)
 
         return x
 
@@ -208,18 +210,15 @@ class LogicConv2d(LogicBase):
                     where the last dim is (h, w, c)
         """
         c = self.channels
-        h_k = self.receptive_field_size
-        w_k = self.receptive_field_size
         sample_size = self.lut_rank ** self.tree_depth
 
         size = (self.num_kernels, self.lut_rank, sample_size)
-
-        h_indices = torch.randint(0, h_k, size, device=self.device)
-        w_indices = torch.randint(0, w_k, size, device=self.device)
+        dim_indices = [torch.randint(0, dim, size, device=self.device) 
+                       for dim in self.receptive_field_size]
         c_indices = torch.randint(0, c, size, device=self.device)
 
-        # shape: (num_kernels, lut_rank, sample_size, 3)
-        indices = torch.stack((h_indices, w_indices, c_indices), dim=-1)
+        # shape: (num_kernels, lut_rank, sample_size, dim)
+        indices = torch.stack((*dim_indices, c_indices), dim=-1)
 
         return indices.transpose(0, 1)
 
@@ -233,22 +232,18 @@ class LogicConv2d(LogicBase):
                     coords[t, k, s] is the (h, w, c) of the t-th element of the s-th tuple
                     for kernel k.
         """
-        c, h_k, w_k = self.channels, self.receptive_field_size, self.receptive_field_size
+        c = self.channels
         sample_size = self.lut_rank ** self.tree_depth
         device = self.device
 
         # All RF positions as (h, w, c)
-        h_rf = torch.arange(0, h_k, device=device)
-        w_rf = torch.arange(0, w_k, device=device)
+        rf = [torch.arange(0, dim, device=device) for dim in self.receptive_field_size]
         c_rf = torch.arange(0, c, device=device)
 
-        h_rf_grid, w_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, c_rf, indexing="ij")
-        all_positions = torch.stack(
-            [h_rf_grid.flatten(), w_rf_grid.flatten(), c_rf_grid.flatten()],
-            dim=1,
-        )
+        grid = torch.meshgrid(*rf, c_rf, indexing="ij")
+        all_positions = torch.stack([g.flatten() for g in grid], dim=1)
 
-        num_positions = h_k * w_k * c
+        num_positions = torch.prod(torch.tensor(self.receptive_field_size)) * c
 
         # All unique unordered index tuples of size `lut_rank`
         positions_1d = torch.arange(num_positions, device=device)
@@ -291,44 +286,47 @@ class LogicConv2d(LogicBase):
             out: torch.Tensor of shape (lut_rank, num_kernels, num_positions, sample_size, 3),
                 with the sliding-window offsets applied.
         """
-        h, w = self.in_dim[0], self.in_dim[1]
-        h_k, w_k = self.receptive_field_size, self.receptive_field_size
+        #h, w = self.in_dim
+        #h_k, w_k = self.receptive_field_size
 
         # Account for padding
-        h_padded = h + 2 * self.padding
-        w_padded = w + 2 * self.padding
+        padded = [in_dim + 2 * self.padding for in_dim in self.in_dim]
+        #h_padded = h + 2 * self.padding
+        #w_padded = w + 2 * self.padding
 
-        assert h_k <= h_padded and w_k <= w_padded, (
-            f"Receptive field size ({h_k}, {w_k}) must fit within input dimensions "
-            f"({h_padded}, {w_padded}) after padding."
+        assert all(rfs <= p for rfs, p in zip(self.receptive_field_size, padded)), (
+            f"Receptive field size {self.receptive_field_size} must fit within input "
+            f"dimensions {padded} after padding."
         )
 
         # Sliding positions
-        h_starts = torch.arange(0, h_padded - h_k + 1, self.stride, device=self.device)
-        w_starts = torch.arange(0, w_padded - w_k + 1, self.stride, device=self.device)
+        starts = [torch.arange(0, p - rcf + 1, self.stride, device=self.device) 
+                  for p, rcf in zip(padded, self.receptive_field_size)]
+        #h_starts = torch.arange(0, padded[0] - self.receptive_field_size[0] + 1, self.stride, device=self.device)
+        #w_starts = torch.arange(0, padded[1] - self.receptive_field_size[1] + 1, self.stride, device=self.device)
 
         # Meshgrid for all receptive-field start positions
-        h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing="ij")
-        h_offsets = h_grid.flatten()
-        w_offsets = w_grid.flatten()
-        num_positions = h_offsets.numel()
+        grid = torch.meshgrid(*starts, indexing="ij")
+        offsets = [g.flatten() for g in grid]
+        num_positions = [o.numel() for o in offsets]
 
         # tensor: (L, K, S, 3) → (K, L, S, 3)
         pairs_all = tensor.permute(1, 0, 2, 3)
         K, L, S, _ = pairs_all.shape
 
         # Split h, w, c coordinates: (K, L, S)
-        h_base = pairs_all[..., 0]
-        w_base = pairs_all[..., 1]
-        c_base = pairs_all[..., 2]
+        base = [pairs_all[..., i] for i in range(len(offsets))]
+        #h_base = pairs_all[..., 0]
+        #w_base = pairs_all[..., 1]
+        c_base = pairs_all[..., -1]
 
         # Add sliding-window offsets (broadcasted) → (K, P, L, S)
-        h_idx = h_base.unsqueeze(1) + h_offsets.view(1, num_positions, 1, 1)
-        w_idx = w_base.unsqueeze(1) + w_offsets.view(1, num_positions, 1, 1)
-        c_idx = c_base.unsqueeze(1).expand(-1, num_positions, -1, -1)
+        idx = [b.unsqueeze(1) + o.view(1, num_positions[0], 1, 1) 
+               for b, o in zip(base, offsets)]
+        c_idx = c_base.unsqueeze(1).expand(-1, num_positions[0], -1, -1)
 
         # Combine back into indices: (K, P, L, S, 3)
-        all_indices = torch.stack([h_idx, w_idx, c_idx], dim=-1)
+        all_indices = torch.stack([*idx, c_idx], dim=-1)
 
         # Reorder so first axis is L: (L, K, P, S, 3)
         out = all_indices.permute(2, 0, 1, 3, 4)
@@ -365,6 +363,21 @@ class LogicConv2d(LogicBase):
             tree_ids.append(level_ids)
             tree_luts.append(level_luts)
         return tree_luts, tree_ids
+    
+    def get_luts(self):
+        """Computes the most probable LUT for each neuron.
+
+        Returns:
+           List[List[torch.Tensor]]: Nested list of Boolean tensors (LUTs)
+        """
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_luts = []
+            for w in self.tree_weights[level]:
+                luts = self.parametrization.get_luts(w)
+                level_luts.append(luts)
+            tree_luts.append(level_luts)
+        return tree_luts
 
 
 class LogicConv3d(LogicBase):
@@ -737,6 +750,21 @@ class LogicConv3d(LogicBase):
             tree_ids.append(level_ids)
             tree_luts.append(level_luts)
         return tree_luts, tree_ids
+    
+    def get_luts(self):
+        """Computes the most probable LUT for each neuron.
+
+        Returns:
+           List[List[torch.Tensor]]: Nested list of Boolean tensors (LUTs)
+        """
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_luts = []
+            for w in self.tree_weights[level]:
+                luts = self.parametrization.get_luts(w)
+                level_luts.append(luts)
+            tree_luts.append(level_luts)
+        return tree_luts
 
 
 class OrPooling(torch.nn.Module):

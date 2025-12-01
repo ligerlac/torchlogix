@@ -160,3 +160,32 @@ class LogicDense(LogicBase):
             )
         else:
             raise ValueError(self.connections)
+        
+    def get_luts_and_ids(self, **kwargs):
+        """Computes the most probable LUT and its ID for each neuron.
+
+        Method is dependent on the chosen parametrization.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,
+                  where each row is the most probable LUT truth table for a
+                  neuron (entry is True for output 1, False for 0).
+                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
+                  entry is the integer ID of the corresponding LUT, obtained by
+                  interpreting its truth table as a binary number (or None if
+                  not applicable for high lut_rank).
+        """
+        return self.parametrization.get_luts_and_ids(self.weight, **kwargs)
+    
+    def get_luts(self, **kwargs):
+        """Computes the most probable LUT for each neuron.
+
+        Method is dependent on the chosen parametrization.
+
+        Returns:
+            torch.Tensor: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,
+                  where each row is the most probable LUT truth table for a
+                  neuron (entry is True for output 1, False for 0).
+        """
+        return self.parametrization.get_luts(self.weight, **kwargs)

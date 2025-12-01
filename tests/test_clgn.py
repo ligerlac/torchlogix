@@ -74,13 +74,13 @@ class TestIndeces:
         """
         vertical_positions = (
             int(
-                (layer.in_dim[0] + 2 * layer.padding - layer.receptive_field_size)
+                (layer.in_dim[0] + 2 * layer.padding - layer.receptive_field_size[0])
                 / layer.stride
             ) + 1
         )
         horizontal_positions = (
             int(
-                (layer.in_dim[1] + 2 * layer.padding - layer.receptive_field_size)
+                (layer.in_dim[1] + 2 * layer.padding - layer.receptive_field_size[1])
                 / layer.stride
             ) + 1
         )

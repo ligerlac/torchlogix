@@ -58,6 +58,7 @@ class LogicBase(torch.nn.Module, ABC):
     def forward(self, x, **kwargs):
         pass
 
+    @abstractmethod
     def get_luts_and_ids(self, **kwargs):
         """Computes the most probable LUT and its ID for each neuron.
 
@@ -73,8 +74,9 @@ class LogicBase(torch.nn.Module, ABC):
                   interpreting its truth table as a binary number (or None if
                   not applicable for high lut_rank).
         """
-        return self.parametrization.get_luts_and_ids(self.weight, **kwargs)
+        pass
     
+    @abstractmethod
     def get_luts(self, **kwargs):
         """Computes the most probable LUT for each neuron.
 
@@ -85,4 +87,4 @@ class LogicBase(torch.nn.Module, ABC):
                   where each row is the most probable LUT truth table for a
                   neuron (entry is True for output 1, False for 0).
         """
-        return self.parametrization.get_luts(self.weight, **kwargs)
+        pass

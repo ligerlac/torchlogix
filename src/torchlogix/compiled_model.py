@@ -288,9 +288,9 @@ class CompiledLogicNet(torch.nn.Module):
                 conv_info = self.conv_layers[layer_idx]
                 if len(current_shape) == 3:  # (C, H, W)
                     c, h, w = current_shape
-                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
                              // conv_info['stride']) + 1
-                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
                              // conv_info['stride']) + 1
                     output_shape = (conv_info['num_kernels'], h_out, w_out)
                     output_size = conv_info['num_kernels'] * h_out * w_out
@@ -356,9 +356,9 @@ class CompiledLogicNet(torch.nn.Module):
 
         if len(conv_info['in_dim']) == 2:
             conv_dim = 2
-            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
                     // conv_info['stride']) + 1
-            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
+            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
                     // conv_info['stride']) + 1
         elif len(conv_info['in_dim']) == 3:
             conv_dim = 3
