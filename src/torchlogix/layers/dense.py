@@ -181,7 +181,7 @@ class LogicDense(torch.nn.Module):
         else:
             raise ValueError(connections)
 
-    def get_lut_ids(self):
+    def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
 
         Returns the truth table by choosing the maximum weight over all
@@ -198,7 +198,7 @@ class LogicDense(torch.nn.Module):
                   interpreting its truth table as a binary number (or None if
                   not applicable for high lut_rank).
         """
-        return self.parametrization.get_lut_ids(self.weight)
+        return self.parametrization.get_luts_and_ids(self.weight)
 
 
 ##########################################################################

@@ -99,7 +99,19 @@ class LUTParametrization(ABC):
         pass
 
     @abstractmethod
-    def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_luts(self, weight: torch.Tensor) -> torch.Tensor:
+        """Extract LUT truth tables from weights.
+
+        Args:
+            weight: Weight parameters.
+
+        Returns:
+                - luts: Boolean tensor of truth tables
+        """
+        pass
+
+    @abstractmethod
+    def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Extract LUT truth tables and IDs from weights.
 
         Args:
@@ -203,8 +215,12 @@ class RawLUTParametrization(LUTParametrization):
             weights.argmax(-1), self.num_functions
         ).to(torch.float32)
 
+    def get_luts(self, weight: torch.Tensor) -> torch.Tensor:
+        ids = weight.argmax(axis=1)
+        luts = ((ids.unsqueeze(-1) >> torch.arange(self.lut_entries, device=ids.device)) & 1).flip(1)
+        return luts
 
-    def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ids = weight.argmax(axis=1)
         luts = ((ids.unsqueeze(-1) >> torch.arange(self.lut_entries, device=ids.device)) & 1).flip(1)
         return luts, ids
@@ -312,18 +328,17 @@ class WalshLUTParametrization(LUTParametrization):
 
     def _sample_eval(self, weights: torch.Tensor) -> torch.Tensor:
         """Threshold at 0 for discrete output."""
-        return (weights < 0).to(dtype=torch.float32)
+        return (weights > 0).to(dtype=torch.float32)
 
-    def get_lut_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_luts(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         luts = walsh_hadamard_transform(weight, self.lut_rank)
-        luts = luts < 0
+        return luts < 0
 
-        print("LUTs:", luts)
+    def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        assert self.lut_rank <= 4, "LUT IDs only supported for lut_rank <= 4 due to combinatorial explosion."
+        luts = self.get_luts(weight)
 
-        if self.lut_rank <= 4:
-            ids = 2 ** torch.arange(self.lut_entries - 1, -1, -1, device=luts.device)
-            ids = (luts * ids.unsqueeze(0)).sum(dim=1)
-        else:
-            ids = None
+        ids = 2 ** torch.arange(self.lut_entries - 1, -1, -1, device=luts.device)
+        ids = (luts * ids.unsqueeze(0)).sum(dim=1)
 
         return luts, ids

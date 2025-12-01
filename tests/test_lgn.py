@@ -14,37 +14,37 @@ llkw = {"connections": "random-unique", "device": "cpu"}
 llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}
 
 
-def test_get_lut_ids_xor_walsh():
+def test_get_luts_and_ids_xor_walsh():
     layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
     layer.weight.data = torch.zeros((1, 4))
     layer.weight.data[0, 3] = 1
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(ids, torch.tensor([6]))
     assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 1, 1, 0]]]))
 
 
-def test_get_lut_ids_and_walsh():
+def test_get_luts_and_ids_and_walsh():
     layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(ids, torch.tensor([1]))
     assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 0, 0, 1]]]))
     
 
-def test_get_lut_ids_xor():
+def test_get_luts_and_ids_xor():
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros((1, 16))
     layer.weight.data[0, 6] = 100
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(ids, torch.tensor([6]))
     assert torch.allclose(luts, torch.tensor([[[0, 1, 1, 0]]]))
 
 
-def test_get_lut_ids_and():
+def test_get_luts_and_ids_and():
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros((1, 16))
     layer.weight.data[0, 1] = 100
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(ids, torch.tensor([1]))
     assert torch.allclose(luts, torch.tensor([[[0, 0, 0, 1]]]))
 
@@ -118,7 +118,7 @@ def test_lut_rank_walsh():
     lut_rank = 4
     out_dim = x.shape[1] // lut_rank
     layer = LogicDense(in_dim=x.shape[1], out_dim=out_dim, lut_rank=lut_rank, **llkw_walsh)
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert luts.shape == (out_dim, 1 << lut_rank)
     model = torch.nn.Sequential(layer)
     y = model(x)

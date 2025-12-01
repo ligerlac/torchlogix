@@ -350,7 +350,7 @@ class LogicConv2d(nn.Module):
             indices.append(base)
         return indices
 
-    def get_lut_ids(self):
+    def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
 
         Returns:
@@ -364,7 +364,7 @@ class LogicConv2d(nn.Module):
             level_ids = []
             level_luts = []
             for w in self.tree_weights[level]:
-                luts, ids = self.parametrization.get_lut_ids(w)
+                luts, ids = self.parametrization.get_luts_and_ids(w)
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)
@@ -724,7 +724,7 @@ class LogicConv3d(nn.Module):
             indices.append(base)
         return indices
 
-    def get_lut_ids(self):
+    def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
 
         Returns:
@@ -738,7 +738,7 @@ class LogicConv3d(nn.Module):
             level_ids = []
             level_luts = []
             for w in self.tree_weights[level]:
-                luts, ids = self.parametrization.get_lut_ids(w)
+                luts, ids = self.parametrization.get_luts_and_ids(w)
                 level_ids.append(ids)
                 level_luts.append(luts)
             tree_ids.append(level_ids)

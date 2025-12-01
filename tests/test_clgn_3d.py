@@ -307,7 +307,7 @@ def test_lut_rank_walsh():
         padding=0,
         lut_rank=lut_rank,
     )
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     for luts_level in luts:
         for luts_ in luts_level:
             assert luts_.shape[-1] == 1 << lut_rank

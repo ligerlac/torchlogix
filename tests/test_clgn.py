@@ -184,7 +184,7 @@ def test_lut_rank_walsh():
         padding=0,
         lut_rank=lut_rank,
     )
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     for luts_level in luts:
         for luts_ in luts_level:
             assert luts_.shape[-1] == 1 << lut_rank
@@ -252,7 +252,7 @@ def test_and_model():
             expected
         )
 
-def test_get_lut_ids_and():
+def test_get_luts_and_ids_and():
     """Test the AND gate implementation.
 
     AND is the 1-st gate:
@@ -285,7 +285,7 @@ def test_get_lut_ids_and():
         layer.tree_weights[0].data[1] = and_weights
         layer.tree_weights[1].data[0] = and_weights
 
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
     assert torch.allclose(luts[0][1].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
     assert torch.allclose(luts[1][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
@@ -295,7 +295,7 @@ def test_get_lut_ids_and():
     
 
 
-def test_get_lut_ids_and_walsh():
+def test_get_luts_and_ids_and_walsh():
     """Test the AND gate implementation.
 
     AND is the 1-st gate:
@@ -329,7 +329,7 @@ def test_get_lut_ids_and_walsh():
         layer.tree_weights[0].data[1] = and_weights
         layer.tree_weights[1].data[0] = and_weights
 
-    luts, ids = layer.get_lut_ids()
+    luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
     assert torch.allclose(luts[0][1].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
     assert torch.allclose(luts[1][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
