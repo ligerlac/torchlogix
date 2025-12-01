@@ -1,12 +1,11 @@
-import numpy as np
 import torch
 
 from ..parametrization import RawLUTParametrization, WalshLUTParametrization
 from ..functional import GradFactor, get_random_unique_connections
-from ..packbitstensor import PackBitsTensor
+from .base import LogicBase
 
 
-class LogicDense(torch.nn.Module):
+class LogicDense(LogicBase):
     """Fully-connected logic gate layer with differentiable learning.
 
     This module provides the core implementation of Differentiable Deep Logic
@@ -63,44 +62,32 @@ class LogicDense(torch.nn.Module):
         lut_rank: int = 2,
         arbitrary_basis: bool = False
     ):
-        super().__init__()
+        super().__init__(
+            parametrization=parametrization, 
+            device=device, 
+            grad_factor=grad_factor, 
+            temperature=temperature,
+            forward_sampling=forward_sampling, 
+            lut_rank=lut_rank, 
+            arbitrary_basis=arbitrary_basis,
+            connections=connections,
+            weight_init=weight_init,
+            residual_init_param=residual_init_param,
+            )
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.device = device
-        self.grad_factor = grad_factor
-        self.lut_rank = lut_rank
-
-        # Create parametrization component (sampler merged into parametrization)
-        if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        else:
-            raise ValueError(
-                f"Unsupported parametrization: {parametrization}. "
-                f"Choose 'raw' or 'walsh'."
-            )
-
-        # Initialize weights using parametrization
-        weights = self.parametrization.init_weights(
-            out_dim, weight_init, residual_init_param, device
-        )
-        self.weight = torch.nn.Parameter(weights)
-
-        # Setup connections
-        self.connections = connections
-        assert connections in ["random", "random-unique"], (
-            f"connections must be 'random' or 'random-unique', got {connections}"
-        )
-        self.indices = self._get_connections(connections)
-
+        self.weight = self._init_weights(out_dim=out_dim)
+        self.indices = self._init_connections()
         # Legacy attributes for compatibility
         self.num_neurons = out_dim
         self.num_weights = out_dim
+
+    def _init_weights(self, out_dim):
+        # Initialize weights using parametrization
+        weights = self.parametrization.init_weights(
+            out_dim, self.weight_init, self.residual_init_param, self.device
+        )
+        return torch.nn.Parameter(weights)
 
     def forward(self, x):
         """Applies the LogicDense transformation to the input.
@@ -147,18 +134,11 @@ class LogicDense(torch.nn.Module):
             self.in_dim, self.out_dim, "train" if self.training else "eval"
         )
 
-    def _get_connections(self, connections):
+    def _init_connections(self):
         """Constructs input–neuron connection indices.
 
         Each neuron takes ``lut_rank`` input features. This function returns a
         tensor encoding which input indices are connected to which neuron.
-
-        Args:
-            connections: Strategy for building connections. Supported values:
-                - ``"random"``: Randomly sample ``lut_rank`` input indices for
-                  each of the ``out_dim`` neurons.
-                - ``"random-unique"``: Use a deterministic, non-overlapping pattern of
-                  connections (currently only for ``lut_rank == 2``).
 
         Returns:
             A tensor of shape ``(lut_rank, out_dim)`` with integer indices into
@@ -168,34 +148,15 @@ class LogicDense(torch.nn.Module):
             f"Cannot have lut_rank > in_dim ({self.lut_rank} > {self.in_dim})"
         )
 
-        if connections == "random":
+        if self.connections == "random":
             c = torch.randperm(self.lut_rank * self.out_dim) % self.in_dim
             c = torch.randperm(self.in_dim)[c]
             c = c.reshape(self.lut_rank, self.out_dim)
             c = c.to(torch.int64).to(self.device)
             return c
-        elif connections == "random-unique":
+        elif self.connections == "random-unique":
             return get_random_unique_connections(
                 self.in_dim, self.out_dim, self.lut_rank, self.device
             )
         else:
-            raise ValueError(connections)
-
-    def get_luts_and_ids(self):
-        """Computes the most probable LUT and its ID for each neuron.
-
-        Returns the truth table by choosing the maximum weight over all
-        possible Boolean functions (for raw parametrization) or by applying
-        Walsh-Hadamard transform (for Walsh parametrization).
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor]:
-                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,
-                  where each row is the most probable LUT truth table for a
-                  neuron (entry is True for output 1, False for 0).
-                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each
-                  entry is the integer ID of the corresponding LUT, obtained by
-                  interpreting its truth table as a binary number (or None if
-                  not applicable for high lut_rank).
-        """
-        return self.parametrization.get_luts_and_ids(self.weight)
+            raise ValueError(self.connections)

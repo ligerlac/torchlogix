@@ -1,15 +1,12 @@
-from typing import Union
-import math
-import numpy as np
 import torch
-import torch.nn as nn
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
+from .base import LogicBase
 from ..parametrization import RawLUTParametrization, WalshLUTParametrization
 
 
-class LogicConv2d(nn.Module):
+class LogicConv2d(LogicBase):
     """2D convolutional layer with differentiable logic operations.
 
     This layer implements a 2D convolution where each output location is
@@ -84,63 +81,61 @@ class LogicConv2d(nn.Module):
         lut_rank: int = 2,
         arbitrary_basis: bool = False
     ):
-        super().__init__()
+        super().__init__(
+            parametrization=parametrization, 
+            device=device, 
+            grad_factor=grad_factor, 
+            temperature=temperature,
+            forward_sampling=forward_sampling, 
+            lut_rank=lut_rank, 
+            arbitrary_basis=arbitrary_basis,
+            connections=connections,
+            weight_init=weight_init,
+            residual_init_param=residual_init_param,
+            )
         assert stride <= receptive_field_size, (
             f"Stride ({stride}) cannot be larger than receptive field size "
             f"({receptive_field_size})."
         )
 
         self.in_dim = _pair(in_dim)
-        self.device = device
-        self.grad_factor = grad_factor
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
         self.channels = channels
         self.receptive_field_size = receptive_field_size
         self.stride = stride
         self.padding = padding
-        self.connections = connections
-        self.lut_rank = lut_rank
-
-        # Create parametrization component (sampler merged into parametrization)
-        if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        else:
-            raise ValueError(
-                f"Unsupported parametrization: {parametrization}. "
-                f"Choose 'raw' or 'walsh'."
-            )
-
-        # Setup connections
-        if connections == "random":
-            self.kernels = self._get_random_receptive_field_tensor()
-        elif connections == "random-unique":
-            self.kernels = self._get_random_unique_receptive_field_tensor()
-        else:
-            raise ValueError(f"Unknown connections type: {connections}")
-
-        # Build tree indices
-        self.indices = self._get_indices_from_kernel_tensor(self.kernels)
-
+        self.tree_weights = self._init_weights()
+        self.indices = self._init_connections()
+        
+    def _init_weights(self):
         # Initialize tree weights using parametrization
-        self.tree_weights = torch.nn.ParameterList()
-        for i in reversed(range(tree_depth + 1)):
+        tree_weights = torch.nn.ParameterList()
+        for i in reversed(range(self.tree_depth + 1)):
             # each tree level has lut_rank**i nodes per kernel
             level_weights = torch.nn.Parameter(torch.stack(
                 [
                     self.parametrization.init_weights(
-                        num_kernels, weight_init, residual_init_param, device
-                    ) for _ in range(lut_rank**i)
+                        self.num_kernels, 
+                        self.weight_init, 
+                        self.residual_init_param, 
+                        self.device
+                    ) for _ in range(self.lut_rank**i)
                 ]
             ))
-            self.tree_weights.append(level_weights)
+            tree_weights.append(level_weights)
+        return tree_weights
 
+    def _init_connections(self):
+         # Setup connections
+        if self.connections == "random":
+            kernels = self._get_random_receptive_field_tensor()
+        elif self.connections == "random-unique":
+            kernels = self._get_random_unique_receptive_field_tensor()
+        else:
+            raise ValueError(f"Unknown connections type: {self.connections}")
+        # Build tree indices
+        return self._get_indices_from_kernel_tensor(kernels)
 
     def forward(self, x):
         """Applies the logic convolution to the input.
@@ -372,7 +367,7 @@ class LogicConv2d(nn.Module):
         return tree_luts, tree_ids
 
 
-class LogicConv3d(nn.Module):
+class LogicConv3d(LogicBase):
     """3D convolutional layer with differentiable logic operations.
 
     This layer implements a 3D convolution where each output location is
@@ -447,19 +442,25 @@ class LogicConv3d(nn.Module):
         lut_rank: int = 2,
         arbitrary_basis: bool = False
     ):
-        super().__init__()
+        super().__init__(
+            parametrization=parametrization, 
+            device=device, 
+            grad_factor=grad_factor, 
+            temperature=temperature,
+            forward_sampling=forward_sampling, 
+            lut_rank=lut_rank, 
+            arbitrary_basis=arbitrary_basis,
+            connections=connections,
+            weight_init=weight_init,
+            residual_init_param=residual_init_param,
+            )
         self.receptive_field_size = _triple(receptive_field_size)
         self.in_dim = _triple(in_dim)
-        self.device = device
-        self.grad_factor = grad_factor
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
         self.channels = channels
         self.stride = stride
         self.padding = padding
-        self.connections = connections
-        self.lut_rank = lut_rank
-
         assert (
             (stride <= self.receptive_field_size[0]) and
             (stride <= self.receptive_field_size[1]) and
@@ -468,45 +469,37 @@ class LogicConv3d(nn.Module):
             f"Stride ({stride}) cannot be larger than receptive field size "
             f"({receptive_field_size})"
         )
-
-        # Create parametrization component (sampler merged into parametrization)
-        if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        else:
-            raise ValueError(
-                f"Unsupported parametrization: {parametrization}. "
-                f"Choose 'raw' or 'walsh'."
-            )
-
-        # Setup connections
-        if connections == "random":
-            self.kernels = self._get_random_receptive_field_tensor()
-        elif connections == "random-unique":
-            self.kernels = self._get_random_unique_receptive_field_tensor()
-        else:
-            raise ValueError(f"Unknown connections type: {connections}")
-
-        self.indices = self._get_indices_from_kernel_tensor(self.kernels)
-
+        self.tree_weights = self._init_weights()
+        self.indices = self._init_connections()
+        
+    def _init_weights(self):
         # Initialize tree weights using parametrization
-        self.tree_weights = torch.nn.ParameterList()
-        for i in reversed(range(tree_depth + 1)):
+        tree_weights = torch.nn.ParameterList()
+        for i in reversed(range(self.tree_depth + 1)):
             # each tree level has lut_rank**i nodes per kernel
             level_weights = torch.nn.Parameter(torch.stack(
                 [
                     self.parametrization.init_weights(
-                        num_kernels, weight_init, residual_init_param, device
-                    ) for _ in range(lut_rank**i)
+                        self.num_kernels, 
+                        self.weight_init, 
+                        self.residual_init_param, 
+                        self.device
+                    ) for _ in range(self.lut_rank**i)
                 ]
             ))
-            self.tree_weights.append(level_weights)            
+            tree_weights.append(level_weights)
+        return tree_weights
 
+    def _init_connections(self):
+         # Setup connections
+        if self.connections == "random":
+            kernels = self._get_random_receptive_field_tensor()
+        elif self.connections == "random-unique":
+            kernels = self._get_random_unique_receptive_field_tensor()
+        else:
+            raise ValueError(f"Unknown connections type: {self.connections}")
+        # Build tree indices
+        return self._get_indices_from_kernel_tensor(kernels)          
 
     def forward(self, x):
         """Applies the logic convolution to the input.
