@@ -21,7 +21,8 @@ def test_dlgn_model():
         tau=1.0,
         device="cpu",
         connections='random',
-        weight_init='random'
+        weight_init='random',
+        parametrization='raw'
     )
     model.train(False)  # Switch model to eval mode
 
