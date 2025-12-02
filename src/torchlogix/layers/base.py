@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 import torch
 
-from ..parametrization import RawLUTParametrization, WalshLUTParametrization
+from ..parametrization import RawLUTParametrization, WalshLUTParametrization, LightLUTParametrization
 
 
 class LogicBase(torch.nn.Module, ABC):
@@ -34,10 +34,14 @@ class LogicBase(torch.nn.Module, ABC):
             self.parametrization = WalshLUTParametrization(
                 lut_rank, arbitrary_basis, forward_sampling, temperature
             )
+        elif parametrization == "light":
+            self.parametrization = LightLUTParametrization(
+                lut_rank, arbitrary_basis, forward_sampling, temperature
+            )
         else:
             raise ValueError(
                 f"Unsupported parametrization: {parametrization}. "
-                f"Choose 'raw' or 'walsh'."
+                f"Choose 'raw', 'walsh', or 'light'."
             )
         self.device = device
         self.grad_factor = grad_factor

@@ -1,5 +1,10 @@
 import torch
-from torchlogix.parametrization import LUTParametrization, RawLUTParametrization, WalshLUTParametrization
+from torchlogix.parametrization import (
+    LUTParametrization, 
+    RawLUTParametrization, 
+    WalshLUTParametrization,
+    LightLUTParametrization
+)
 from torchlogix.functional import ID_TO_WALSH_COEFFICIENTS, walsh_hadamard_transform
 import pytest
 
@@ -11,6 +16,7 @@ def int_to_bits(n, width=4):
 @pytest.mark.parametrize("param_cls, forward_sampling, temperature", [
     (RawLUTParametrization, "hard", 0.5),
     (WalshLUTParametrization, "soft", 1.0),
+    (LightLUTParametrization, "gumbel_soft", 2.0),
 ])
 def test_lut_parametrization_init(param_cls, forward_sampling, temperature):
     lut_parametrization = param_cls(
@@ -59,6 +65,19 @@ def test_weight_init_walsh(lut_rank, num_neurons):
     assert weights.shape == (num_neurons, 2**lut_rank)
 
 
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+@pytest.mark.parametrize("num_neurons", [42, 69])
+def test_weight_init_light(lut_rank, num_neurons):
+    param = LightLUTParametrization(lut_rank=lut_rank)
+    weights = param.init_weights(
+        weight_init="random",
+        num_neurons=num_neurons,
+        residual_probability=0.3,
+        device="cpu"
+    )
+    assert weights.shape == (num_neurons, 2**lut_rank)
+
+
 def test_get_luts_and_ids():
     param = RawLUTParametrization(lut_rank=2)
     for i in range(16):
@@ -86,6 +105,26 @@ def test_get_lut_ids_walsh():
         assert torch.allclose(luts, torch.tensor(int_to_bits(i, width=4)).bool())
 
 
+def test_get_lut_ids_light():
+    all_coeffs = torch.empty((2**4, 4), dtype=torch.int32)
+    for j in range(2**4):
+        input = int_to_bits(j, width=4)
+        all_coeffs[j] = torch.tensor(input)
+
+    param = LightLUTParametrization(lut_rank=2)
+    for i, coeff in enumerate(all_coeffs):
+        weights = torch.tensor(coeff).float()
+        luts, ids = param.get_luts_and_ids(weights)
+        assert torch.allclose(ids, torch.tensor([i]))
+        inputs = torch.tensor([[0,0], [0,1], [1,0], [1,1]])
+        inputs = inputs.unsqueeze(2)  # add batch dim
+        output = param.forward(x=inputs, training=False, weight=weights, contraction='bnk,nk->bn')
+        # assert output matches truth table (lut)
+        assert torch.allclose(output.squeeze(1), luts.float())
+        # assert that the lut matches binary representation of i
+        assert torch.allclose(luts, torch.tensor(int_to_bits(i, width=4)).bool())
+
+
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_get_luts_walsh(lut_rank):
     all_inputs = torch.empty((2**lut_rank, lut_rank), dtype=torch.int32)
@@ -100,5 +139,22 @@ def test_get_luts_walsh(lut_rank):
         weights = 1./2**lut_rank * walsh_hadamard_transform(walsh_input, lut_rank)
         # check L2 norm
         assert torch.allclose(weights.norm(p=2), torch.tensor(1.0))
+        output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='bnk,nk->bn')
+        assert torch.allclose(output_lut.squeeze(), input_lut.float())
+
+
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_get_luts_light(lut_rank):
+    all_inputs = torch.empty((2**lut_rank, lut_rank), dtype=torch.int32)
+    for j in range(2**lut_rank):
+        input = int_to_bits(j, width=lut_rank)
+        all_inputs[j] = torch.tensor(input)
+
+    param = LightLUTParametrization(lut_rank=lut_rank)
+    for i in range(16):
+        input_lut = torch.tensor(int_to_bits(i, width=2**lut_rank))
+        weights = input_lut.unsqueeze(0).float()
+        # check L2 norm
+        assert torch.all(weights >= 0) and torch.all(weights <= 1)
         output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='bnk,nk->bn')
         assert torch.allclose(output_lut.squeeze(), input_lut.float())

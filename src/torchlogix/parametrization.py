@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from .functional import (
     walsh_basis_hard,
     walsh_hadamard_transform,
+    light_basis_hard,
     compute_all_logic_ops_vectorized,
     softmax,
     sigmoid,
@@ -262,7 +263,7 @@ class WalshLUTParametrization(LUTParametrization):
             n = int((num_neurons * residual_probability)) % (num_neurons + 1)
             weights = torch.empty((num_neurons, lut_entries), device=device)
             # identity representation, corresponds to Boolean function, which maps MSB (last single variable) to itself
-            identity = torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
+            identity = 1 - 2 * torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
             transformed_identity = walsh_hadamard_transform(identity, self.lut_rank, dtype=torch.int32, device=device)
             # randomly sample indices
             indices = torch.randperm(num_neurons, device=device)
@@ -315,7 +316,6 @@ class WalshLUTParametrization(LUTParametrization):
         # Convert basis to same dtype as weights for einsum compatibility
         x = torch.einsum(contraction, basis.to(weight.dtype), weight)
 
-        # Sample output (merged from SigmoidSampler)
         if training:
             x = self._sample_train(-x)
         else:
@@ -338,9 +338,123 @@ class WalshLUTParametrization(LUTParametrization):
         """Threshold at 0 for discrete output."""
         return (weights > 0).to(dtype=torch.float32)
 
-    def get_luts(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_luts(self, weight: torch.Tensor) -> torch.Tensor:
         luts = walsh_hadamard_transform(weight, self.lut_rank)
         return luts < 0
+
+    def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        assert self.lut_rank <= 4, "LUT IDs only supported for lut_rank <= 4 due to combinatorial explosion."
+        luts = self.get_luts(weight)
+
+        ids = 2 ** torch.arange(self.lut_entries - 1, -1, -1, device=luts.device)
+        ids = (luts * ids.unsqueeze(0)).sum(dim=1)
+
+        return luts, ids
+    
+
+class LightLUTParametrization(LUTParametrization):
+    """Light DGN parametrization using basis coefficients.
+
+    This parametrization represents Boolean functions via positive
+    basis coefficients, which are mapped to [0,1] with sigmoid.
+    """
+
+    def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
+                 forward_sampling: str = "soft", temperature: float = 1.0):
+        super().__init__(lut_rank, arbitrary_basis, forward_sampling, temperature)
+        if not arbitrary_basis and lut_rank not in [2, 4, 6]:
+            raise ValueError(
+                f"Hard-coded Light basis only supports lut_rank in [2, 4, 6], got {lut_rank}"
+            )
+
+    def init_weights(
+        self,
+        num_neurons: int,
+        weight_init: str,
+        residual_probability: float,
+        device: str
+    ) -> torch.Tensor:
+        lut_entries = 1 << self.lut_rank
+        if weight_init == "residual":
+            n = int((num_neurons * residual_probability)) % (num_neurons + 1)
+            weights = torch.empty((num_neurons, lut_entries), device=device)
+            # identity representation, corresponds to Boolean function, which maps MSB (last single variable) to itself
+            identity = torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
+            # randomly sample indices
+            indices = torch.randperm(num_neurons, device=device)
+            weights[indices[:n]] = identity.to(torch.float)
+            # sample random binary representations
+            samples = torch.randint(0, 2, (num_neurons - n, lut_entries), device=device).to(torch.int32)
+            if n < num_neurons:
+                weights[indices[n:]] = samples.to(torch.float)
+            return weights
+        elif weight_init == "random":
+            return torch.rand(num_neurons, lut_entries, device=device)
+        else:
+            raise ValueError(weight_init)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        weight: torch.Tensor,
+        training: bool,
+        contraction: str
+    ) -> torch.Tensor:
+        """Layer-agnostic forward pass.
+
+        Args:
+            x: Extracted inputs, shape (batch, lut_rank, ...)
+            weight: Weight parameters
+            training: Whether in training mode
+            contraction: Einsum pattern for combining basis with weights
+
+        Returns:
+            Output with lut_rank dimension reduced
+        """
+
+        # Compute Walsh basis
+        if not self.arbitrary_basis:
+            basis = light_basis_hard(x, self.lut_rank)
+        else:
+            raise NotImplementedError("Arbitrary basis requires layer context")
+
+        # Handle 1D weight case (single neuron) for backward compatibility
+        if weight.ndim == 1:
+            weight = weight.unsqueeze(0)
+        # Sample weights (merged from SoftmaxSampler)
+        if training:
+            w = self._sample_train(weight)
+        else:
+            w = self._sample_eval(weight)
+        # Apply layer-provided contraction (no layer-type detection)
+        # Convert basis to same dtype as weights for einsum compatibility
+        x = torch.einsum(contraction, basis.to(weight.dtype), w)
+        # Sample output (merged from SigmoidSampler)
+        if training:
+            x = self._sample_train(x)
+        else:
+            x = self._sample_eval(x)
+
+        return x
+
+    def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
+        """Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""
+        if self.forward_sampling == "soft":
+            return sigmoid(weights, tau=self.temperature, hard=False)
+        elif self.forward_sampling == "hard":
+            return sigmoid(weights, tau=self.temperature, hard=True)
+        elif self.forward_sampling == "gumbel_soft":
+            return gumbel_sigmoid(weights, tau=self.temperature, hard=False)
+        elif self.forward_sampling == "gumbel_hard":
+            return gumbel_sigmoid(weights, tau=self.temperature, hard=True)
+
+    def _sample_eval(self, weights: torch.Tensor) -> torch.Tensor:
+        """Threshold at 0 for discrete output."""
+        return (weights > 0).to(dtype=torch.float32)
+
+    def get_luts(self, weight: torch.Tensor) -> torch.Tensor:
+        luts = weight > 0
+        return luts
 
     def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         assert self.lut_rank <= 4, "LUT IDs only supported for lut_rank <= 4 due to combinatorial explosion."

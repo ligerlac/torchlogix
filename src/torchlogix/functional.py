@@ -416,3 +416,137 @@ def walsh_basis_6(A, B, C, D, E, F) -> torch.Tensor:
         A*B*C*D*E*F
     ], dim=-1)
     return basis
+
+
+def light_basis_hard(x, lut_rank):
+    if lut_rank == 2:
+        A, B = x[:, 0], x[:, 1]
+        basis = light_basis_2(A, B)
+    elif lut_rank == 4:
+        A, B, C, D = (x[:, 0], x[:, 1],
+                        x[:, 2], x[:, 3]
+                        )
+        basis = light_basis_4(A, B, C, D)
+    elif lut_rank == 6:
+        A, B, C, D, E, F = (
+            x[:, 0], x[:, 1], x[:, 2],
+            x[:, 3], x[:, 4], x[:, 5],
+        )
+        basis = light_basis_6(A, B, C, D, E, F)
+    else:
+        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
+    return basis
+
+
+def light_basis_2(A, B) -> torch.Tensor:
+    basis = torch.stack([
+        (1 - A) * (1 - B),
+        (1 - A) * B,
+        A * (1 - B),
+        A*B
+    ], dim=-1)
+    return basis
+
+def light_basis_3(A, B, C) -> torch.Tensor:
+    basis = torch.stack([
+        (1 - A) * (1 - B) * (1 - C),
+        (1 - A) * (1 - B) * C,
+        (1 - A) * B * (1 - C),
+        (1 - A) * B * C,
+        A * (1 - B) * (1 - C),
+        A * (1 - B) * C,
+        A*B * (1 - C),
+        A*B*C
+    ], dim=-1)
+    return basis
+
+def light_basis_4(A, B, C, D) -> torch.Tensor:
+    basis = torch.stack([
+        (1 - A) * (1 - B) * (1 - C) * (1 - D),
+        (1 - A) * (1 - B) * (1 - C) * D,
+        (1 - A) * (1 - B) * C * (1 - D),
+        (1 - A) * (1 - B) * C * D,
+        (1 - A) * B * (1 - C) * (1 - D),
+        (1 - A) * B * (1 - C) * D,
+        (1 - A) * B * C * (1 - D),
+        (1 - A) * B * C * D,
+        A * (1 - B) * (1 - C) * (1 - D),
+        A * (1 - B) * (1 - C) * D,
+        A * (1 - B) * C * (1 - D),
+        A * (1 - B) * C * D,
+        A * B * (1 - C) * (1 - D),
+        A * B * (1 - C) * D,
+        A * B * C * (1 - D),
+        A * B * C * D
+    ], dim=-1)
+    return basis
+
+
+def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
+    basis = torch.stack([
+        (1 - A) * (1 - B) * (1 - C) * (1 - D) * (1 - E) * (1 - F),
+        (1 - A) * (1 - B) * (1 - C) * (1 - D) * (1 - E) * F,
+        (1 - A) * (1 - B) * (1 - C) * (1 - D) * E * (1 - F),
+        (1 - A) * (1 - B) * (1 - C) * (1 - D) * E * F,
+        (1 - A) * (1 - B) * (1 - C) * D * (1 - E) * (1 - F),
+        (1 - A) * (1 - B) * (1 - C) * D * (1 - E) * F,
+        (1 - A) * (1 - B) * (1 - C) * D * E * (1 - F),
+        (1 - A) * (1 - B) * (1 - C) * D * E * F,
+        (1 - A) * (1 - B) * C * (1 - D) * (1 - E) * (1 - F),
+        (1 - A) * (1 - B) * C * (1 - D) * (1 - E) * F,
+        (1 - A) * (1 - B) * C * (1 - D) * E * (1 - F),
+        (1 - A) * (1 - B) * C * (1 - D) * E * F,
+        (1 - A) * (1 - B) * C * D * (1 - E) * (1 - F),
+        (1 - A) * (1 - B) * C * D * (1 - E) * F,
+        (1 - A) * (1 - B) * C * D * E * (1 - F),
+        (1 - A) * (1 - B) * C * D * E * F,
+        (1 - A) * B* (1 - C) * (1 - D) * (1 - E)  *(1 - F),
+        (1 - A) * B* (1 - C) * (1 - D) * (1 - E)  * F,
+        (1 - A) * B* (1 - C) * (1 - D) * E * (1 - F),
+        (1 - A) * B* (1 - C) * (1 - D) * E * F,
+        (1 - A) * B* (1 - C) * D * (1 - E) * (1 - F),
+        (1 - A) * B* (1 - C) * D * (1 - E) * F,
+        (1 - A) * B* (1 - C) * D * E * (1 - F),
+        (1 - A) * B* (1 - C) * D * E * F,
+        (1 - A) * B* C * (1 - D) * (1 - E) * (1 - F),
+        (1 - A) * B* C * (1 - D) * (1 - E) * F,
+        (1 - A) * B* C * (1 - D) * E * (1 - F),
+        (1 - A) * B* C * (1 - D) * E * F,
+        (1 - A) * B* C * D * (1 - E) * (1 - F),
+        (1 - A) * B* C * D * (1 - E) * F,
+        (1 - A) * B* C * D * E * (1 - F),
+        (1 - A) * B* C * D * E * F,
+        A * (1 - B) * (1 - C) * (1 - D) * (1 - E) * (1 - F),
+        A * (1 - B) * (1 - C) * (1 - D) * (1 - E) * F,
+        A * (1 - B) * (1 - C) * (1 - D) * E * (1 - F),
+        A * (1 - B) * (1 - C) * (1 - D) * E * F,
+        A * (1 - B) * (1 - C) * D * (1 - E) * (1 - F),
+        A * (1 - B) * (1 - C) * D * (1 - E) * F,
+        A * (1 - B) * (1 - C) * D * E * (1 - F),
+        A * (1 - B) * (1 - C) * D * E * F,
+        A * (1 - B) * C * (1 - D) * (1 - E) * (1 - F),
+        A * (1 - B) * C * (1 - D) * (1 - E) * F,
+        A * (1 - B) * C * (1 - D) * E * (1 - F),
+        A * (1 - B) * C * (1 - D) * E * F,
+        A * (1 - B) * C * D * (1 - E) * (1 - F),
+        A * (1 - B) * C * D * (1 - E) * F,
+        A * (1 - B) * C * D * E * (1 - F),
+        A * (1 - B) * C * D * E * F,
+        A * B * (1 - C) * (1 - D) * (1 - E) * (1 - F),
+        A * B * (1 - C) * (1 - D) * (1 - E) * F,
+        A * B * (1 - C) * (1 - D) * E * (1 - F),
+        A * B * (1 - C) * (1 - D) * E * F,
+        A * B * (1 - C) * D * (1 - E) * (1 - F),
+        A * B * (1 - C) * D * (1 - E) * F,
+        A * B * (1 - C) * D * E * (1 - F),
+        A * B * (1 - C) * D * E * F,
+        A * B * C * (1 - D) * (1 - E) * (1 - F),
+        A * B * C * (1 - D) * (1 - E) * F,
+        A * B * C * (1 - D) * E * (1 - F),
+        A * B * C * (1 - D) * E * F,
+        A * B * C * D * (1 - E) * (1 - F),
+        A * B * C * D * (1 - E) * F,
+        A * B * C * D * E * (1 - F),
+        A * B * C * D * E * F
+    ], dim=-1)
+    return basis

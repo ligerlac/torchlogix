@@ -12,6 +12,8 @@ from torchlogix.layers import GroupSum, LogicDense
 
 llkw = {"connections": "random-unique", "device": "cpu"}
 llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}
+llkw_light = {"connections": "random-unique", "device": "cpu", "parametrization": "light"}
+
 
 
 def test_get_luts_and_ids_xor_walsh():
@@ -26,6 +28,24 @@ def test_get_luts_and_ids_xor_walsh():
 def test_get_luts_and_ids_and_walsh():
     layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(ids, torch.tensor([1]))
+    assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 0, 0, 1]]]))
+
+
+def test_get_luts_and_ids_xor_light():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_light)
+    layer.weight.data = torch.zeros((1, 4))
+    layer.weight.data[0, 1] = 1
+    layer.weight.data[0, 2] = 1
+    luts, ids = layer.get_luts_and_ids()
+    assert torch.allclose(ids, torch.tensor([6]))
+    assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 1, 1, 0]]]))
+
+
+def test_get_luts_and_ids_and_light():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_light)
+    layer.weight.data = torch.tensor([[0, 0, 0, 1.0]])
     luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(ids, torch.tensor([1]))
     assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 0, 0, 1]]]))
