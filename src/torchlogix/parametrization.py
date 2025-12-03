@@ -267,7 +267,7 @@ class WalshLUTParametrization(LUTParametrization):
             transformed_identity = walsh_hadamard_transform(identity, self.lut_rank, dtype=torch.int32, device=device)
             # randomly sample indices
             indices = torch.randperm(num_neurons, device=device)
-            weights[indices[:n]] = (1.0 / self.lut_rank) * transformed_identity.to(torch.float)
+            weights[indices[:n]] = (1.0 / lut_entries) * transformed_identity.to(torch.float)
             # sample random binary representations
             samples = 1 - 2 * torch.randint(0, 2, (num_neurons - n, lut_entries), device=device).to(torch.int32)
             # convert with wh transform

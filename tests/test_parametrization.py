@@ -29,7 +29,6 @@ def test_lut_parametrization_init(param_cls, forward_sampling, temperature):
     assert lut_parametrization.temperature == temperature
 
 
-
 @pytest.mark.parametrize("lut_rank", [4, 6])
 def test_raw_lut_rank_fails(lut_rank):
     with pytest.raises(ValueError):
@@ -54,21 +53,9 @@ def test_weight_init_raw(num_neurons):
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 @pytest.mark.parametrize("num_neurons", [42, 69])
-def test_weight_init_walsh(lut_rank, num_neurons):
-    param = WalshLUTParametrization(lut_rank=lut_rank)
-    weights = param.init_weights(
-        weight_init="random",
-        num_neurons=num_neurons,
-        residual_probability=0.3,
-        device="cpu"
-    )
-    assert weights.shape == (num_neurons, 2**lut_rank)
-
-
-@pytest.mark.parametrize("lut_rank", [2, 4, 6])
-@pytest.mark.parametrize("num_neurons", [42, 69])
-def test_weight_init_light(lut_rank, num_neurons):
-    param = LightLUTParametrization(lut_rank=lut_rank)
+@pytest.mark.parametrize("param_cls", [WalshLUTParametrization, LightLUTParametrization])
+def test_weight_init_not_raw(lut_rank, num_neurons, param_cls):
+    param = param_cls(lut_rank=lut_rank)
     weights = param.init_weights(
         weight_init="random",
         num_neurons=num_neurons,
@@ -158,3 +145,32 @@ def test_get_luts_light(lut_rank):
         assert torch.all(weights >= 0) and torch.all(weights <= 1)
         output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='bnk,nk->bn')
         assert torch.allclose(output_lut.squeeze(), input_lut.float())
+
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+@pytest.mark.parametrize("num_neurons", [42, 69])
+def test_residual_init_light(lut_rank, num_neurons):
+    param = LightLUTParametrization(lut_rank=lut_rank)
+    weights = param.init_weights(
+        weight_init="residual",
+        num_neurons=num_neurons,
+        residual_probability=1.0,
+        device="cpu"
+    )
+    lut_entries = 2**lut_rank
+    identity = torch.cat((torch.zeros(lut_entries // 2), torch.ones(lut_entries // 2)))
+    assert all(torch.allclose(w, identity) for w in weights)
+
+
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+@pytest.mark.parametrize("num_neurons", [42, 69])
+def test_residual_init_walsh(lut_rank, num_neurons):
+    param = WalshLUTParametrization(lut_rank=lut_rank)
+    weights = param.init_weights(
+        weight_init="residual",
+        num_neurons=num_neurons,
+        residual_probability=1.0,
+        device="cpu"
+    )
+    lut_entries = 2**lut_rank
+    identity = 1 - 2 * torch.cat((torch.zeros(lut_entries // 2), torch.ones(lut_entries // 2)))
+    assert all(torch.allclose(walsh_hadamard_transform(w, lut_rank), identity) for w in weights)
