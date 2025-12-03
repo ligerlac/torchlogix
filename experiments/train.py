@@ -189,7 +189,7 @@ def run_training(args):
         if args.temp_decay is not None:
             temperature = np.exp(- i / args.num_iterations * args.temp_decay)
             for layer in model:
-                if isinstance(layer, torchlogix.layers.LogicConv2d) or isinstance(layer, torchlogix.layers.LogicDense):
+                if isinstance(layer, torchlogix.layers.LogicConv) or isinstance(layer, torchlogix.layers.LogicDense):
                     layer.temperature = temperature
             pbar.set_postfix(loss=f"{loss:.4f}", temp=f"{temperature:.4f}")
 
@@ -268,7 +268,7 @@ def run_training(args):
                 if args.temp_decay is not None:
                     temperature = np.exp(- i / args.num_iterations * args.temp_decay)
                     for layer in model:
-                        if isinstance(layer, torchlogix.layers.LogicConv2d) or isinstance(layer, torchlogix.layers.LogicDense):
+                        if isinstance(layer, torchlogix.layers.LogicConv) or isinstance(layer, torchlogix.layers.LogicDense):
                             layer.temperature = temperature
                     pbar.set_postfix(loss=f"{loss:.4f}", temp=f"{temperature:.4f}")
                 
@@ -371,6 +371,11 @@ def main():
     parser.add_argument(
         "--weight-init", type=str, default="residual", choices=["residual", "random"],
         help="Initialization method for model weights"
+    )
+
+    parser.add_argument(
+        "--weight-rescale", type=str, default="None", choices=["clip", "abs_sum", "L2", "None"],
+        help="Weight rescaling for each layer after each training step"
     )
 
     parser.add_argument(

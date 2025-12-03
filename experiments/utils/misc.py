@@ -15,6 +15,7 @@ from torchlogix import PackBitsTensor
 from torchlogix.models.baseline_nn import FullyConnectedNN
 from torchlogix.models.conv import CNN
 from torchlogix.models.nn import RandomlyConnectedNN
+from torchlogix.layers import LogicConv, LogicDense
 
 from .shared_config import IMPL_TO_DEVICE, BITS_TO_TORCH_FLOATING_POINT_TYPE
 
@@ -138,13 +139,28 @@ def load_model_from_checkpoint(model_path: Path, model_class, **model_kwargs):
     return model
 
 
-def train(model, x, y, loss_fn, optimizer):
+def train(model, x, y, loss_fn, optimizer, weight_rescale):
     model.train()
     x = model(x)
     loss = loss_fn(x, y)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+
+    if weight_rescale is not None:
+        for layer in model:
+            if isinstance(layer, LogicConv) or isinstance(layer, LogicDense):
+                if weight_rescale == "clip":
+                    with torch.no_grad():
+                        layer.weight.clamp_(-1, 1)
+                elif weight_rescale == "abs_sum":
+                    with torch.no_grad():
+                        abs_sum = layer.weight.sum(dim=-1, keepdim=True).abs()
+                        layer.weight.div_(abs_sum)
+                elif weight_rescale == "L2":
+                    with torch.no_grad():
+                        l2_norm = layer.weight.norm(p=2, dim=-1, keepdim=True)
+                        layer.weight.div_(l2_norm)
 
     return loss.item()
 
