@@ -92,3 +92,11 @@ class LogicBase(torch.nn.Module, ABC):
                   neuron (entry is True for output 1, False for 0).
         """
         pass
+
+    def get_regularization_loss(self, regularizer: str):
+        """Computes regularization loss for the layer.
+
+        Returns:
+            torch.Tensor: Scalar tensor representing the regularization loss.
+        """
+        pass

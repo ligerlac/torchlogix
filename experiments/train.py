@@ -354,8 +354,13 @@ def main():
     )
 
     parser.add_argument(
-        "--reg-lambda", type=float, default=0.0,
+        "--regularizer-weight", type=float, default=0.0,
         help="Regularization strength"
+    )
+
+    parser.add_argument(
+        "--regularizer", type=str, default="None", choices=["None", "abs_sum", "L2"],
+        help="Regularization method"
     )
 
     parser.add_argument(

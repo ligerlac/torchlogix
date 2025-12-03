@@ -139,10 +139,14 @@ def load_model_from_checkpoint(model_path: Path, model_class, **model_kwargs):
     return model
 
 
-def train(model, x, y, loss_fn, optimizer, weight_rescale):
+def train(model, x, y, loss_fn, optimizer, weight_rescale, regularizer, regularizer_weight):
     model.train()
     x = model(x)
     loss = loss_fn(x, y)
+    reg_loss = 0.0
+    for layer in model:
+        reg_loss += layer.get_regularization_loss(regularizer)
+    loss += regularizer_weight * reg_loss
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()

@@ -550,3 +550,14 @@ def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
         A * B * C * D * E * F
     ], dim=-1)
     return basis
+
+
+def get_regularization_loss(weights, regularizer="None"):
+    if regularizer == "None":
+        return 0.0
+    elif regularizer == "L2":
+        return (1 - weights.pow(2).sum(-1)).pow(2)
+    elif regularizer == "abs_sum":
+        return (1 - weights.sum(-1).abs()).pow(2)
+    else:
+        raise ValueError(f"Unknown regularizer: {regularizer}")

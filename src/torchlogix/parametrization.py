@@ -125,6 +125,7 @@ class LUTParametrization(ABC):
                 - ids: Integer tensor of LUT IDs (or None if not applicable)
         """
         pass
+    
 
 
 class RawLUTParametrization(LUTParametrization):
@@ -273,7 +274,7 @@ class WalshLUTParametrization(LUTParametrization):
             # convert with wh transform
             transformed_samples = walsh_hadamard_transform(samples, self.lut_rank, device=device, dtype=torch.int32)
             if n < num_neurons:
-                weights[indices[n:]] = (1.0 / self.lut_rank) * transformed_samples.to(torch.float)
+                weights[indices[n:]] = (1.0 / lut_entries) * transformed_samples.to(torch.float)
             return weights
         elif weight_init == "random":
             return torch.randn(num_neurons, lut_entries, device=device) * 0.1

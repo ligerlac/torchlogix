@@ -1,7 +1,7 @@
 import torch
 
 from ..parametrization import RawLUTParametrization, WalshLUTParametrization
-from ..functional import GradFactor, get_random_unique_connections
+from ..functional import GradFactor, get_random_unique_connections, get_regularization_loss
 from .base import LogicBase
 
 
@@ -189,3 +189,6 @@ class LogicDense(LogicBase):
                   neuron (entry is True for output 1, False for 0).
         """
         return self.parametrization.get_luts(self.weight, **kwargs)
+
+    def get_regularization_loss(self, regularizer: str):
+        return get_regularization_loss(self.weight, regularizer)

@@ -4,6 +4,8 @@ import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
+from torchlogix.functional import get_regularization_loss
+
 from .base import LogicBase
 
 
@@ -380,6 +382,12 @@ class LogicConv(LogicBase):
                 level_luts.append(luts)
             tree_luts.append(level_luts)
         return tree_luts
+    
+    def get_regularization_loss(self, regularizer: str):
+        reg_loss = 0.0
+        for w in self.tree_weights:
+            reg_loss += get_regularization_loss(w, regularizer).sum(0)
+        return reg_loss
 
 
 class OrPooling(torch.nn.Module):
