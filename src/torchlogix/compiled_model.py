@@ -10,7 +10,8 @@ import numpy as np
 import numpy.typing
 import torch
 
-from .layers.conv import LogicConv, OrPooling
+from .layers.conv import LogicConv2d, LogicConv3d
+from .layers.pool import OrPooling2d, OrPooling3d
 from .layers.dense import LogicDense
 from .layers.groupsum import GroupSum
 from .layers.thresholding import LearnableThermometerThresholding
@@ -110,11 +111,19 @@ class CompiledLogicNet(torch.nn.Module):
                     raise ValueError("LearnableThermometerThresholding layer must appear first in layer order.")
                 thresholding_info = self._extract_thresholding_layer_info(layer)
                 self.thresholding_layer = thresholding_info  # there will only be one thresholding layer
-            elif isinstance(layer, LogicConv):
+            elif isinstance(layer, LogicConv2d):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
-            elif isinstance(layer, OrPooling):
+            elif isinstance(layer, LogicConv3d):
+                conv_info = self._extract_conv_layer_info(layer)
+                self.conv_layers.append(conv_info)
+                self.layer_order.append(('conv', len(self.conv_layers) - 1))
+            elif isinstance(layer, OrPooling2d):
+                pool_info = self._extract_pooling_layer_info(layer)
+                self.pooling_layers.append(pool_info)
+                self.layer_order.append(('pool', len(self.pooling_layers) - 1))
+            elif isinstance(layer, OrPooling3d):
                 pool_info = self._extract_pooling_layer_info(layer)
                 self.pooling_layers.append(pool_info)
                 self.layer_order.append(('pool', len(self.pooling_layers) - 1))
@@ -141,7 +150,7 @@ class CompiledLogicNet(torch.nn.Module):
 
         # Validate model structure
         if not self.conv_layers and not self.linear_layers:
-            raise ValueError("Model must contain at least one LogicConv, or LogicDense layer.")
+            raise ValueError("Model must contain at least one LogicConv2d, LogicConv3d, or LogicDense layer.")
 
     def _extract_thresholding_layer_info(self, layer: LearnableThermometerThresholding) -> Dict[str, Any]:
         """Extract information from a thresholding layer for compilation."""
@@ -150,8 +159,8 @@ class CompiledLogicNet(torch.nn.Module):
             'thresholds': layer.get_thresholds(),
         }
 
-    def _extract_conv_layer_info(self, layer: LogicConv) -> Dict[str, Any]:
-        """Extract information from a LogicConv layer for compilation."""
+    def _extract_conv_layer_info(self, layer: Union[LogicConv2d, LogicConv3d]) -> Dict[str, Any]:
+        """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
         tree_operations = []
         for level_idx, level_weights in enumerate(layer.tree_weights):
             level_ops = []
@@ -172,7 +181,7 @@ class CompiledLogicNet(torch.nn.Module):
             'channels': layer.channels,
         }
 
-    def _extract_pooling_layer_info(self, layer: OrPooling) -> Dict[str, Any]:
+    def _extract_pooling_layer_info(self, layer: Union[OrPooling2d, OrPooling3d]) -> Dict[str, Any]:
         """Extract information from an OrPooling layer for compilation."""
         return {
             'kernel_size': layer.kernel_size,
@@ -284,9 +293,9 @@ class CompiledLogicNet(torch.nn.Module):
                 conv_info = self.conv_layers[layer_idx]
                 if len(current_shape) == 3:  # (C, H, W)
                     c, h, w = current_shape
-                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+                    h_out = ((h + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
                              // conv_info['stride']) + 1
-                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+                    w_out = ((w + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
                              // conv_info['stride']) + 1
                     output_shape = (conv_info['num_kernels'], h_out, w_out)
                     output_size = conv_info['num_kernels'] * h_out * w_out
@@ -352,9 +361,9 @@ class CompiledLogicNet(torch.nn.Module):
 
         if len(conv_info['in_dim']) == 2:
             conv_dim = 2
-            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
+            h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
                     // conv_info['stride']) + 1
-            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
+            w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'])
                     // conv_info['stride']) + 1
         elif len(conv_info['in_dim']) == 3:
             conv_dim = 3
