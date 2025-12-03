@@ -359,7 +359,7 @@ def main():
     )
 
     parser.add_argument(
-        "--regularizer", type=str, default="None", choices=["None", "abs_sum", "L2"],
+        "--regularizer", type=str, default=None, choices=[None, "abs_sum", "L2"],
         help="Regularization method"
     )
 
@@ -379,7 +379,7 @@ def main():
     )
 
     parser.add_argument(
-        "--weight-rescale", type=str, default="None", choices=["clip", "abs_sum", "L2", "None"],
+        "--weight-rescale", type=str, default=None, choices=["clip", "abs_sum", "L2", None],
         help="Weight rescaling for each layer after each training step"
     )
 

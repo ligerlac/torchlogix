@@ -1,7 +1,7 @@
 import torch
 
 from ..parametrization import RawLUTParametrization, WalshLUTParametrization
-from ..functional import GradFactor, get_random_unique_connections, get_regularization_loss
+from ..functional import GradFactor, get_random_unique_connections, get_regularization_loss, rescale_weights
 from .base import LogicBase
 
 
@@ -192,3 +192,6 @@ class LogicDense(LogicBase):
 
     def get_regularization_loss(self, regularizer: str):
         return get_regularization_loss(self.weight, regularizer)
+    
+    def rescale_weights(self, method):
+        rescale_weights(self.weight, method)

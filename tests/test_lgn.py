@@ -48,6 +48,21 @@ def test_regularizer_walsh():
     assert reg_loss.item() > 0.0
 
 
+def test_weight_rescale_walsh():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, 1.0]])
+    reg_loss = layer.get_regularization_loss("abs_sum")
+    assert reg_loss.item() > 0.0
+    reg_loss = layer.get_regularization_loss("L2")
+    assert reg_loss.item() > 0.0
+    layer.rescale_weights("abs_sum")
+    reg_loss = layer.get_regularization_loss("abs_sum")
+    assert np.isclose(reg_loss.item(), 0.0)
+    layer.rescale_weights("L2")
+    reg_loss = layer.get_regularization_loss("L2")
+    assert np.isclose(reg_loss.item(), 0.0)
+
+
 def test_get_luts_and_ids_xor_light():
     layer = LogicDense(in_dim=2, out_dim=1, **llkw_light)
     layer.weight.data = torch.zeros((1, 4))

@@ -552,8 +552,8 @@ def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
     return basis
 
 
-def get_regularization_loss(weights, regularizer="None"):
-    if regularizer == "None":
+def get_regularization_loss(weights, regularizer=None):
+    if regularizer is None:
         return 0.0
     elif regularizer == "L2":
         return (1 - weights.pow(2).sum(-1)).pow(2)
@@ -561,3 +561,19 @@ def get_regularization_loss(weights, regularizer="None"):
         return (1 - weights.sum(-1).abs()).pow(2)
     else:
         raise ValueError(f"Unknown regularizer: {regularizer}")
+    
+
+def rescale_weights(weights, method=None):
+    with torch.no_grad():
+        if method is None:
+            pass
+        elif method == "clip":
+            weights.clamp_(-1, 1)
+        elif method == "abs_sum":
+            abs_sum = weights.sum(dim=-1, keepdim=True).abs()
+            weights.div_(abs_sum)
+        elif method == "L2":
+            l2_norm = weights.norm(p=2, dim=-1, keepdim=True)
+            weights.div_(l2_norm)
+        else:
+            raise ValueError(f"Unknown rescale method: {method}")

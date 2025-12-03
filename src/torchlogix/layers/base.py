@@ -100,3 +100,11 @@ class LogicBase(torch.nn.Module, ABC):
             torch.Tensor: Scalar tensor representing the regularization loss.
         """
         pass
+
+    def rescale_weights(self, method: str):
+        """Rescales the weights of the layer according to the specified method.
+
+        Args:
+            method (str): Rescaling method. Options are 'clip', 'abs_sum', 'L2'.
+        """
+        pass

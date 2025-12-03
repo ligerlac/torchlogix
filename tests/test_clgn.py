@@ -194,7 +194,7 @@ def test_lut_rank_walsh():
 
 def test_regularizer_walsh():
     lut_rank = 2
-    layer = LogicConv(
+    layer = LogicConv2d(
         in_dim=(3, 4),
         parametrization="walsh",
         device="cpu",
@@ -221,6 +221,35 @@ def test_regularizer_walsh():
     assert reg_loss.item() > 0.0
     reg_loss = layer.get_regularization_loss("L2")
     assert reg_loss.item() > 0.0
+
+
+def test_weight_rescale_walsh():
+    lut_rank = 2
+    layer = LogicConv2d(
+        in_dim=(3, 4),
+        parametrization="walsh",
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=0,
+        receptive_field_size=3,
+        connections="random-unique",
+        stride=1,
+        padding=0,
+        lut_rank=lut_rank,
+    )
+    for params in layer.parameters():
+        params.data = torch.tensor([[[0.5, 0.5, 0.5, -1.0]]])
+    reg_loss = layer.get_regularization_loss("abs_sum")
+    assert reg_loss.item() > 0.0
+    reg_loss = layer.get_regularization_loss("L2")
+    assert reg_loss.item() > 0.0
+    layer.rescale_weights("abs_sum")
+    reg_loss = layer.get_regularization_loss("abs_sum")
+    assert np.isclose(reg_loss.item(), 0.0)
+    layer.rescale_weights("L2")
+    reg_loss = layer.get_regularization_loss("L2")
+    assert np.isclose(reg_loss.item(), 0.0)
     
 
 def test_and_model():

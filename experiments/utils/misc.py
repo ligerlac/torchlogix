@@ -153,18 +153,7 @@ def train(model, x, y, loss_fn, optimizer, weight_rescale, regularizer, regulari
 
     if weight_rescale is not None:
         for layer in model:
-            if isinstance(layer, LogicConv) or isinstance(layer, LogicDense):
-                if weight_rescale == "clip":
-                    with torch.no_grad():
-                        layer.weight.clamp_(-1, 1)
-                elif weight_rescale == "abs_sum":
-                    with torch.no_grad():
-                        abs_sum = layer.weight.sum(dim=-1, keepdim=True).abs()
-                        layer.weight.div_(abs_sum)
-                elif weight_rescale == "L2":
-                    with torch.no_grad():
-                        l2_norm = layer.weight.norm(p=2, dim=-1, keepdim=True)
-                        layer.weight.div_(l2_norm)
+            layer.rescale_weights(weight_rescale)
 
     return loss.item()
 

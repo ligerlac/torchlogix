@@ -4,7 +4,7 @@ import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from torchlogix.functional import get_regularization_loss
+from torchlogix.functional import get_regularization_loss, rescale_weights
 
 from .base import LogicBase
 
@@ -337,6 +337,10 @@ class _LogicConvNd(LogicBase):
         for w in self.tree_weights:
             reg_loss += get_regularization_loss(w, regularizer).sum(0)
         return reg_loss
+    
+    def rescale_weights(self, method):
+        for w in self.tree_weights:
+            rescale_weights(w, method)
 
 
 class LogicConv2d(_LogicConvNd):
