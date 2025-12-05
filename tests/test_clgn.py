@@ -170,10 +170,31 @@ class TestIndeces:
                         f"Kernel {kernel_idx}, position {pos_idx}: Found self-connection {left_tuple}"
 
 
+def test_unique_connections_walsh():
+    """Test scaling up to multiple inputs, that is n=4."""
+    lut_rank = 6
+    import time
+    start = time.time()
+    layer = LogicConv2d(
+        in_dim=(30, 20),
+        parametrization="walsh",
+        device="cpu",
+        channels=1,
+        num_kernels=1,
+        tree_depth=0,
+        receptive_field_size=5,
+        connections="random-unique",
+        stride=1,
+        padding=0,
+        lut_rank=lut_rank,
+    )
+    assert time.time() - start < 10, "Unique connections generation took too long"
+
+
 def test_lut_rank_walsh():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
-    layer = layer = LogicConv2d(
+    layer = LogicConv2d(
         in_dim=(3, 4),
         parametrization="walsh",
         device="cpu",
