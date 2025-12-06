@@ -6,7 +6,9 @@ import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from torchlogix.functional import get_regularization_loss, rescale_weights
+from torchlogix.functional import (
+    get_regularization_loss, rescale_weights, get_combination_indices
+    )
 
 from .base import LogicBase
 
@@ -201,15 +203,13 @@ class _LogicConvNd(LogicBase):
 
         # All unique unordered index tuples of size `lut_rank`
         positions_1d = torch.arange(num_positions, device=device)
-        total_tuples = math.comb(int(num_positions), self.lut_rank)
-        if sample_size > total_tuples:
-            raise ValueError(
-                f"Not enough unique {self.lut_rank}-tuples: need {sample_size}, have {total_tuples}"
-            )
-        ranks = self._sample_unique_ranks_per_kernel(total_tuples, sample_size, self.num_kernels, device)
-        comb_indices = self._unrank_combinations_batched(num_positions, self.lut_rank, 
-                                                          ranks.view(-1)).view(self.num_kernels, 
-                                                                               sample_size, self.lut_rank)
+        comb_indices = get_combination_indices(
+            n=num_positions,
+            k=self.lut_rank,
+            sample_size=sample_size,
+            num_sets=self.num_kernels,
+            device=self.device
+        )
         tuple_indices = positions_1d[comb_indices] 
         # Map to (h, w, c) coordinates
         coords = all_positions[tuple_indices]  # (K, sample_size, lut_rank, 3)
@@ -287,60 +287,6 @@ class _LogicConvNd(LogicBase):
             base = torch.arange(size, device=self.device).view(-1, self.lut_rank).transpose(0, 1)
             indices.append(base)
         return indices
-    
-    def _build_binom_table(self, n: int, k: int, device=None) -> torch.Tensor:
-        """Build table C[x, i] = binom(x, i) for x in [0..n-1], i in [0..k]."""
-        C = torch.zeros(n, k + 1, dtype=torch.long, device=device)
-        C[:, 0] = 1
-        for x in range(n):
-            for i in range(1, k + 1):
-                if i > x:
-                    C[x, i] = 0
-                elif i == x:
-                    C[x, i] = 1
-                else:
-                    # Pascal recurrence: C(x, i) = C(x-1, i-1) + C(x-1, i)
-                    C[x, i] = C[x - 1, i - 1] + C[x - 1, i]
-        return C
-
-    def _unrank_combinations_batched(self, n: int, k: int, ranks: torch.Tensor) -> torch.Tensor:
-        """Map ranks in [0, C(n,k)) to k-combinations of {0,...,n-1}, batched.
-
-        Args:
-            n: Total number of items.
-            k: Combination size.
-            ranks: Tensor of integer ranks, shape (...,).
-
-        Returns:
-            Tensor of combinations of shape (..., k), dtype long.
-        """
-        device = ranks.device
-        ranks = ranks.clone().reshape(-1)           # (B,)
-        B = ranks.numel()
-
-        # Precompute binomial coefficients C[x, i]
-        C = self._build_binom_table(n, k, device=device)  # (n, k+1)
-
-        combos = torch.empty(B, k, dtype=torch.long, device=device)
-
-        # Combinadic unranking: for i = k .. 1, find largest x with C(x, i) <= r
-        for i in range(k, 0, -1):
-            col = C[:, i]                       # (n,)
-            # Broadcast compare: (n,B)
-            mask = col.unsqueeze(1) <= ranks.unsqueeze(0)
-            # monotone in x ⇒ last True index is desired x
-            x = mask.long().sum(dim=0) - 1      # (B,)
-            combos[:, i - 1] = x
-            ranks = ranks - C[x, i]             # C[x, i] gathered by advanced indexing
-
-        return combos.reshape(*ranks.shape, k)
-    
-    def _sample_unique_ranks_per_kernel(self, total_tuples, sample_size, K, device):
-        all_ranks = []
-        for _ in range(K):
-            r = random.sample(range(total_tuples), sample_size)  # pure Python, no big tensor
-            all_ranks.append(r)
-        return torch.tensor(all_ranks, dtype=torch.long, device=device)  # (K, sample_size)
 
     def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
