@@ -9,7 +9,7 @@ import torch
 
 from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
-from torchlogix.functional import get_unique_connections, take_tuples
+from torchlogix.functional import take_tuples
 
 llkw = {"connections": "random-unique", "device": "cpu"}
 llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}

@@ -1,6 +1,5 @@
 import torch
 from torchlogix.parametrization import (
-    LUTParametrization, 
     RawLUTParametrization, 
     WalshLUTParametrization,
     LightLUTParametrization

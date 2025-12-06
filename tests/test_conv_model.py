@@ -2,7 +2,6 @@
 This module contains tests for a model that contains convolutional- and dense layers.
 """
 
-import pytest
 import numpy as np
 import torch
 

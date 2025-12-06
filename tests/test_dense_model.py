@@ -2,7 +2,6 @@
 This module contains tests for a model that contains and dense layers.
 """
 
-import pytest
 import numpy as np
 import torch
 
@@ -16,7 +15,7 @@ def test_dlgn_model():
     model = Dlgn(
         in_dim=100,
         n_layers=3,
-        neurons_per_layer=10,
+        neurons_per_layer=50,
         class_count=10,
         tau=1.0,
         device="cpu",
