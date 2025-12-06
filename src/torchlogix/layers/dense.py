@@ -1,7 +1,8 @@
 import torch
 
-from ..parametrization import RawLUTParametrization, WalshLUTParametrization
-from ..functional import GradFactor, get_random_unique_connections, get_regularization_loss, rescale_weights
+from ..functional import (
+    GradFactor, get_combination_indices, get_regularization_loss, rescale_weights, take_tuples
+    )
 from .base import LogicBase
 
 
@@ -149,17 +150,43 @@ class LogicDense(LogicBase):
         )
 
         if self.connections == "random":
-            c = torch.randperm(self.lut_rank * self.out_dim) % self.in_dim
-            c = torch.randperm(self.in_dim)[c]
+            assert self.out_dim * self.lut_rank >= self.in_dim, "All inputs should be covered"
+            # With this method both inputs can stem from the same input feature
+            c = torch.randperm(self.lut_rank * self.out_dim, device=self.device) % self.in_dim
             c = c.reshape(self.lut_rank, self.out_dim)
-            c = c.to(torch.int64).to(self.device)
-            return c
+
+            # Following method ensures that each input to a neuron is unique
+            # But Now we face the issue of potentially not covering all inputs
+            # weights = torch.ones(self.out_dim, self.in_dim, device=self.device)
+            # c = torch.multinomial(weights, self.lut_rank, replacement=False)
+            # c = c.t()
         elif self.connections == "random-unique":
-            return get_random_unique_connections(
-                self.in_dim, self.out_dim, self.lut_rank, self.device
+            # Feasibility checks
+            assert self.out_dim * self.lut_rank >= self.in_dim, (
+                f"Need out_dim * lut_rank >= in_dim to cover all inputs "
+                f"({self.out_dim} * {self.lut_rank} < {self.in_dim})."
+                )
+            n_max = int(self.in_dim * (self.in_dim // (self.lut_rank - 1) - 1) / 2)
+            assert self.out_dim <= n_max, (
+                "The number of neurons ({}) must not be greater than the number of pair-wise combinations "
+                "of the inputs ({})".format(self.out_dim, n_max)
             )
+            x = torch.arange(self.in_dim)
+            c = take_tuples(x, tuple_size=self.lut_rank, start=0, step_between=1, stride_within=1)
+            offset = 2
+            while c.shape[-1] < self.out_dim:
+                c_ = take_tuples(x, tuple_size=self.lut_rank, start=0, step_between=1, stride_within=offset)
+                c = torch.cat([c, c_], dim=-1)
+                offset += 1
+            c = c[:, :self.out_dim]
+            perm_out = torch.randperm(self.out_dim)
+            perm_in = torch.randperm(self.in_dim)
+            c = c[:, perm_out]
+            c = perm_in[c]
         else:
             raise ValueError(self.connections)
+        c = c.contiguous().to(torch.int64).to(self.device)
+        return c
         
     def get_luts_and_ids(self, **kwargs):
         """Computes the most probable LUT and its ID for each neuron.

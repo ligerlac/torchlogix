@@ -9,6 +9,7 @@ import torch
 
 from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
+from torchlogix.functional import get_unique_connections, take_tuples
 
 llkw = {"connections": "random-unique", "device": "cpu"}
 llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}
@@ -106,6 +107,7 @@ def test_trivial_layer():
     and its weights should have shape (1, 16).
     It should not be possible to have more than one connection (==out_dim).
     """
+    llkw["connections"] = "random-unique"
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
     assert torch.allclose(layer.indices, torch.tensor(((0,), (1,)))) or torch.allclose(layer.indices, torch.tensor(((1,), (0,))))
     assert layer.weight.shape == (1, 16)
@@ -160,6 +162,18 @@ def test_xor_model_walsh():
     for (x, y), expected in test_cases:
         pred = model(torch.tensor([[x, y]])).item()
         assert np.isclose(pred, expected)
+
+
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_take_tuples(lut_rank):
+    layer = LogicDense(in_dim=400, out_dim=400, lut_rank=lut_rank, **llkw_walsh)
+    # column-wise unique test
+    assert all(len(torch.unique(layer.indices[..., col])) == lut_rank for col in range(layer.indices.shape[1]))
+    unique, counts = torch.unique(layer.indices, return_counts=True)
+    # counts should not deviate by more than 1
+    assert counts.float().std().item() < 1
+    # cover all inputs
+    assert len(unique) == layer.in_dim
 
 
 @pytest.mark.parametrize("weight_init", ["random", "residual"])

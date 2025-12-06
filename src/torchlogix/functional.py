@@ -6,6 +6,7 @@ operations, vectorized operations, and utility functions for building logic
 gate networks.
 """
 import math
+import random
 import numpy as np
 import torch
 
@@ -193,11 +194,11 @@ def gumbel_sigmoid(logits, tau=1.0, hard=False, threshold=0.5):
 
     return y_soft
 
-def softmax(logits, hard=False, tau=1.0):
-    y_soft = torch.nn.functional.softmax(logits / tau, dim=-1)
+def softmax(logits, hard=False, tau=1.0, dim=-1):
+    y_soft = torch.nn.functional.softmax(logits / tau, dim=dim)
     if hard:
-        index = y_soft.max(-1, keepdim=True)[1]
-        y_hard = torch.zeros_like(logits).scatter_(-1, index, 1.0)
+        index = y_soft.max(dim, keepdim=True)[1]
+        y_hard = torch.zeros_like(logits).scatter_(dim, index, 1.0)
         return (y_hard - y_soft).detach() + y_soft
     return y_soft
 
@@ -208,6 +209,7 @@ def sigmoid(logits, hard=False, tau=1.0):
         return (y_hard - y_soft).detach() + y_soft
     return y_soft
 
+##################################################################
 
 def fwht(x: torch.Tensor, n: int) -> torch.Tensor:
     """
@@ -242,7 +244,8 @@ def hadamard_matrix(n, dtype=torch.float32, device=None):
     return torch.cat([top, bottom], dim=0)
 
 
-def walsh_hadamard_transform(x: torch.Tensor, n: int, dtype=torch.float32, device=None, fast=False) -> torch.Tensor:
+def walsh_hadamard_transform(x: torch.Tensor, n: int, dtype=torch.float32, 
+                             device=None, fast=False) -> torch.Tensor:
     """
     Walsh-Hadamard transform on the last dimension.
     x: (..., 2^n)
@@ -252,6 +255,8 @@ def walsh_hadamard_transform(x: torch.Tensor, n: int, dtype=torch.float32, devic
     else:
         H = hadamard_matrix(1 << n, dtype=dtype, device=device)
         return x @ H
+    
+##########################################################################
     
 # Needs to be CUDAized
 def kron_pairwise_basis(x):
@@ -551,6 +556,7 @@ def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
     ], dim=-1)
     return basis
 
+####################################################################
 
 def get_regularization_loss(weights, regularizer=None):
     if regularizer is None:
@@ -577,3 +583,132 @@ def rescale_weights(weights, method=None):
             weights.div_(l2_norm)
         else:
             raise ValueError(f"Unknown rescale method: {method}")
+        
+
+##########################################################################
+
+def build_binom_table(n: int, k: int, device=None) -> torch.Tensor:
+    """Build table C[x, i] = binom(x, i) for x in [0..n-1], i in [0..k]."""
+    C = torch.zeros(n, k + 1, dtype=torch.long, device=device)
+    C[:, 0] = 1
+    for x in range(n):
+        for i in range(1, k + 1):
+            if i > x:
+                C[x, i] = 0
+            elif i == x:
+                C[x, i] = 1
+            else:
+                # Pascal recurrence: C(x, i) = C(x-1, i-1) + C(x-1, i)
+                C[x, i] = C[x - 1, i - 1] + C[x - 1, i]
+    return C
+
+def unrank_combinations_batched(n: int, k: int, ranks: torch.Tensor) -> torch.Tensor:
+    """Map ranks in [0, C(n,k)) to k-combinations of {0,...,n-1}, batched.
+
+    Args:
+        n: Total number of items.
+        k: Combination size.
+        ranks: Tensor of integer ranks, shape (...,).
+
+    Returns:
+        Tensor of combinations of shape (..., k), dtype long.
+    """
+    device = ranks.device
+    ranks = ranks.clone().reshape(-1)           # (B,)
+    B = ranks.numel()
+
+    # Precompute binomial coefficients C[x, i]
+    C = build_binom_table(n, k, device=device)  # (n, k+1)
+
+    combos = torch.empty(B, k, dtype=torch.long, device=device)
+
+    # Combinadic unranking: for i = k .. 1, find largest x with C(x, i) <= r
+    for i in range(k, 0, -1):
+        col = C[:, i]                       # (n,)
+        # Broadcast compare: (n,B)
+        mask = col.unsqueeze(1) <= ranks.unsqueeze(0)
+        # monotone in x ⇒ last True index is desired x
+        x = mask.long().sum(dim=0) - 1      # (B,)
+        combos[:, i - 1] = x
+        ranks = ranks - C[x, i]             # C[x, i] gathered by advanced indexing
+
+    return combos.reshape(*ranks.shape, k)
+    
+def sample_unique_ranks(total_tuples, sample_size, K, device):
+    all_ranks = []
+    for _ in range(K):
+        r = random.sample(range(total_tuples), sample_size)  # pure Python, no big tensor
+        all_ranks.append(r)
+    return torch.tensor(all_ranks, dtype=torch.long, device=device)  # (K, sample_size)
+
+
+def get_combination_indices(n, k, sample_size, num_sets, device):
+    """Get unique combination indices for K samples of size sample_size from n items.
+
+    Args:
+        n: Total number of items.
+        k: Combination size.
+        sample_size: Number of unique combinations to sample.
+        num_sets: Number of sets of combinations to generate.
+        device: Target device for returned tensor.
+    """
+    total_tuples = math.comb(int(n), k)
+    assert sample_size <= total_tuples, (
+        f"Not enough unique {k}-tuples: need {sample_size}, have {total_tuples}"
+        )
+    ranks = sample_unique_ranks(total_tuples, sample_size, num_sets, device)
+    comb_indices = unrank_combinations_batched(n, k, 
+                                                ranks.view(-1)).view(num_sets, 
+                                                                    sample_size, k)
+    return comb_indices
+
+
+def take_tuples(
+    x: torch.Tensor,
+    tuple_size: int,
+    start: int = 0,
+    stride_within: int = 1,
+    step_between: int | None = None,
+):
+    """
+    Take k-tuples from the last dimension of x with full control over:
+      - start index
+      - stride within each tuple
+      - step between tuple starts
+
+    x:            (..., N)
+    tuple_size:   k (number of elements per tuple)
+    start:        first index used for the first tuple
+    stride_within:distance between elements inside a tuple
+    step_between: distance between starts of consecutive tuples
+                  (if None, defaults to tuple_size * stride_within)
+
+    Returns:
+        y with shape (..., tuple_size, num_groups)
+        where last two dims are (k, num_groups).
+    """
+    N = x.size(-1)
+
+    if step_between is None:
+        step_between = tuple_size * stride_within
+
+    # Maximum starting index that still fits a full tuple
+    max_start = N - (tuple_size - 1) * stride_within
+    if max_start <= start:
+        raise ValueError("Not enough elements to take a single tuple "
+                         f"with start={start}, tuple_size={tuple_size}, stride_within={stride_within}.")
+
+    # All possible starting positions
+    starts = torch.arange(start, max_start, step_between, device=x.device)  # (num_groups,)
+    num_groups = starts.numel()
+
+    # Offsets inside each tuple
+    offsets = torch.arange(tuple_size, device=x.device) * stride_within     # (tuple_size,)
+
+    # Build index matrix: shape (tuple_size, num_groups)
+    idx = starts.unsqueeze(0) + offsets.unsqueeze(1)
+
+    # Gather: result (..., tuple_size, num_groups)
+    y = x[..., idx]   # advanced indexing broadcasts over leading dims
+
+    return y
