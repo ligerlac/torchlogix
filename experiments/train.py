@@ -302,8 +302,18 @@ def main():
         default="DlgnMnistSmall", help="Model architecture. Must match dataset"
     )
     parser.add_argument(
-        "--connections-method", type=str, choices=["random", "random-unique"],
-        default="random", help="Connection strategy"
+        "--connections-init-method", type=str, choices=["random", "random-unique"],
+        default="random", help="Connection initilization strategy"
+    )
+
+    parser.add_argument(
+        "--connections", type=str, choices=["fixed", "learnable"],
+        default="fixed", help="Connection strategy"
+    )
+
+    parser.add_argument(
+        "--connections-temperature", type=float, default=1.0,
+        help="Temperature for softmax in learnable connections"
     )
 
     # Training parameters
@@ -334,7 +344,7 @@ def main():
     )
 
     parser.add_argument(
-        "--parametrization", type=str, default="raw", choices=["raw", "walsh"],
+        "--parametrization", type=str, default="raw", choices=["raw", "walsh", "light"],
         help="Parametrization to use"
     )
 
@@ -349,7 +359,7 @@ def main():
     )
 
     parser.add_argument(
-        "--temperature", type=float, default=1.0,
+        "--parametrization-temperature", type=float, default=1.0,
         help="Temperature for sigmoid in walsh parametrization"
     )
 

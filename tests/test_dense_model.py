@@ -19,7 +19,7 @@ def test_dlgn_model():
         class_count=10,
         tau=1.0,
         device="cpu",
-        connections_kwargs={"method": "random"},
+        connections_kwargs={"init_method": "random"},
         parametrization_kwargs={"weight_init": "random"},
         parametrization='raw'
     )

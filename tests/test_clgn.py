@@ -23,7 +23,7 @@ def layer(
         "num_kernels": num_kernels,
         "tree_depth": tree_depth,
         "receptive_field_size": receptive_field_size,
-        "connections_kwargs": {"method": connections_method},
+        "connections_kwargs": {"init_method": connections_method},
         "stride": stride,
         "padding": padding,
         "parametrization_kwargs": {"weight_init": weight_init}
@@ -136,7 +136,7 @@ class TestIndeces:
         For random-unique connections, the first level should have unique pairs of
         indices.
         """
-        if layer.connections.method != "random-unique":
+        if layer.connections.init_method != "random-unique":
             pytest.skip("Test only applies to random-unique connections")
         
         # Only test the first level (level 0) which contains the actual position pairs
@@ -175,7 +175,7 @@ def test_unique_connections_walsh():
     lut_rank = 6
     import time
     start = time.time()
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(30, 20),
         parametrization="walsh",
@@ -195,7 +195,7 @@ def test_unique_connections_walsh():
 def test_lut_rank_walsh():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
         parametrization="walsh",
@@ -217,7 +217,7 @@ def test_lut_rank_walsh():
 
 def test_regularizer_walsh():
     lut_rank = 2
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
         parametrization="walsh",
@@ -249,7 +249,7 @@ def test_regularizer_walsh():
 
 def test_weight_rescale_walsh():
     lut_rank = 2
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
         parametrization="walsh",
@@ -284,7 +284,7 @@ def test_and_model():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
         device="cpu",
@@ -347,7 +347,7 @@ def test_get_luts_and_ids():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
         device="cpu",
@@ -391,7 +391,7 @@ def test_get_luts_and_ids_and_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
         parametrization="walsh",
@@ -435,7 +435,7 @@ def test_and_model_walsh():
     - set the weights to 0, except for the 1-st element (set to some high value)
     - test some possible inputs
     """
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
         parametrization="walsh",
@@ -498,7 +498,7 @@ def test_and_model_walsh():
 
 
 def test_binary_model():
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=2,
         device="cpu",
@@ -549,7 +549,7 @@ def test_binary_model():
 
     
 def test_conv_model():
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
         device="cpu",
@@ -609,7 +609,7 @@ def test_conv_model():
 
 
 def test_conv_model_rect():
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
         device="cpu",
@@ -675,7 +675,7 @@ def test_conv_model_rect():
 
 def test_compiled_model():
     """Test model compilation and inference."""
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     model = torch.nn.Sequential(
         LogicConv2d(
             in_dim=3,
@@ -716,7 +716,7 @@ def test_compiled_model():
 
 def test_compiled_model_rect():
     """Test model compilation and inference."""
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     model = torch.nn.Sequential(
         LogicConv2d(
             in_dim=(3,4),
@@ -793,7 +793,7 @@ def test_pooling_layer():
 
 def test_compiled_pooling_model():
     """Test model compilation and inference."""
-    connections_kwargs = {"method": "random-unique"}
+    connections_kwargs = {"init_method": "random-unique"}
     model = torch.nn.Sequential(
         LogicConv2d(
             in_dim=3,
@@ -838,7 +838,7 @@ def test_compiled_model_with_thresholding():
     thresholding_layer.freeze_thresholds()  # Freeze to make deterministic
 
     # Create a simple model: Thresholding -> Conv -> Flatten -> GroupSum
-    connections_kwargs = {"method": "random"}
+    connections_kwargs = {"init_method": "random"}
     model = torch.nn.Sequential(
         thresholding_layer,
         LogicConv2d(
@@ -895,7 +895,7 @@ def test_thresholding_with_bitpacking_raises_error():
     thresholding_layer.freeze_thresholds()
 
     # Create a simple model with thresholding
-    connections_kwargs = {"method": "random"}
+    connections_kwargs = {"init_method": "random"}
     model = torch.nn.Sequential(
         thresholding_layer,
         LogicConv2d(

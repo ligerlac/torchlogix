@@ -8,17 +8,24 @@ def get_model(args):
     It can be a difflogic model or a baseline model.
     """
     llkw = {
-        "connections_method": args.connections_method,
+        "connections": args.connections,
+        "connections_kwargs": {
+            "init_method": args.connections_init_method,
+            "temperature": args.connections_temperature
+            },
+        "parametrization": args.parametrization,
+        "parametrization_kwargs": {
+            "temperature": args.parametrization_temperature,
+            "forward_sampling": args.forward_sampling,
+            "weight_init": args.init,
+            "residual_probability": args.residual_probability,
+            "arbitrary_basis": args.arbitrary_basis
+            },
         "device": args.device,
-        "forward_sampling": args.forward_sampling,
-        "temperature": args.temperature,
-        "weight_init": args.weight_init,
-        "residual_init_param": args.residual_init_param,
         "lut_rank": args.lut_rank,
-        "arbitrary_basis": args.arbitrary_basis
     }
     model_cls = torchlogix.models.__dict__[args.architecture]
-    model = model_cls(parametrization=args.parametrization, **llkw)
+    model = model_cls(**llkw)
 
     model = model.to(llkw["device"])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

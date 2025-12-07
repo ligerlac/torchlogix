@@ -25,7 +25,7 @@ def layer(
         "num_kernels": num_kernels,
         "tree_depth": tree_depth,
         "receptive_field_size": receptive_field_size,
-        "connections_kwargs": {"method": connections_method},
+        "connections_kwargs": {"init_method": connections_method},
         "stride": stride,
         "padding": padding,
     }
@@ -138,7 +138,7 @@ class TestIndices:
         For random-unique connections, the first level should have unique pairs of
         indices.
         """
-        if layer.connections.method != "random-unique":
+        if layer.connections.init_method != "random-unique":
             pytest.skip("Test only applies to random-unique connections")
 
         # Only test the first level (level 0) which contains the actual position pairs
@@ -186,7 +186,7 @@ def test_and_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        connections_kwargs={"method": "random-unique"},
+        connections_kwargs={"init_method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -250,7 +250,7 @@ def test_binary_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        connections_kwargs={"method": "random-unique"},
+        connections_kwargs={"init_method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -301,7 +301,7 @@ def test_lut_rank_walsh():
         num_kernels=1,
         tree_depth=0,
         receptive_field_size=3,
-        connections_kwargs={"method": "random-unique"},
+        connections_kwargs={"init_method": "random-unique"},
         parametrization="walsh",
         stride=1,
         padding=0,
@@ -321,7 +321,7 @@ def test_conv_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        connections_kwargs={"method": "random-unique"},
+        connections_kwargs={"init_method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -393,7 +393,7 @@ def test_conv_model_rect():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=(3,2,2),
-        connections_kwargs={"method": "random-unique"},
+        connections_kwargs={"init_method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -535,7 +535,7 @@ def test_compiled_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            connections_kwargs={"method": "random-unique"},
+            connections_kwargs={"init_method": "random-unique"},
             stride=1,
             padding=0,
         ),
@@ -568,7 +568,7 @@ def test_compiled_model_rect():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            connections_kwargs={"method": "random-unique"},
+            connections_kwargs={"init_method": "random-unique"},
             stride=1,
             padding=0,
         ),
@@ -600,7 +600,7 @@ def test_compiled_pooling_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            connections_kwargs={"method": "random-unique"},
+            connections_kwargs={"init_method": "random-unique"},
             stride=1,
             padding=0,
         ),
