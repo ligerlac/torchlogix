@@ -69,6 +69,8 @@ class LUTParametrization(ABC):
                 - "gumbel_soft": Gumbel-Softmax/Sigmoid continuous relaxation
                 - "gumbel_hard": Gumbel-Softmax/Sigmoid straight-through
             temperature: Temperature parameter for sampling operations.
+            weight_init: Initialization strategy for weights ("residual" or "random").
+            residual_probability: Parameter controlling residual initialization.
         """
         self.lut_rank = lut_rank
         self.lut_entries = 1 << lut_rank

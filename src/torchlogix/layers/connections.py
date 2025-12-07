@@ -16,6 +16,7 @@ def setup_connections(
     device: str = None,
     **connections_kwargs
 ):
+    """Factory method to create connection modules."""
     if structure == "dense":
         if connections == "fixed":
             return FixedDenseConnections(
@@ -45,6 +46,7 @@ def setup_connections(
     
 
 class Connections(torch.nn.Module, ABC):
+    """Abstract base class for connection strategies."""
     def __init__(
             self,
             lut_rank=2,
@@ -65,6 +67,19 @@ class Connections(torch.nn.Module, ABC):
 
 
 class FixedDenseConnections(Connections):
+    """Fixed dense connections implementation.
+    Each neuron connects to ``lut_rank`` input features chosen from the input dimension.
+    The connections are fixed after initialization.
+    
+    Args:
+        in_dim: Input feature dimension.
+        out_dim: Number of neurons (output dimension).
+        lut_rank: Number of input features each neuron connects to.
+        device: Device to store the connection indices tensor.
+        init_method: Method to initialize connections. Options are:
+            - "random": Randomly select input features (with replacement).
+            - "random-unique": Randomly select unique input features (without replacement).
+    """
     def __init__(
             self, 
             in_dim, 
@@ -123,6 +138,10 @@ class FixedDenseConnections(Connections):
     
 
 class LearnableConnectionFunction(torch.autograd.Function):
+    """Autograd function for learnable connections.
+    Implements the forward and backward pass for learnable connections
+    using Gumbel-Softmax for differentiable sampling.
+"""
     @staticmethod
     def forward(ctx, x, weights, tau, gumbel, indices):
         if gumbel:
@@ -152,6 +171,23 @@ class LearnableConnectionFunction(torch.autograd.Function):
     
 
 class LearnableDenseConnections(Connections):
+    """Learnable dense connections implementation.
+    Each neuron connects to ``lut_rank`` input features chosen from a set of candidates.
+    The connections are learnable parameters optimized during training.
+
+    Args:
+        in_dim: Input feature dimension.
+        out_dim: Number of neurons (output dimension).
+        lut_rank: Number of input features each neuron connects to.
+        temperature: Temperature parameter for Gumbel-Softmax.
+        num_candidates: Number of candidate input features per neuron.
+            If -1, all input features are candidates.
+        gumbel: Whether to use Gumbel noise for sampling.
+        device: Device to store the connection indices tensor.
+        init_method: Method to initialize connections. Options are:
+            - "random": Randomly select input features (with replacement).
+            - "random-unique": Randomly select unique input features (without replacement).
+    """
     def __init__(
             self, 
             in_dim, 
@@ -252,6 +288,9 @@ def get_random_unique_connections(in_dim, out_dim, n):
 
 
 class FixedConvConnections(Connections):
+    """Fixed convolutional connections implementation.
+    Each convolutional kernel connects to input features within its receptive field.
+    The connections are fixed after initialization."""
     def __init__(
             self, 
             in_dim: Union[_size_2_t, _size_3_t, int],

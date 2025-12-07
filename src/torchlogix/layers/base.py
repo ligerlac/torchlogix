@@ -10,6 +10,15 @@ class LogicBase(torch.nn.Module, ABC):
     """
     Abstract base class for logic layers.
     Provides common functionality and enforces implementation of certain methods.
+
+    Args:
+        device (str): Device to run the layer on ('cpu' or 'cuda').
+        grad_factor (float): Gradient scaling factor.
+        lut_rank (int): Rank of the LUTs used in the layer.
+        parametrization (str): Type of parametrization to use ('raw', 'walsh', 'light').
+        parametrization_kwargs (dict): Additional keyword arguments for parametrization.
+        connections (str): Type of connections to use ('fixed', 'learnable', etc.).
+        connections_kwargs (dict): Additional keyword arguments for connections.
     """
     def __init__(
         self, 

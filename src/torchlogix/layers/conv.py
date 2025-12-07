@@ -14,7 +14,29 @@ from .base import LogicBase
 
 
 class _LogicConvNd(LogicBase):
-    """Abstract baseclass for convolutional logic layers."""
+    """Abstract baseclass for convolutional logic layers.
+    This module provides common functionality for 2D and 3D logic convolutional
+    layers with differentiable learning.
+    
+    Args:
+        in_dim: Input spatial dimensions ``(depth, height, width)``.
+        channels: Number of input channels.
+        num_kernels: Number of output logic kernels (analogous to output channels)
+        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses
+            ``2**d`` leaves per receptive field.
+        receptive_field_size: Spatial size (depth, height and width) of the
+            receptive field (assumed cubic).
+        stride: Convolution stride in all spatial dimensions.
+        padding: Zero-padding applied symmetrically to depth, height and width
+            before selecting receptive fields.
+        conv_dimension: Dimension of the convolution (2 or 3).
+        device (str): Device to run the layer on ('cpu' or 'cuda').
+        grad_factor (float): Gradient scaling factor.
+        lut_rank (int): Rank of the LUTs used in the layer.
+        parametrization (str): Type of parametrization to use ('raw', 'walsh', 'light').
+        parametrization_kwargs (dict): Additional keyword arguments for parametrization.
+        connections (str): Type of connections to use ('fixed', 'learnable', etc.).
+        connections_kwargs (dict): Additional keyword arguments for connections."""
 
     def __init__(
         self,
@@ -211,52 +233,6 @@ class LogicConv2d(_LogicConvNd):
     Instead of linear filters, it uses a binary tree of differentiable
     logic operations (LUTs) applied to selected positions in the receptive
     field, per kernel and per spatial location.
-
-    Args:
-        in_dim: Input spatial dimensions ``(height, width)``.
-        parametrization: LUT parametrization method. One of:
-            - ``"raw"``: Direct truth table logits.
-            - ``"walsh"``: Walsh-Hadamard basis coefficients.
-            - ``"light"``: Light LGN parametrization.
-        device: Device on which the module parameters and buffers are
-            allocated (e.g. ``"cpu"`` or ``"cuda"``).
-        grad_factor: Factor applied to the gradient of intermediate logic
-            activations (e.g., via a custom autograd function) to control
-            the strength of gradient flow.
-        channels: Number of input channels.
-        num_kernels: Number of output logic kernels (analogous to output
-            channels in a standard convolution).
-        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses
-            ``2**d`` leaves per receptive field.
-        receptive_field_size: Spatial size (height and width) of the
-            receptive field (assumed square).
-        connections_method: Strategy for wiring the receptive field positions into
-            the logic trees. Supported values:
-            - ``"random"``: Randomly sampled receptive field positions for
-                all leaves across kernels.
-            - ``"random-unique"``: Randomly sampled non-repeating positions
-                within each receptive field (unique connections).
-        weight_init: Weight initialization scheme for the LUT logits at
-            each tree node. Supported values:
-            - ``"residual"``: Residual-style init around a default LUT.
-            - ``"random"``: Unstructured random logits.
-        stride: Convolution stride in both spatial dimensions.
-        padding: Zero-padding applied symmetrically to height and width
-            before selecting receptive fields.
-        temperature: Temperature used by (Gumbel-)Softmax/Sigmoid sampling
-            of LUT weights at each tree node.
-        forward_sampling: Sampling strategy for LUT weights. One of:
-            - ``"soft"``: Softmax/Sigmoid with continuous relaxation.
-            - ``"hard"``: Straight-through hard selection.
-            - ``"gumbel_soft"``: Gumbel-Softmax/Sigmoid relaxation.
-            - ``"gumbel_hard"``: Straight-through Gumbel-Softmax/Sigmoid.
-        residual_probability: Scalar controlling the strength of the
-            residual-style initialization when ``weight_init == "residual"``.
-        lut_rank: Arity of each logic gate (number of Boolean inputs per
-            node). Typically 2 for binary trees.
-        arbitrary_basis: If ``True``, allows more general bases for the LUT
-            parametrization (e.g., Walsh), rather than a fixed hard-coded
-            basis.
     """
     def __init__(
         self,
@@ -302,52 +278,6 @@ class LogicConv3d(_LogicConvNd):
     Instead of linear filters, it uses a binary tree of differentiable
     logic operations (LUTs) applied to selected positions in the receptive
     field, per kernel and per spatial location.
-
-    Args:
-        in_dim: Input spatial dimensions ``(height, width, depth)``.
-        parametrization: LUT parametrization method. One of:
-            - ``"raw"``: Direct truth table logits.
-            - ``"walsh"``: Walsh-Hadamard basis coefficients.
-            - ``"light"``: Light LGN parametrization.
-        device: Device on which the module parameters and buffers are
-            allocated (e.g. ``"cpu"`` or ``"cuda"``).
-        grad_factor: Factor applied to the gradient of intermediate logic
-            activations (e.g., via a custom autograd function) to control
-            the strength of gradient flow.
-        channels: Number of input channels.
-        num_kernels: Number of output logic kernels (analogous to output
-            channels in a standard convolution).
-        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses
-            ``2**d`` leaves per receptive field.
-        receptive_field_size: Spatial size (height and width) of the
-            receptive field (assumed square).
-        connections_method: Strategy for wiring the receptive field positions into
-            the logic trees. Supported values:
-            - ``"random"``: Randomly sampled receptive field positions for
-                all leaves across kernels.
-            - ``"random-unique"``: Randomly sampled non-repeating positions
-                within each receptive field (unique connections).
-        weight_init: Weight initialization scheme for the LUT logits at
-            each tree node. Supported values:
-            - ``"residual"``: Residual-style init around a default LUT.
-            - ``"random"``: Unstructured random logits.
-        stride: Convolution stride in both spatial dimensions.
-        padding: Zero-padding applied symmetrically to height and width
-            before selecting receptive fields.
-        temperature: Temperature used by (Gumbel-)Softmax/Sigmoid sampling
-            of LUT weights at each tree node.
-        forward_sampling: Sampling strategy for LUT weights. One of:
-            - ``"soft"``: Softmax/Sigmoid with continuous relaxation.
-            - ``"hard"``: Straight-through hard selection.
-            - ``"gumbel_soft"``: Gumbel-Softmax/Sigmoid relaxation.
-            - ``"gumbel_hard"``: Straight-through Gumbel-Softmax/Sigmoid.
-        residual_probability: Scalar controlling the strength of the
-            residual-style initialization when ``weight_init == "residual"``.
-        lut_rank: Arity of each logic gate (number of Boolean inputs per
-            node). Typically 2 for binary trees.
-        arbitrary_basis: If ``True``, allows more general bases for the LUT
-            parametrization (e.g., Walsh), rather than a fixed hard-coded
-            basis.
     """
     def __init__(
         self,

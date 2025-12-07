@@ -15,38 +15,15 @@ class LogicDense(LogicBase):
     operates on a subset of input features.
 
     Args:
-        in_dim: Number of input features (last dimension of the input tensor).
-        out_dim: Number of output neurons (logical units).
-        parametrization: LUT parametrization method. One of:
-            - ``"raw"``: Direct truth table logits (supports lut_rank=2).
-            - ``"walsh"``: Walsh-Hadamard basis coefficients.
-        device: Device on which parameters and buffers are allocated
-            (e.g. ``"cpu"`` or ``"cuda"``).
-        grad_factor: Scaling factor applied to the gradient of the input using
-            ``GradFactor``. A value of 1.0 leaves gradients unchanged.
-        connections_method: Strategy for wiring input features to each neuron.
-            Supported values are:
-            - ``"random"``: Randomly sampled connections per neuron.
-            - ``"random-unique"``: Random, non-overlapping connections
-                (currently only for ``lut_rank == 2``).
-        weight_init: Initialization scheme for LUT weights. Supported values:
-            - ``"residual"``: Residual-style initialization around a default LUT.
-            - ``"random"``: Fully random logits for each possible LUT.
-        residual_probability: Scalar parameter controlling the strength of the
-            residual initialization when ``weight_init == "residual"``.
-        temperature: Temperature parameter used for (Gumbel-)Softmax/Sigmoid
-            sampling of LUT weights during training.
-        forward_sampling: Strategy for sampling LUT weights in the forward pass.
-            Supported values:
-            - ``"soft"``: Softmax/Sigmoid over weights (continuous relaxation).
-            - ``"hard"``: Straight-through hard selection.
-            - ``"gumbel_soft"``: Gumbel-Softmax/Sigmoid (continuous).
-            - ``"gumbel_hard"``: Straight-through Gumbel-Softmax/Sigmoid.
-        lut_rank: Number of inputs per logic gate (arity of the LUT). The
-            number of possible entries in the LUT is ``2 ** lut_rank``.
-        arbitrary_basis: If True, allows a non-hardcoded basis for LUT
-            parametrization (e.g., an arbitrary Walsh basis). If False,
-            uses a fixed / hardcoded basis.
+        in_dim (int): Number of input features.
+        out_dim (int): Number of neurons (output features).
+        device (str): Device to run the layer on ('cpu' or 'cuda').
+        grad_factor (float): Gradient scaling factor.
+        lut_rank (int): Rank of the LUTs used in the layer.
+        parametrization (str): Type of parametrization to use ('raw', 'walsh', 'light').
+        parametrization_kwargs (dict): Additional keyword arguments for parametrization.
+        connections (str): Type of connections to use ('fixed', 'learnable', etc.).
+        connections_kwargs (dict): Additional keyword arguments for connections.
     """
 
     def __init__(
