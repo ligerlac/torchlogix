@@ -15,7 +15,7 @@ from torchlogix import CompiledLogicNet
 
 @pytest.fixture
 def layer(
-    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections
+    in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections_method
 ):
     """Create instance of LogicCNNLayer."""
     params = {
@@ -25,7 +25,7 @@ def layer(
         "num_kernels": num_kernels,
         "tree_depth": tree_depth,
         "receptive_field_size": receptive_field_size,
-        "connections": connections,
+        "connections_kwargs": {"method": connections_method},
         "stride": stride,
         "padding": padding,
     }
@@ -48,7 +48,7 @@ def layer(
             LogicConv3d(**params)
         pytest.skip("Stride should be smaller than receptive field size")
     kernel_volume = math.prod(receptive_field_size_tuple) * channels
-    if connections == "random-unique":
+    if connections_method == "random-unique":
         if kernel_volume * (kernel_volume - 1) / 2 < 2** tree_depth:
             pytest.skip("Kernel volume should be large enough to support the tree depth")
     return LogicConv3d(**params)
@@ -61,7 +61,7 @@ def layer(
 @pytest.mark.parametrize("receptive_field_size", [2, 3, (3, 2, 2)])
 @pytest.mark.parametrize("stride", [1, 3])
 @pytest.mark.parametrize("padding", [0])
-@pytest.mark.parametrize("connections", ["random", "random-unique"])
+@pytest.mark.parametrize("connections_method", ["random", "random-unique"])
 class TestIndices:
     """Test the shape and structure of layer indices.
 
@@ -88,7 +88,7 @@ class TestIndices:
             int((layer.in_dim[2] + 2 * layer.padding - layer.receptive_field_size[2]) / layer.stride) + 1
         )
         num_positions = h_positions * w_positions * d_positions
-        indices = layer.indices[0][side]
+        indices = layer.connections.indices[0][side]
         assert indices.shape == (
             layer.num_kernels,
             num_positions,
@@ -104,7 +104,7 @@ class TestIndices:
         should have 2**i gates, where i is the level (in reverse order).
         """
         for level in range(1, layer.tree_depth):
-            indices = layer.indices[level][side]
+            indices = layer.connections.indices[level][side]
             expected_gates = 2 ** (layer.tree_depth - level)
             assert indices.shape == (expected_gates,)
 
@@ -115,7 +115,7 @@ class TestIndices:
 
         Width, height and channel indices should be within specified input dimensions.
         """
-        indices = layer.indices[0][side]
+        indices = layer.connections.indices[0][side]
         assert torch.all(indices[..., 0] < layer.in_dim[0])
         assert torch.all(indices[..., 1] < layer.in_dim[1])
         assert torch.all(indices[..., 2] < layer.in_dim[2])
@@ -128,7 +128,7 @@ class TestIndices:
         Each following level should have indices within the range of the previous level.
         """
         for level in range(1, layer.tree_depth):
-            indices = layer.indices[level][side]
+            indices = layer.connections.indices[level][side]
             n_gates_prev = 2 ** (layer.tree_depth - level + 1)
             assert torch.all(indices < n_gates_prev)
 
@@ -138,12 +138,12 @@ class TestIndices:
         For random-unique connections, the first level should have unique pairs of
         indices.
         """
-        if layer.connections != "random-unique":
+        if layer.connections.method != "random-unique":
             pytest.skip("Test only applies to random-unique connections")
 
         # Only test the first level (level 0) which contains the actual position pairs
-        left_indices = layer.indices[0][0]   # Shape: (num_kernels, num_positions, sample_size, 4)
-        right_indices = layer.indices[0][1]  # Shape: (num_kernels, num_positions, sample_size, 4)
+        left_indices = layer.connections.indices[0][0]   # Shape: (num_kernels, num_positions, sample_size, 4)
+        right_indices = layer.connections.indices[0][1]  # Shape: (num_kernels, num_positions, sample_size, 4)
 
         # Test uniqueness for each kernel and each sliding position
         for kernel_idx in range(left_indices.shape[0]):
@@ -186,7 +186,7 @@ def test_and_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        connections="random-unique",
+        connections_kwargs={"method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -197,7 +197,7 @@ def test_and_model():
         [[[0, 0, 1, 0], [0, 1, 1, 0]]],
         ]
     )
-    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
+    layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -250,7 +250,7 @@ def test_binary_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        connections="random-unique",
+        connections_kwargs={"method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -259,7 +259,7 @@ def test_binary_model():
         [[[[0, 0, 0, 0], [1, 0, 0, 0]]],
         [[[0, 1, 0, 0], [1, 1, 0, 0]]]],
     )
-    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
+    layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to BARELY select AND operation
     with torch.no_grad():
@@ -301,7 +301,7 @@ def test_lut_rank_walsh():
         num_kernels=1,
         tree_depth=0,
         receptive_field_size=3,
-        connections="random-unique",
+        connections_kwargs={"method": "random-unique"},
         parametrization="walsh",
         stride=1,
         padding=0,
@@ -321,7 +321,7 @@ def test_conv_model():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=2,
-        connections="random-unique",
+        connections_kwargs={"method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -330,7 +330,7 @@ def test_conv_model():
         [[[[0, 0, 0, 0], [1, 0, 0, 0]]],
         [[[0, 1, 0, 0], [1, 1, 0, 0]]]],
     )
-    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
+    layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -393,7 +393,7 @@ def test_conv_model_rect():
         num_kernels=1,
         tree_depth=1,
         receptive_field_size=(3,2,2),
-        connections="random-unique",
+        connections_kwargs={"method": "random-unique"},
         stride=1,
         padding=0,
     )
@@ -402,7 +402,7 @@ def test_conv_model_rect():
         [[[[0, 0, 0, 0], [1, 0, 0, 0]]],
         [[[0, 1, 0, 0], [1, 1, 0, 0]]]],
     )
-    layer.indices = layer._get_indices_from_kernel_tensor(kernels)
+    layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
     with torch.no_grad():
@@ -535,7 +535,7 @@ def test_compiled_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            connections="random-unique",
+            connections_kwargs={"method": "random-unique"},
             stride=1,
             padding=0,
         ),
@@ -568,7 +568,7 @@ def test_compiled_model_rect():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            connections="random-unique",
+            connections_kwargs={"method": "random-unique"},
             stride=1,
             padding=0,
         ),
@@ -600,7 +600,7 @@ def test_compiled_pooling_model():
             num_kernels=1,
             tree_depth=1,
             receptive_field_size=2,
-            connections="random-unique",
+            connections_kwargs={"method": "random-unique"},
             stride=1,
             padding=0,
         ),
