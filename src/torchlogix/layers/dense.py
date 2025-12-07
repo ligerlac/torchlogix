@@ -1,7 +1,6 @@
 import torch
 
-from torchlogix.layers.connections import setup_connections
-
+from .connections import setup_connections
 from ..functional import (
     GradFactor, get_combination_indices, get_regularization_loss, rescale_weights, take_tuples
     )
@@ -132,13 +131,13 @@ class LogicDense(LogicBase):
 
     def _init_connections(self):
         """Constructs input–neuron connection indices."""
-        self.connections_kwargs["in_dim"] = self.in_dim
-        self.connections_kwargs["out_dim"] = self.out_dim
         self.connections = setup_connections(
             structure="dense",
             connections=self.connections,
             lut_rank=self.lut_rank,
             device=self.device,
+            in_dim=self.in_dim,
+            out_dim=self.out_dim,
             **self.connections_kwargs
         )
         return self.connections
