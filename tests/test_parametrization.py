@@ -40,11 +40,9 @@ def test_raw_lut_rank_fails(lut_rank):
 
 @pytest.mark.parametrize("num_neurons", [42, 69])
 def test_weight_init_raw(num_neurons):
-    param = RawLUTParametrization(lut_rank=2)
+    param = RawLUTParametrization(lut_rank=2, weight_init="random", residual_probability=0.3)
     weights = param.init_weights(
-        weight_init="random",
         num_neurons=num_neurons,
-        residual_probability=0.3,
         device="cpu"
     )
     assert weights.shape == (num_neurons, 16)
@@ -54,11 +52,9 @@ def test_weight_init_raw(num_neurons):
 @pytest.mark.parametrize("num_neurons", [42, 69])
 @pytest.mark.parametrize("param_cls", [WalshLUTParametrization, LightLUTParametrization])
 def test_weight_init_not_raw(lut_rank, num_neurons, param_cls):
-    param = param_cls(lut_rank=lut_rank)
+    param = param_cls(lut_rank=lut_rank, weight_init="random", residual_probability=0.3)
     weights = param.init_weights(
-        weight_init="random",
         num_neurons=num_neurons,
-        residual_probability=0.3,
         device="cpu"
     )
     assert weights.shape == (num_neurons, 2**lut_rank)
@@ -148,11 +144,9 @@ def test_get_luts_light(lut_rank):
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 @pytest.mark.parametrize("num_neurons", [42, 69])
 def test_residual_init_light(lut_rank, num_neurons):
-    param = LightLUTParametrization(lut_rank=lut_rank)
+    param = LightLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_probability=1.0)
     weights = param.init_weights(
-        weight_init="residual",
         num_neurons=num_neurons,
-        residual_probability=1.0,
         device="cpu"
     )
     lut_entries = 2**lut_rank
@@ -163,11 +157,9 @@ def test_residual_init_light(lut_rank, num_neurons):
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 @pytest.mark.parametrize("num_neurons", [42, 69])
 def test_residual_init_walsh(lut_rank, num_neurons):
-    param = WalshLUTParametrization(lut_rank=lut_rank)
+    param = WalshLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_probability=1.0)
     weights = param.init_weights(
-        weight_init="residual",
         num_neurons=num_neurons,
-        residual_probability=1.0,
         device="cpu"
     )
     lut_entries = 2**lut_rank
