@@ -11,9 +11,10 @@ from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
 from torchlogix.functional import take_tuples
 
-llkw = {"connections": "random-unique", "device": "cpu"}
-llkw_walsh = {"connections": "random-unique", "device": "cpu", "parametrization": "walsh"}
-llkw_light = {"connections": "random-unique", "device": "cpu", "parametrization": "light"}
+connections_kwargs = {"method": "random-unique"}
+llkw = {"connections": "fixed", "device": "cpu", "connections_kwargs": connections_kwargs}
+llkw_walsh = {"connections": "fixed", "device": "cpu", "parametrization": "walsh", "connections_kwargs": connections_kwargs}
+llkw_light = {"connections": "fixed", "device": "cpu", "parametrization": "light", "connections_kwargs": connections_kwargs}
 
 
 
@@ -107,9 +108,10 @@ def test_trivial_layer():
     and its weights should have shape (1, 16).
     It should not be possible to have more than one connection (==out_dim).
     """
-    llkw["connections"] = "random-unique"
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
-    assert torch.allclose(layer.indices, torch.tensor(((0,), (1,)))) or torch.allclose(layer.indices, torch.tensor(((1,), (0,))))
+    assert torch.allclose(
+        layer.connections.indices, torch.tensor(((0,), (1,)))
+        ) or torch.allclose(layer.connections.indices, torch.tensor(((1,), (0,))))
     assert layer.weight.shape == (1, 16)
     with pytest.raises(AssertionError):
         LogicDense(in_dim=2, out_dim=2, **llkw)
@@ -117,10 +119,11 @@ def test_trivial_layer():
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_trivial_layer_walsh(lut_rank):
-    layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, parametrization="walsh", connections="random", device="cpu")
-    assert layer.indices.shape == (lut_rank, 1)
+    llkw_walsh["connections_kwargs"]["method"] = "random"
+    layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, **llkw_walsh)
+    assert layer.connections.indices.shape == (lut_rank, 1)
     # the connections must be random permutation of all inputs
-    assert set(layer.indices[:, 0].tolist()) == set(range(lut_rank))
+    assert set(layer.connections.indices[:, 0].tolist()) == set(range(lut_rank))
     assert layer.weight.shape == (1, 2**lut_rank)
 
 
@@ -128,7 +131,7 @@ def test_trivial_layer_walsh(lut_rank):
 def test_in_dim_less_than_lut_rank(lut_rank):
     """Test that an error is raised when in_dim < lut_rank."""
     with pytest.raises(AssertionError):
-        LogicDense(in_dim=2, out_dim=1, lut_rank=lut_rank, parametrization="walsh", connections="random", device="cpu")
+        LogicDense(in_dim=2, out_dim=1, lut_rank=lut_rank, **llkw_walsh)
 
 
 def test_xor_model():
@@ -166,10 +169,12 @@ def test_xor_model_walsh():
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_take_tuples(lut_rank):
+    llkw_walsh["connections_kwargs"]["method"] = "random-unique"
     layer = LogicDense(in_dim=400, out_dim=400, lut_rank=lut_rank, **llkw_walsh)
     # column-wise unique test
-    assert all(len(torch.unique(layer.indices[..., col])) == lut_rank for col in range(layer.indices.shape[1]))
-    unique, counts = torch.unique(layer.indices, return_counts=True)
+    assert all(len(torch.unique(layer.connections.indices[..., col])
+                   ) == lut_rank for col in range(layer.connections.indices.shape[1]))
+    unique, counts = torch.unique(layer.connections.indices, return_counts=True)
     # counts should not deviate by more than 1
     assert counts.float().std().item() < 1
     # cover all inputs
@@ -179,19 +184,23 @@ def test_take_tuples(lut_rank):
 @pytest.mark.parametrize("weight_init", ["random", "residual"])
 def test_compiled_model(weight_init):
     """Test model compilation and inference."""
+    parametrization_kwargs = {"weight_init": weight_init}
+    connections_kwargs = {"method": "random"}
     model = torch.nn.Sequential(
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="random",
-            weight_init=weight_init,
+            connections="fixed",
+            connections_kwargs=connections_kwargs,
+            parametrization_kwargs=parametrization_kwargs,
             device="cpu",
         ),
         LogicDense(
             in_dim=42,
             out_dim=42,
-            connections="random",
-            weight_init=weight_init,
+            connections="fixed",
+            connections_kwargs=connections_kwargs,
+            parametrization_kwargs=parametrization_kwargs,
             device="cpu",
         ),
         GroupSum(1),

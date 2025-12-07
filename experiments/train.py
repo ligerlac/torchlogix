@@ -302,7 +302,7 @@ def main():
         default="DlgnMnistSmall", help="Model architecture. Must match dataset"
     )
     parser.add_argument(
-        "--connections", type=str, choices=["random", "random-unique"],
+        "--connections-method", type=str, choices=["random", "random-unique"],
         default="random", help="Connection strategy"
     )
 

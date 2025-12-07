@@ -21,6 +21,27 @@ from .functional import (
 )
 
 
+def setup_parametrization(parametrization: str, lut_rank: int, **parametrization_kwargs):
+    if parametrization == "raw":
+        parametrization = RawLUTParametrization(
+            lut_rank, **parametrization_kwargs
+        )
+    elif parametrization == "walsh":
+        parametrization = WalshLUTParametrization(
+            lut_rank, **parametrization_kwargs
+        )
+    elif parametrization == "light":
+        parametrization = LightLUTParametrization(
+            lut_rank, **parametrization_kwargs
+        )
+    else:
+        raise ValueError(
+            f"Unsupported parametrization: {parametrization}. "
+            f"Choose 'raw', 'walsh', or 'light'."
+        )
+    return parametrization
+
+
 class LUTParametrization(ABC):
     """Base class for LUT parametrization strategies.
 
@@ -29,8 +50,13 @@ class LUTParametrization(ABC):
     outputs from inputs.
     """
 
-    def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", temperature: float = 1.0):
+    def __init__(self, 
+                 lut_rank: int, 
+                 arbitrary_basis: bool = False,
+                 forward_sampling: str = "soft",
+                 temperature: float = 1.0,
+                 weight_init: str = "residual",
+                 residual_probability: float = 0.9):
         """Initialize parametrization.
 
         Args:
@@ -56,13 +82,13 @@ class LUTParametrization(ABC):
             )
         self.forward_sampling = forward_sampling
         self.temperature = temperature
+        self.weight_init = weight_init
+        self.residual_probability = residual_probability
 
     @abstractmethod
     def init_weights(
         self,
         num_neurons: int,
-        weight_init: str,
-        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         """Initialize weights for this parametrization.
@@ -136,9 +162,18 @@ class RawLUTParametrization(LUTParametrization):
     Boolean functions.
     """
 
-    def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", temperature: float = 1.0):
-        super().__init__(lut_rank, arbitrary_basis, forward_sampling, temperature)
+    def __init__(self, lut_rank: int, 
+                 arbitrary_basis: bool = False,
+                 forward_sampling: str = "soft", 
+                 temperature: float = 1.0,
+                 weight_init: str = "residual",
+                 residual_probability: float = 0.9):
+        super().__init__(lut_rank, 
+                         arbitrary_basis, 
+                         forward_sampling, 
+                         temperature, 
+                         weight_init, 
+                         residual_probability)
         if lut_rank != 2:
             raise ValueError("Raw parametrization currently only supports lut_rank=2")
         # Number of possible Boolean functions (not just truth table entries)
@@ -147,26 +182,24 @@ class RawLUTParametrization(LUTParametrization):
     def init_weights(
         self,
         num_neurons: int,
-        weight_init: str,
-        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         lut_entries = 1 << self.lut_rank
-        if weight_init == "residual":
+        if self.weight_init == "residual":
             # all weights to 0 except for weight number lut_entries - 1, 
             # which is set to residual_probability corresponding to a probability
             # If we want to sample the identity function with probability p, the param is:
             if lut_entries < 5:
-                param = - math.log(1 - residual_probability) + math.log(residual_probability) + math.log((1 << lut_entries) - 1)
+                param = - math.log(1 - self.residual_probability) + math.log(self.residual_probability) + math.log((1 << lut_entries) - 1)
             else:
-                param = - math.log(1 - residual_probability) + math.log(residual_probability) + lut_entries * math.log(2)
+                param = - math.log(1 - self.residual_probability) + math.log(self.residual_probability) + lut_entries * math.log(2)
             # Original DGN paper set this parameter to 5, which leads to a probability of ~0.9082 for lut_rank=2
             weights = torch.zeros((num_neurons, 1 << lut_entries), device=device)
             weights[:, lut_entries - 1] = param
             return weights
-        elif weight_init == "random":
+        elif self.weight_init == "random":
             return torch.randn(num_neurons, 1 << lut_entries, device=device)
-        raise ValueError(f"Unknown weight_init: {weight_init}")
+        raise ValueError(f"Unknown weight_init: {self.weight_init}")
 
     def forward(
         self,
@@ -244,9 +277,18 @@ class WalshLUTParametrization(LUTParametrization):
     and exploits structure in Boolean functions (parity, correlations).
     """
 
-    def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", temperature: float = 1.0):
-        super().__init__(lut_rank, arbitrary_basis, forward_sampling, temperature)
+    def __init__(self, lut_rank: int, 
+                 arbitrary_basis: bool = False,
+                 forward_sampling: str = "soft", 
+                 temperature: float = 1.0,
+                 weight_init: str = "residual",
+                 residual_probability: float = 0.9):
+        super().__init__(lut_rank, 
+                         arbitrary_basis, 
+                         forward_sampling, 
+                         temperature, 
+                         weight_init, 
+                         residual_probability)
         if not arbitrary_basis and lut_rank not in [2, 4, 6]:
             raise ValueError(
                 f"Hard-coded Walsh basis only supports lut_rank in [2, 4, 6], got {lut_rank}"
@@ -255,13 +297,11 @@ class WalshLUTParametrization(LUTParametrization):
     def init_weights(
         self,
         num_neurons: int,
-        weight_init: str,
-        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         lut_entries = 1 << self.lut_rank
-        if weight_init == "residual":
-            n = int((num_neurons * residual_probability)) % (num_neurons + 1)
+        if self.weight_init == "residual":
+            n = int((num_neurons * self.residual_probability)) % (num_neurons + 1)
             weights = torch.empty((num_neurons, lut_entries), device=device)
             # identity representation, corresponds to Boolean function, which maps MSB (last single variable) to itself
             identity = 1 - 2 * torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
@@ -276,10 +316,10 @@ class WalshLUTParametrization(LUTParametrization):
             if n < num_neurons:
                 weights[indices[n:]] = (1.0 / lut_entries) * transformed_samples.to(torch.float)
             return weights
-        elif weight_init == "random":
+        elif self.weight_init == "random":
             return torch.randn(num_neurons, lut_entries, device=device) * 0.1
         else:
-            raise ValueError(weight_init)
+            raise ValueError(self.weight_init)
 
     def forward(
         self,
@@ -360,9 +400,18 @@ class LightLUTParametrization(LUTParametrization):
     basis coefficients, which are mapped to [0,1] with sigmoid.
     """
 
-    def __init__(self, lut_rank: int, arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", temperature: float = 1.0):
-        super().__init__(lut_rank, arbitrary_basis, forward_sampling, temperature)
+    def __init__(self, lut_rank: int, 
+                 arbitrary_basis: bool = False,
+                 forward_sampling: str = "soft", 
+                 temperature: float = 1.0,
+                 weight_init: str = "residual",
+                 residual_probability: float = 0.9):
+        super().__init__(lut_rank, 
+                         arbitrary_basis, 
+                         forward_sampling, 
+                         temperature, 
+                         weight_init, 
+                         residual_probability)
         if not arbitrary_basis and lut_rank not in [2, 4, 6]:
             raise ValueError(
                 f"Hard-coded Light basis only supports lut_rank in [2, 4, 6], got {lut_rank}"
@@ -371,13 +420,11 @@ class LightLUTParametrization(LUTParametrization):
     def init_weights(
         self,
         num_neurons: int,
-        weight_init: str,
-        residual_probability: float,
         device: str
     ) -> torch.Tensor:
         lut_entries = 1 << self.lut_rank
-        if weight_init == "residual":
-            n = int((num_neurons * residual_probability)) % (num_neurons + 1)
+        if self.weight_init == "residual":
+            n = int((num_neurons * self.residual_probability)) % (num_neurons + 1)
             weights = torch.empty((num_neurons, lut_entries), device=device)
             # identity representation, corresponds to Boolean function, which maps MSB (last single variable) to itself
             identity = torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
@@ -389,10 +436,10 @@ class LightLUTParametrization(LUTParametrization):
             if n < num_neurons:
                 weights[indices[n:]] = samples.to(torch.float)
             return weights
-        elif weight_init == "random":
+        elif self.weight_init == "random":
             return torch.rand(num_neurons, lut_entries, device=device)
         else:
-            raise ValueError(weight_init)
+            raise ValueError(self.weight_init)
 
     def forward(
         self,

@@ -129,7 +129,7 @@ class CompiledLogicNet(torch.nn.Module):
                 self.layer_order.append(('pool', len(self.pooling_layers) - 1))
             elif isinstance(layer, LogicDense):
                 self.linear_layers.append(
-                    (layer.indices[0], layer.indices[1], layer.weight.argmax(1))
+                    (layer.connections.indices[0], layer.connections.indices[1], layer.weight.argmax(1))
                 )
                 self.layer_order.append(('linear', len(self.linear_layers) - 1))
             elif isinstance(layer, torch.nn.Flatten):
@@ -170,7 +170,7 @@ class CompiledLogicNet(torch.nn.Module):
             tree_operations.append(level_ops)
 
         return {
-            'indices': layer.indices,
+            'indices': layer.connections.indices,
             'tree_operations': tree_operations,
             'tree_depth': layer.tree_depth,
             'num_kernels': layer.num_kernels,

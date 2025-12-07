@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 import torch
 
-from ..parametrization import RawLUTParametrization, WalshLUTParametrization, LightLUTParametrization
+from ..parametrization import RawLUTParametrization, WalshLUTParametrization, LightLUTParametrization, setup_parametrization
 
 
 class LogicBase(torch.nn.Module, ABC):
@@ -13,42 +13,26 @@ class LogicBase(torch.nn.Module, ABC):
     """
     def __init__(
         self, 
-        parametrization: str = "raw",
         device: str = "cuda",
         grad_factor: float = 1.0,
-        temperature: float = 1.0,
-        forward_sampling: str = "soft",
         lut_rank: int = 2,
-        arbitrary_basis: bool = False,
-        connections: str = "random",
-        weight_init: str = "residual",
-        residual_probability: float = 0.9,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,    
     ):
         super().__init__()
         # Create parametrization component (sampler merged into parametrization)
-        if parametrization == "raw":
-            self.parametrization = RawLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        elif parametrization == "walsh":
-            self.parametrization = WalshLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        elif parametrization == "light":
-            self.parametrization = LightLUTParametrization(
-                lut_rank, arbitrary_basis, forward_sampling, temperature
-            )
-        else:
-            raise ValueError(
-                f"Unsupported parametrization: {parametrization}. "
-                f"Choose 'raw', 'walsh', or 'light'."
-            )
+        self.parametrization = setup_parametrization(
+            parametrization,
+            lut_rank,
+            **(parametrization_kwargs or {})
+        )
         self.device = device
         self.grad_factor = grad_factor
         self.lut_rank = lut_rank
         self.connections = connections
-        self.weight_init = weight_init
-        self.residual_probability = residual_probability
+        self.connections_kwargs = connections_kwargs or {}
 
     @abstractmethod
     def _init_weights(self, **kwargs):

@@ -8,7 +8,7 @@ def get_model(args):
     It can be a difflogic model or a baseline model.
     """
     llkw = {
-        "connections": args.connections,
+        "connections_method": args.connections_method,
         "device": args.device,
         "forward_sampling": args.forward_sampling,
         "temperature": args.temperature,

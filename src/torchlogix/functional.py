@@ -117,49 +117,6 @@ def compute_all_logic_ops_vectorized(a, b):
 ##########################################################################
 
 
-def get_random_unique_connections(in_dim, out_dim, lut_rank=2, device="cuda"):
-    """Return unique input index tuples for each output neuron, fully in torch.
-
-    Each output neuron gets lut_rank distinct input indices.
-    No two neurons share the same tuple (unordered).
-
-    Args:
-        in_dim: Number of input features.
-        out_dim: Number of output neurons.
-        lut_rank: Number of inputs per neuron.
-        device: Target device for returned tensor.
-
-    Returns:
-        Tensor of shape (lut_rank, out_dim), dtype int64.
-    """
-    # Feasibility checks
-    assert out_dim * lut_rank >= in_dim, (
-        f"Need out_dim * lut_rank >= in_dim to cover all inputs "
-        f"({out_dim} * {lut_rank} < {in_dim})."
-    )
-    n_max = math.comb(in_dim, lut_rank)
-    assert out_dim <= n_max, (
-        f"Requested {out_dim} unique tuples, but only {n_max} combinations exist."
-    )
-
-    # Create input range
-    x = torch.arange(in_dim, device=device)
-
-    # Create all lut_rank-combinations in lexicographic order:
-    # shape = (n_max, lut_rank)
-    combos = torch.combinations(x, r=lut_rank, with_replacement=False)
-
-    # Randomly select out_dim unique tuples
-    perm = torch.randperm(combos.size(0), device=device)
-    selected = combos[perm[:out_dim]]  # (out_dim, lut_rank)
-
-    # Return shape (lut_rank, out_dim)
-    return selected.t().contiguous()
-
-
-##########################################################################
-
-
 class GradFactor(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, f):
@@ -668,7 +625,7 @@ def take_tuples(
     tuple_size: int,
     start: int = 0,
     stride_within: int = 1,
-    step_between: int | None = None,
+    step_between: int = 1,
 ):
     """
     Take k-tuples from the last dimension of x with full control over:

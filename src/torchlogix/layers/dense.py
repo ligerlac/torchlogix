@@ -1,5 +1,7 @@
 import torch
 
+from torchlogix.layers.connections import setup_connections
+
 from ..functional import (
     GradFactor, get_combination_indices, get_regularization_loss, rescale_weights, take_tuples
     )
@@ -23,7 +25,7 @@ class LogicDense(LogicBase):
             (e.g. ``"cpu"`` or ``"cuda"``).
         grad_factor: Scaling factor applied to the gradient of the input using
             ``GradFactor``. A value of 1.0 leaves gradients unchanged.
-        connections: Strategy for wiring input features to each neuron.
+        connections_method: Strategy for wiring input features to each neuron.
             Supported values are:
             - ``"random"``: Randomly sampled connections per neuron.
             - ``"random-unique"``: Random, non-overlapping connections
@@ -52,33 +54,27 @@ class LogicDense(LogicBase):
         self,
         in_dim: int,
         out_dim: int,
-        parametrization: str = "raw",
-        device: str = "cpu",
+        device: str = "cuda",
         grad_factor: float = 1.0,
-        connections: str = "random",
-        weight_init: str = "residual",
-        residual_probability: float = 0.9,
-        temperature: float = 1.0,
-        forward_sampling: str = "soft",
         lut_rank: int = 2,
-        arbitrary_basis: bool = False
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
     ):
         super().__init__(
-            parametrization=parametrization, 
-            device=device, 
-            grad_factor=grad_factor, 
-            temperature=temperature,
-            forward_sampling=forward_sampling, 
-            lut_rank=lut_rank, 
-            arbitrary_basis=arbitrary_basis,
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
             connections=connections,
-            weight_init=weight_init,
-            residual_probability=residual_probability,
-            )
+            connections_kwargs=connections_kwargs,
+        )
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.weight = self._init_weights(out_dim=out_dim)
-        self.indices = self._init_connections()
+        self.connections = self._init_connections()
         # Legacy attributes for compatibility
         self.num_neurons = out_dim
         self.num_weights = out_dim
@@ -86,7 +82,7 @@ class LogicDense(LogicBase):
     def _init_weights(self, out_dim):
         # Initialize weights using parametrization
         weights = self.parametrization.init_weights(
-            out_dim, self.weight_init, self.residual_probability, self.device
+            out_dim, self.device
         )
         return torch.nn.Parameter(weights)
 
@@ -114,8 +110,7 @@ class LogicDense(LogicBase):
             x = GradFactor.apply(x, self.grad_factor)
 
         # Extract inputs according to connection pattern
-        indices = self.indices.long()
-        x = x[:, indices]  # Shape: (batch_size, lut_rank, out_dim)
+        x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
 
         # Delegate to parametrization with einsum contraction
         # b=batch, n=neurons, k=num_basis/16
@@ -136,57 +131,17 @@ class LogicDense(LogicBase):
         )
 
     def _init_connections(self):
-        """Constructs input–neuron connection indices.
-
-        Each neuron takes ``lut_rank`` input features. This function returns a
-        tensor encoding which input indices are connected to which neuron.
-
-        Returns:
-            A tensor of shape ``(lut_rank, out_dim)`` with integer indices into
-            the last dimension of the input.
-        """
-        assert self.in_dim >= self.lut_rank, (
-            f"Cannot have lut_rank > in_dim ({self.lut_rank} > {self.in_dim})"
+        """Constructs input–neuron connection indices."""
+        self.connections_kwargs["in_dim"] = self.in_dim
+        self.connections_kwargs["out_dim"] = self.out_dim
+        self.connections = setup_connections(
+            structure="dense",
+            connections=self.connections,
+            lut_rank=self.lut_rank,
+            device=self.device,
+            **self.connections_kwargs
         )
-
-        if self.connections == "random":
-            assert self.out_dim * self.lut_rank >= self.in_dim, "All inputs should be covered"
-            # With this method both inputs can stem from the same input feature
-            c = torch.randperm(self.lut_rank * self.out_dim, device=self.device) % self.in_dim
-            c = c.reshape(self.lut_rank, self.out_dim)
-
-            # Following method ensures that each input to a neuron is unique
-            # But Now we face the issue of potentially not covering all inputs
-            # weights = torch.ones(self.out_dim, self.in_dim, device=self.device)
-            # c = torch.multinomial(weights, self.lut_rank, replacement=False)
-            # c = c.t()
-        elif self.connections == "random-unique":
-            # Feasibility checks
-            assert self.out_dim * self.lut_rank >= self.in_dim, (
-                f"Need out_dim * lut_rank >= in_dim to cover all inputs "
-                f"({self.out_dim} * {self.lut_rank} < {self.in_dim})."
-                )
-            n_max = int(self.in_dim * (self.in_dim // (self.lut_rank - 1) - 1) / 2)
-            assert self.out_dim <= n_max, (
-                "The number of neurons ({}) must not be greater than the number of pair-wise combinations "
-                "of the inputs ({})".format(self.out_dim, n_max)
-            )
-            x = torch.arange(self.in_dim)
-            c = take_tuples(x, tuple_size=self.lut_rank, start=0, step_between=1, stride_within=1)
-            offset = 2
-            while c.shape[-1] < self.out_dim:
-                c_ = take_tuples(x, tuple_size=self.lut_rank, start=0, step_between=1, stride_within=offset)
-                c = torch.cat([c, c_], dim=-1)
-                offset += 1
-            c = c[:, :self.out_dim]
-            perm_out = torch.randperm(self.out_dim)
-            perm_in = torch.randperm(self.in_dim)
-            c = c[:, perm_out]
-            c = perm_in[c]
-        else:
-            raise ValueError(self.connections)
-        c = c.contiguous().to(torch.int64).to(self.device)
-        return c
+        return self.connections
         
     def get_luts_and_ids(self, **kwargs):
         """Computes the most probable LUT and its ID for each neuron.
