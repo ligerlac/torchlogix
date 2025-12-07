@@ -3,13 +3,14 @@
 This module contains tests for the core functionality of the LGN class.
 """
 
+from xml.parsers.expat import model
 import numpy as np
 import pytest
 import torch
 
 from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
-from torchlogix.functional import take_tuples
+from torchlogix.functional import take_tuples, walsh_basis_hard
 
 connections_kwargs = {"method": "random-unique"}
 llkw = {"connections": "fixed", "device": "cpu", "connections_kwargs": connections_kwargs}
@@ -240,3 +241,33 @@ def test_large_compiled_model():
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
     assert np.allclose(preds, preds_compiled)
+
+
+@pytest.mark.parametrize("num_candidates", [-1])
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_learnable_connections(num_candidates, lut_rank):
+    """Test that connections can be trained."""
+    connections_kwargs = {"method": "random-unique", "num_candidates": num_candidates}
+    in_dim = 100
+    out_dim = 100
+    layer = LogicDense(in_dim=in_dim, 
+                       out_dim=out_dim, 
+                       lut_rank=lut_rank, 
+                       connections="learnable", 
+                       connections_kwargs=connections_kwargs, 
+                       device="cpu",
+                       parametrization="walsh")
+    if num_candidates == -1:
+        assert layer.connections.indices.shape[0] == layer.in_dim
+    else:
+        assert layer.connections.indices.shape[0] == num_candidates
+    assert layer.connections.indices.shape[1] == layer.lut_rank
+    assert layer.connections.indices.shape[2] == layer.out_dim
+    assert layer.connections.indices.shape == layer.connections.weights.shape
+    X = torch.rand((2, in_dim), requires_grad=True)
+    layer.training = True
+    y = layer(X)
+    loss = y.sum()
+    loss.backward()
+    assert all(torch.norm(p.grad) > 0 for p in layer.parameters())
+    
