@@ -12,7 +12,7 @@ from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
 from torchlogix.functional import take_tuples, walsh_basis_hard
 
-connections_kwargs = {"method": "random-unique"}
+connections_kwargs = {"init_method": "random-unique"}
 llkw = {"connections": "fixed", "device": "cpu", "connections_kwargs": connections_kwargs}
 llkw_walsh = {"connections": "fixed", "device": "cpu", "parametrization": "walsh", "connections_kwargs": connections_kwargs}
 llkw_light = {"connections": "fixed", "device": "cpu", "parametrization": "light", "connections_kwargs": connections_kwargs}
@@ -120,7 +120,7 @@ def test_trivial_layer():
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_trivial_layer_walsh(lut_rank):
-    llkw_walsh["connections_kwargs"]["method"] = "random"
+    llkw_walsh["connections_kwargs"]["init_method"] = "random"
     layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, **llkw_walsh)
     assert layer.connections.indices.shape == (lut_rank, 1)
     # the connections must be random permutation of all inputs
@@ -170,7 +170,7 @@ def test_xor_model_walsh():
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_take_tuples(lut_rank):
-    llkw_walsh["connections_kwargs"]["method"] = "random-unique"
+    llkw_walsh["connections_kwargs"]["init_method"] = "random-unique"
     layer = LogicDense(in_dim=400, out_dim=400, lut_rank=lut_rank, **llkw_walsh)
     # column-wise unique test
     assert all(len(torch.unique(layer.connections.indices[..., col])
@@ -186,7 +186,7 @@ def test_take_tuples(lut_rank):
 def test_compiled_model(weight_init):
     """Test model compilation and inference."""
     parametrization_kwargs = {"weight_init": weight_init}
-    connections_kwargs = {"method": "random"}
+    connections_kwargs = {"init_method": "random"}
     model = torch.nn.Sequential(
         LogicDense(
             in_dim=42,
@@ -243,11 +243,14 @@ def test_large_compiled_model():
     assert np.allclose(preds, preds_compiled)
 
 
-@pytest.mark.parametrize("num_candidates", [-1])
+@pytest.mark.parametrize("parametrization", ["raw", "walsh", "light"])
+@pytest.mark.parametrize("num_candidates", [-1, 1, 2, 3])
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
-def test_learnable_connections(num_candidates, lut_rank):
+def test_learnable_connections(parametrization, num_candidates, lut_rank):
     """Test that connections can be trained."""
-    connections_kwargs = {"method": "random-unique", "num_candidates": num_candidates}
+    if lut_rank > 2 and parametrization == "raw":
+        pytest.skip("Raw parametrization currently only supports lut_rank=2 ")
+    connections_kwargs = {"init_method": "random-unique", "num_candidates": num_candidates}
     in_dim = 100
     out_dim = 100
     layer = LogicDense(in_dim=in_dim, 
@@ -256,7 +259,7 @@ def test_learnable_connections(num_candidates, lut_rank):
                        connections="learnable", 
                        connections_kwargs=connections_kwargs, 
                        device="cpu",
-                       parametrization="walsh")
+                       parametrization=parametrization)
     if num_candidates == -1:
         assert layer.connections.indices.shape[0] == layer.in_dim
     else:
@@ -264,7 +267,8 @@ def test_learnable_connections(num_candidates, lut_rank):
     assert layer.connections.indices.shape[1] == layer.lut_rank
     assert layer.connections.indices.shape[2] == layer.out_dim
     assert layer.connections.indices.shape == layer.connections.weights.shape
-    X = torch.rand((2, in_dim), requires_grad=True)
+    print(layer.connections.weights.shape)
+    X = torch.rand((5, in_dim), requires_grad=True)
     layer.training = True
     y = layer(X)
     loss = y.sum()

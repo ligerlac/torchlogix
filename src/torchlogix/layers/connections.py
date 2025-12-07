@@ -49,11 +49,11 @@ class Connections(torch.nn.Module, ABC):
             self,
             lut_rank=2,
             device=None,
-            method="random"):
+            init_method="random"):
         super().__init__()
         self.lut_rank = lut_rank
         self.device = device
-        self.method = method
+        self.init_method = init_method
 
     @abstractmethod
     def forward(self, x):
@@ -71,12 +71,12 @@ class FixedDenseConnections(Connections):
             out_dim, 
             lut_rank=2, 
             device=None,
-            method="random",
+            init_method="random",
             ):
         super().__init__(
             lut_rank=lut_rank,
             device=device,
-            method=method
+            init_method=init_method
         )
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -102,19 +102,19 @@ class FixedDenseConnections(Connections):
                 f"({self.out_dim} * {self.lut_rank} < {self.in_dim})."
                 )
 
-        if self.method == "random":
+        if self.init_method == "random":
             # With this method both inputs can stem from the same input feature
             c = torch.randperm(self.lut_rank * self.out_dim, 
                                device=self.device) % self.in_dim
             c = c.reshape(self.lut_rank, self.out_dim)
-        elif self.method == "random-unique":
+        elif self.init_method == "random-unique":
             c = get_random_unique_connections(
                 in_dim=self.in_dim,
                 out_dim=self.out_dim,
                 n=self.lut_rank
             )
         else:
-            raise ValueError(self.method)
+            raise ValueError(self.init_method)
         c = c.contiguous().to(torch.int64).to(self.device)
         return c
     
@@ -131,17 +131,23 @@ class LearnableConnectionFunction(torch.autograd.Function):
         else:
             g = torch.zeros_like(weights)
         connections = (weights + g).argmax(dim=0)
-        l = torch.arange(weights.shape[1], device=x.device).unsqueeze(1)       # (L, 1)
-        o = torch.arange(weights.shape[2], device=x.device).unsqueeze(0)       # (1, O)
+        l = torch.arange(weights.shape[1], device=x.device).unsqueeze(1)
+        o = torch.arange(weights.shape[2], device=x.device).unsqueeze(0)
         output = x[:, indices[connections, l, o]]
-        ctx.save_for_backward(x, weights, tau, g)
+        ctx.save_for_backward(x, weights, tau, g, indices)
         return output
 
     @staticmethod
     def backward(ctx, output_grad):
-        x, weights, tau, g = ctx.saved_tensors
-        weights_grad = torch.einsum("bi,blo->ilo", 2*x-1, output_grad)
-        input_grad = torch.einsum("blo,clo->bc", output_grad, softmax((weights + g)/tau, dim=0))
+        x, weights, tau, g, indices = ctx.saved_tensors
+        # compute gradient w.r.t. to learnable weights
+        weights_grad = torch.einsum("bclo,blo->clo", 2*x[:,indices]-1, output_grad)
+        # compute gradient w.r.t. to input with sparse scatter_add method
+        input_grad = torch.zeros_like(x)
+        temp = softmax((weights + g)/tau, dim=0).unsqueeze(0) * output_grad.unsqueeze(1)
+        input_grad.scatter_add_(dim=1, 
+                                index=indices.expand(x.shape[0], -1, -1, -1).reshape(x.shape[0], -1),
+                                src=temp.reshape(x.shape[0], -1))
         return input_grad, weights_grad, None, None, None
     
 
@@ -155,12 +161,12 @@ class LearnableDenseConnections(Connections):
             num_candidates=-1, 
             gumbel=False,
             device=None,
-            method="random"
+            init_method="random"
             ):
         super().__init__(
             lut_rank=lut_rank,
             device=device,
-            method=method
+            init_method=init_method
         )
         self.temperature = temperature
         self.num_candidates = num_candidates
@@ -205,12 +211,12 @@ class LearnableDenseConnections(Connections):
                 f"({self.out_dim} * {self.lut_rank} < {self.in_dim})."
                 )
 
-        if self.method == "random":
+        if self.init_method == "random":
             # With this method both inputs can stem from the same input feature
             c = torch.randperm(self.lut_rank * self.out_dim * self.num_candidates, 
                                device=self.device) % self.in_dim
             c = c.reshape(self.num_candidates, self.lut_rank, self.out_dim)
-        elif self.method == "random-unique":
+        elif self.init_method == "random-unique":
             c = get_random_unique_connections(
                 in_dim=self.in_dim,
                 out_dim=self.out_dim,
@@ -258,12 +264,12 @@ class FixedConvConnections(Connections):
             conv_dimension: int = 2,
             lut_rank=2, 
             device=None,
-            method="random",
+            init_method="random",
             ):
         super().__init__(
             lut_rank=lut_rank,
             device=device,
-            method=method
+            init_method=init_method
         )
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
@@ -288,12 +294,12 @@ class FixedConvConnections(Connections):
 
     def _init_connections(self):
         # Setup connections
-        if self.method == "random":
+        if self.init_method == "random":
             kernels = self._get_random_receptive_field_tensor()
-        elif self.method == "random-unique":
+        elif self.init_method == "random-unique":
             kernels = self._get_random_unique_receptive_field_tensor()
         else:
-            raise ValueError(f"Unknown connections type: {self.method}")
+            raise ValueError(f"Unknown connections type: {self.init_method}")
         # Build tree indices
         return self._get_indices_from_kernel_tensor(kernels)
     
