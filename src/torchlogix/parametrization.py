@@ -22,24 +22,18 @@ from .functional import (
 
 
 def setup_parametrization(parametrization: str, lut_rank: int, **parametrization_kwargs):
-    if parametrization == "raw":
-        parametrization = RawLUTParametrization(
-            lut_rank, **parametrization_kwargs
-        )
-    elif parametrization == "walsh":
-        parametrization = WalshLUTParametrization(
-            lut_rank, **parametrization_kwargs
-        )
-    elif parametrization == "light":
-        parametrization = LightLUTParametrization(
-            lut_rank, **parametrization_kwargs
-        )
-    else:
+    param_dict = {
+        "raw": RawLUTParametrization,
+        "walsh": WalshLUTParametrization,
+        "light": LightLUTParametrization
+    }
+    if parametrization not in param_dict:
         raise ValueError(
             f"Unsupported parametrization: {parametrization}. "
-            f"Choose 'raw', 'walsh', or 'light'."
+            f"Choose from {list(param_dict.keys())}."
         )
-    return parametrization
+    param_cls = param_dict[parametrization]
+    return param_cls(lut_rank, **parametrization_kwargs)
 
 
 class LUTParametrization(ABC):
