@@ -2,7 +2,7 @@ import torch
 
 from .connections import setup_connections
 from ..functional import (
-    GradFactor, get_combination_indices, get_regularization_loss, rescale_weights, take_tuples
+    GradFactor, get_regularization_loss, rescale_weights
     )
 from .base import LogicBase
 
