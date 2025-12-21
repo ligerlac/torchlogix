@@ -111,19 +111,11 @@ class CompiledLogicNet(torch.nn.Module):
                     raise ValueError("LearnableThermometerThresholding layer must appear first in layer order.")
                 thresholding_info = self._extract_thresholding_layer_info(layer)
                 self.thresholding_layer = thresholding_info  # there will only be one thresholding layer
-            elif isinstance(layer, LogicConv2d):
+            elif isinstance(layer, (LogicConv2d, LogicConv3d)):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
                 self.layer_order.append(('conv', len(self.conv_layers) - 1))
-            elif isinstance(layer, LogicConv3d):
-                conv_info = self._extract_conv_layer_info(layer)
-                self.conv_layers.append(conv_info)
-                self.layer_order.append(('conv', len(self.conv_layers) - 1))
-            elif isinstance(layer, OrPooling2d):
-                pool_info = self._extract_pooling_layer_info(layer)
-                self.pooling_layers.append(pool_info)
-                self.layer_order.append(('pool', len(self.pooling_layers) - 1))
-            elif isinstance(layer, OrPooling3d):
+            elif isinstance(layer, (OrPooling2d, OrPooling3d)):
                 pool_info = self._extract_pooling_layer_info(layer)
                 self.pooling_layers.append(pool_info)
                 self.layer_order.append(('pool', len(self.pooling_layers) - 1))
