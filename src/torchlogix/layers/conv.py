@@ -6,9 +6,9 @@ import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from .connections import setup_connections
+from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights, get_combination_indices
+    get_regularization_loss, rescale_weights
     )
 from .base import LogicBase
 

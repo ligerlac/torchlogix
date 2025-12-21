@@ -2,11 +2,10 @@ from typing import Union
 from abc import ABC, abstractmethod
 
 import torch
-from torch.nn.functional import gumbel_softmax
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from ..functional import softmax, take_tuples, get_combination_indices
+from .functional import softmax, take_tuples, get_combination_indices
 
 
 def setup_connections(
@@ -141,7 +140,7 @@ class LearnableConnectionFunction(torch.autograd.Function):
     """Autograd function for learnable connections.
     Implements the forward and backward pass for learnable connections
     using Gumbel-Softmax for differentiable sampling.
-"""
+    """
     @staticmethod
     def forward(ctx, x, weights, tau, gumbel, indices):
         if gumbel:

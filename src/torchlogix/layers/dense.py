@@ -1,6 +1,6 @@
 import torch
 
-from .connections import setup_connections
+from ..connections import setup_connections
 from ..functional import (
     GradFactor, get_regularization_loss, rescale_weights
     )
