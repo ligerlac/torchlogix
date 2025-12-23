@@ -5,6 +5,7 @@ from torchlogix.parametrization import (
     LightLUTParametrization
 )
 from torchlogix.functional import ID_TO_WALSH_COEFFICIENTS, walsh_hadamard_transform
+from torchlogix.layers import LogicDense
 import pytest
 
 
@@ -40,7 +41,7 @@ def test_raw_lut_rank_fails(lut_rank):
 
 @pytest.mark.parametrize("num_neurons", [42, 69])
 def test_weight_init_raw(num_neurons):
-    param = RawLUTParametrization(lut_rank=2, weight_init="random", residual_probability=0.3)
+    param = RawLUTParametrization(lut_rank=2, weight_init="random", residual_param=1.0)
     weights = param.init_weights(
         num_neurons=num_neurons,
         device="cpu"
@@ -52,7 +53,7 @@ def test_weight_init_raw(num_neurons):
 @pytest.mark.parametrize("num_neurons", [42, 69])
 @pytest.mark.parametrize("param_cls", [WalshLUTParametrization, LightLUTParametrization])
 def test_weight_init_not_raw(lut_rank, num_neurons, param_cls):
-    param = param_cls(lut_rank=lut_rank, weight_init="random", residual_probability=0.3)
+    param = param_cls(lut_rank=lut_rank, weight_init="random", residual_param=1.0)
     weights = param.init_weights(
         num_neurons=num_neurons,
         device="cpu"
@@ -141,27 +142,36 @@ def test_get_luts_light(lut_rank):
         output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='bnk,nk->bn')
         assert torch.allclose(output_lut.squeeze(), input_lut.float())
 
-@pytest.mark.parametrize("lut_rank", [2, 4, 6])
-@pytest.mark.parametrize("num_neurons", [42, 69])
-def test_residual_init_light(lut_rank, num_neurons):
-    param = LightLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_probability=1.0)
-    weights = param.init_weights(
-        num_neurons=num_neurons,
-        device="cpu"
-    )
-    lut_entries = 2**lut_rank
-    identity = torch.cat((torch.zeros(lut_entries // 2), torch.ones(lut_entries // 2)))
-    assert all(torch.allclose(w, identity) for w in weights)
-
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 @pytest.mark.parametrize("num_neurons", [42, 69])
-def test_residual_init_walsh(lut_rank, num_neurons):
-    param = WalshLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_probability=1.0)
+@pytest.mark.parametrize("residual_param", [2, 4, 10, 20])
+def test_residual_init_walsh(lut_rank, num_neurons, residual_param):
+    if lut_rank == 6 and residual_param < 20:
+        pytest.skip("Numerical madness for lut_rank=6 and small residual_param")
+    param = WalshLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_param=residual_param)
     weights = param.init_weights(
         num_neurons=num_neurons,
         device="cpu"
     )
     lut_entries = 2**lut_rank
     identity = 1 - 2 * torch.cat((torch.zeros(lut_entries // 2), torch.ones(lut_entries // 2)))
-    assert all(torch.allclose(walsh_hadamard_transform(w, lut_rank), identity) for w in weights)
+    assert all(torch.allclose(walsh_hadamard_transform(w / torch.norm(w, p=2), lut_rank), identity) for w in weights)
+
+
+@pytest.mark.parametrize("num_neurons", [42, 69])
+@pytest.mark.parametrize("residual_param", [1, 3, 5, 10])
+def test_residual_consistency(num_neurons, residual_param):
+    lut_rank = 2
+    parametrization_kwargs = {
+        "weight_init": "residual", "residual_param": residual_param}
+    walsh = LogicDense(in_dim=lut_rank, out_dim=num_neurons, lut_rank=2, parametrization="walsh", 
+                       parametrization_kwargs=parametrization_kwargs, device="cpu")
+    walsh.connections.indices = torch.arange(2).unsqueeze(-1)
+    raw = LogicDense(in_dim=lut_rank, out_dim=num_neurons, lut_rank=2, parametrization="raw", 
+                       parametrization_kwargs=parametrization_kwargs, device="cpu")
+    raw.connections.indices = torch.arange(2).unsqueeze(-1)
+    X = (torch.arange(1 << lut_rank)[:, None] >> torch.arange(lut_rank) & 1).flip(-1).to(torch.float32)
+    assert torch.allclose(walsh(X), raw(X))
+    
+

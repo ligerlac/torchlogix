@@ -245,7 +245,10 @@ def kron_pairwise_basis(x):
 
 
 def walsh_basis_hard(x, lut_rank):
-    if lut_rank == 2:
+    if lut_rank == 1:
+        A = x[:, 0]
+        basis = walsh_basis_1(A)
+    elif lut_rank == 2:
         A, B = x[:, 0], x[:, 1]
         basis = walsh_basis_2(A, B)
     elif lut_rank == 4:
@@ -261,6 +264,15 @@ def walsh_basis_hard(x, lut_rank):
         basis = walsh_basis_6(A, B, C, D, E, F)
     else:
         raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
+    return basis
+
+
+def walsh_basis_1(A) -> torch.Tensor:
+    #A = 1- 2 * a
+    basis = torch.stack([
+        torch.ones_like(A),
+        A,
+    ], dim=-1)
     return basis
 
 

@@ -394,9 +394,9 @@ def main():
     )
 
     parser.add_argument(
-        "--residual-probability", type=float, default=0.9,
+        "--residual-param", type=float, default=5.0,
         help="Parameter for residual weight initialization. " \
-        "Corresponds to percentage of LUTs initialized to identity function times."
+        "Corresponds to percentage of LUTs initialized to identity gate function."
     )
 
     parser.add_argument(

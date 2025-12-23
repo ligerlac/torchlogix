@@ -18,7 +18,7 @@ def get_model(args):
             "temperature": args.parametrization_temperature,
             "forward_sampling": args.forward_sampling,
             "weight_init": args.init,
-            "residual_probability": args.residual_probability,
+            "residual_param": args.residual_param,
             "arbitrary_basis": args.arbitrary_basis
             },
         "device": args.device,
