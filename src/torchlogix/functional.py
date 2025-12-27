@@ -210,9 +210,20 @@ def walsh_hadamard_transform(x: torch.Tensor, n: int, dtype=torch.float32,
     if fast:
         return fwht(x, n)
     else:
-        H = hadamard_matrix(1 << n, dtype=dtype, device=device)
-        return x @ H
-    
+       # Always use float32 for matrix multiplication
+        # (CUDA doesn't support int32 matmul)
+        # We'll convert the result back to the requested dtype if needed
+        # Use device from input tensor if device parameter is None
+        if device is None:
+            device = x.device
+        H = hadamard_matrix(1 << n, dtype=torch.float32, device=device)
+        x_float = x.to(dtype=torch.float32)
+        result = x_float @ H
+        # Convert result back to requested dtype if different from float32
+        if dtype != torch.float32:
+            result = result.to(dtype=dtype)
+        return result
+        
 ##########################################################################
     
 # Needs to be CUDAized
