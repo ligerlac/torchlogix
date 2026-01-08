@@ -50,7 +50,9 @@ class Connections(torch.nn.Module, ABC):
             self,
             lut_rank=2,
             device=None,
-            init_method="random"):
+            init_method="random",
+            **kwargs
+        ):
         super().__init__()
         self.lut_rank = lut_rank
         self.device = device
@@ -62,6 +64,9 @@ class Connections(torch.nn.Module, ABC):
 
     @abstractmethod
     def _init_connections(self):
+        pass
+
+    def update_temperature(self, temperature: float):
         pass
 
 
@@ -86,11 +91,13 @@ class FixedDenseConnections(Connections):
             lut_rank=2, 
             device=None,
             init_method="random",
-            ):
+            **kwargs
+        ):
         super().__init__(
             lut_rank=lut_rank,
             device=device,
-            init_method=init_method
+            init_method=init_method,
+            **kwargs
         )
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -196,12 +203,14 @@ class LearnableDenseConnections(Connections):
             num_candidates=-1, 
             gumbel=False,
             device=None,
-            init_method="random"
-            ):
+            init_method="random",
+            **kwargs
+        ):
         super().__init__(
             lut_rank=lut_rank,
             device=device,
-            init_method=init_method
+            init_method=init_method,
+            **kwargs
         )
         self.temperature = temperature
         self.num_candidates = num_candidates
@@ -221,6 +230,9 @@ class LearnableDenseConnections(Connections):
             self.indices = self._init_connections()
         self.weights = torch.nn.Parameter(torch.rand(
             num_candidates, lut_rank, out_dim, dtype=torch.float32), requires_grad=True)
+        
+    def update_temperature(self, temperature: float):
+        self.temperature = temperature
         
     def forward(self, x):
         return LearnableConnectionFunction.apply(x, self.weights, torch.tensor(self.temperature), 
@@ -303,11 +315,13 @@ class FixedConvConnections(Connections):
             lut_rank=2, 
             device=None,
             init_method="random",
-            ):
+            **kwargs
+        ):
         super().__init__(
             lut_rank=lut_rank,
             device=device,
-            init_method=init_method
+            init_method=init_method,
+            **kwargs
         )
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth

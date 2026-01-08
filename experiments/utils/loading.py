@@ -5,6 +5,8 @@ import torchvision
 from torch_geometric.datasets import NELL, Planetoid
 from torch_geometric.transforms import BaseTransform
 
+from utils.jsc_dataset import JSC
+
 from . import mnist_dataset
 from . import uci_datasets
 
@@ -123,33 +125,13 @@ def load_dataset(args):
             pin_memory=True,
             drop_last=True,
         )
-    elif "cifar-10" in args.dataset:
-        transform = {
-            "cifar-10": lambda x: x,
-            "cifar-10-2-thresholds": lambda x: torch.cat(
-                [(x > (i + 1) / 3).float() for i in range(2)], dim=0
-            ),
-            "cifar-10-3-thresholds": lambda x: torch.cat(
-                [(x > (i + 1) / 4).float() for i in range(3)], dim=0
-            ),
-            "cifar-10-5-thresholds": lambda x: torch.cat(
-                [(x > (i + 1) / 6).float() for i in range(5)], dim=0
-            ),
-            "cifar-10-31-thresholds": lambda x: torch.cat(
-                [(x > (i + 1) / 32).float() for i in range(31)], dim=0
-            ),
-        }[args.dataset]
-        transforms = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Lambda(transform),
-            ]
-        )
+    elif args.dataset == "cifar-10":
+        trafo = torchvision.transforms.ToTensor()
         train_set = torchvision.datasets.CIFAR10(
-            "./data-cifar", train=True, download=True, transform=transforms
+            "./data-cifar", train=True, download=True, transform=trafo
         )
         test_set = torchvision.datasets.CIFAR10(
-            "./data-cifar", train=False, transform=transforms
+            "./data-cifar", train=False, transform=trafo
         )
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
         valid_set_size = len(train_set) - train_set_size
@@ -179,6 +161,79 @@ def load_dataset(args):
             pin_memory=True,
             drop_last=True,
         )
+    elif "fashion-mnist" in args.dataset:
+        trafo = torchvision.transforms.ToTensor()
+        train_set = torchvision.datasets.FashionMNIST(
+            "./data-fashion-mnist", train=True, download=True, transform=trafo
+        )
+        test_set = torchvision.datasets.FashionMNIST(
+            "./data-fashion-mnist", train=False, transform=trafo
+        )
+        train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
+        valid_set_size = len(train_set) - train_set_size
+        train_set, validation_set = torch.utils.data.random_split(
+            train_set, [train_set_size, valid_set_size]
+        )
+
+        train_loader = torch.utils.data.DataLoader(
+            train_set,
+            batch_size=args.batch_size,
+            shuffle=True,
+            pin_memory=True,
+            drop_last=True,
+            num_workers=4,
+        )
+        validation_loader = torch.utils.data.DataLoader(
+            validation_set,
+            batch_size=args.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=True,
+        )
+        test_loader = torch.utils.data.DataLoader(
+            test_set,
+            batch_size=args.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=True,
+        )
+
+    elif "jsc" in args.dataset:
+        train_set = JSC(
+            root="./data-jsc", train=True, download=True, split_seed=42, train_fraction=0.8
+        )
+        test_set = JSC(
+            root="./data-jsc", train=False, split_seed=42, train_fraction=0.8
+        )
+        train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
+        valid_set_size = len(train_set) - train_set_size
+        train_set, validation_set = torch.utils.data.random_split(
+            train_set, [train_set_size, valid_set_size]
+        )
+
+        train_loader = torch.utils.data.DataLoader(
+            train_set,
+            batch_size=args.batch_size,
+            shuffle=True,
+            pin_memory=True,
+            drop_last=True,
+            num_workers=4,
+        )
+        validation_loader = torch.utils.data.DataLoader(
+            validation_set,
+            batch_size=args.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=True,
+        )
+        test_loader = torch.utils.data.DataLoader(
+            test_set,
+            batch_size=args.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=True,
+        )
+
     elif args.dataset in ["cora", "citeseer", "pubmed"]:
         print("ARGS.DATASET", args.dataset)
         dataset = Planetoid(
@@ -189,6 +244,7 @@ def load_dataset(args):
         )
         data = dataset[0]
         return data, None, None
+    
     elif "nell" in args.dataset:
         dataset = NELL(root="data/nell")
         data = dataset[0]  # Get the first (and only) graph object
@@ -222,10 +278,6 @@ def input_dim_of_dataset(dataset):
         "mnist20x20": 400,
         "cicada": 720,
         "cifar-10": 3 * 32 * 32,
-        "cifar-10-2-thresholds": 3 * 32 * 32 * 2,
-        "cifar-10-3-thresholds": 3 * 32 * 32 * 3,
-        "cifar-10-5-thresholds": 3 * 32 * 32 * 5,
-        "cifar-10-31-thresholds": 3 * 32 * 32 * 31,
         "cora": 1433,
         "pubmed": 500,
         "citeseer": 3703,
@@ -244,10 +296,6 @@ def num_classes_of_dataset(dataset):
         "mnist20x20": 10,
         "cicada": 1,
         "cifar-10": 10,
-        "cifar-10-2-thresholds": 10,
-        "cifar-10-3-thresholds": 10,
-        "cifar-10-5-thresholds": 10,
-        "cifar-10-31-thresholds": 10,
         "cora": 7,
         "pubmed": 3,
         "citeseer": 6,

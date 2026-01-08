@@ -20,3 +20,8 @@ docs/.doctrees/
 # data in experiments folder
 experiments/data-mnist/
 experiments/data-fmnist/
+experiments/data-fashion-mnist/
+experiments/data-jsc/
+
+# env files with concrete paths
+experiments/env.sh

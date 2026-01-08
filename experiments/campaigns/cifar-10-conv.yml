@@ -1,0 +1,146 @@
+params:
+
+  # ─────────────────────────────────────────────
+  # Residual / parametrization hyperparameters
+  # ─────────────────────────────────────────────
+
+  residual_param:
+    type: float
+    low: 2.0
+    high: 20.0
+    log: true
+
+  parametrization_temperature:
+    type: float
+    low: 0.1
+    high: 10.0
+    log: true
+
+  parametrization_temperature_decay:
+    type: categorical
+    choices: [null, "linear", "exponential"]
+
+  parametrization_temperature_end:
+    type: float
+    low: 1e-3
+    high_ref: parametrization_temperature
+    log: true
+    when:
+      parametrization_temperature_decay: ["linear", "exponential"]
+
+  # ─────────────────────────────────────────────
+  # Training hyperparameters
+  # ─────────────────────────────────────────────
+
+  learning_rate:
+    type: float
+    low: 1e-3
+    high: 0.1
+    log: true
+
+  lr_schedule:
+    type: categorical
+    choices: [null, "CosineAnnealingWarmRestarts", "ReduceLROnPlateau"]
+
+  lr-patience:
+    type: int
+    low: 2
+    high: 10
+    when:
+      lr_schedule: ["CosineAnnealingWarmRestarts", "ReduceLROnPlateau"]
+
+  lr-reduction-factor:
+    type: float
+    low: 0.1
+    high: 1.0
+    log: true
+    when:
+      lr_schedule: ["ReduceLROnPlateau"]
+
+
+campaigns:
+  # - name: param_raw-rank_2-sampling_soft # ~100 MB per event
+  #   architecture: ClgnCifar10Small
+  #   parametrization: raw
+  #   lut_rank: 2
+  #   batch_size: 128
+  #   forward_sampling: soft
+
+  # - name: param_raw-rank_2-res
+  #   architecture: ClgnCifar10SmallRes
+  #   parametrization: raw
+  #   lut_rank: 2
+  #   batch_size: 128
+
+  # - name: 12-28-walsh-rank_2 # ~30 MB per event
+  #   architecture: ClgnCifar10Small
+  #   parametrization: walsh
+  #   lut_rank: 2
+  #   batch_size: 128
+  
+  - name: raw-rank_2-soft # ~30 MB per event
+    architecture: ClgnCifar10Small
+    parametrization: raw
+    lut_rank: 2
+    batch_size: 128
+    forward_sampling: soft
+
+  - name: walsh-rank_2-soft # ~30 MB per event
+    architecture: ClgnCifar10Small
+    parametrization: walsh
+    lut_rank: 2
+    batch_size: 128
+    forward_sampling: soft
+
+  - name: walsh-rank_2-hard # ~30 MB per event
+    architecture: ClgnCifar10Small
+    parametrization: walsh
+    lut_rank: 2
+    batch_size: 128
+    forward_sampling: hard
+
+  - name: walsh-rank_2-gumbel_soft # ~30 MB per event
+    architecture: ClgnCifar10Small
+    parametrization: walsh
+    lut_rank: 2
+    batch_size: 128
+    forward_sampling: gumbel_soft
+
+  - name: walsh-rank_2-gumbel_hard # ~30 MB per event
+    architecture: ClgnCifar10Small
+    parametrization: walsh
+    lut_rank: 2
+    batch_size: 128
+    forward_sampling: gumbel_hard
+
+  # - name: 12-28-walsh-rank_2-res
+  #   architecture: ClgnCifar10SmallRes
+  #   parametrization: walsh
+  #   lut_rank: 2
+  #   batch_size: 128
+
+  # - name: 12-28-walsh-rank_4 # ~1 GB per event
+  #   architecture: ClgnCifar10Small
+  #   parametrization: walsh
+  #   lut_rank: 4
+  #   batch_size: 16
+
+  # - name: 12-28-walsh-rank_4-res
+  #   architecture: ClgnCifar10SmallRes
+  #   parametrization: walsh
+  #   lut_rank: 4
+  #   batch_size: 16
+
+
+defaults:
+  dataset: cifar-10-2-thresholds
+  num_iterations: 10000
+  # num_iterations: 6
+  eval_freq: 100
+  # eval_freq: 5
+  connections: fixed
+  weight_init: residual
+  half_precision: true
+  device: cuda
+  seed: null
+  output: null

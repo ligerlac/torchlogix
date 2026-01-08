@@ -15,7 +15,6 @@ from torchlogix import PackBitsTensor
 from torchlogix.models.baseline_nn import FullyConnectedNN
 from torchlogix.models.conv import CNN
 from torchlogix.models.nn import RandomlyConnectedNN
-from torchlogix.layers import LogicConv, LogicDense
 
 from .shared_config import IMPL_TO_DEVICE, BITS_TO_TORCH_FLOATING_POINT_TYPE
 
@@ -139,23 +138,22 @@ def load_model_from_checkpoint(model_path: Path, model_class, **model_kwargs):
     return model
 
 
-def train(model, x, y, loss_fn, optimizer, weight_rescale, regularizer, regularizer_weight):
+def train(model, x, y, loss_fn, optimizer, regularization_method, regularization_weight):
     model.train()
     x = model(x)
     loss = loss_fn(x, y)
-    reg_loss = 0.0
-    for layer in model:
-        reg_loss += layer.get_regularization_loss(regularizer)
-    loss += regularizer_weight * reg_loss
+    # Regularization
+    if regularization_weight > 0.0:
+        reg_loss = 0.0
+        for layer in model:
+            if hasattr(layer, 'get_regularization_loss'):
+                reg_loss += layer.get_regularization_loss(regularization_method)
+        loss += regularization_weight * reg_loss
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-
-    if weight_rescale is not None:
-        for layer in model:
-            layer.rescale_weights(weight_rescale)
-
-    return loss.item()
+    # return loss.item()
+    return loss
 
 
 def evaluate_model(model, loader, eval_functions, mode="eval", device="cuda"):
@@ -189,3 +187,9 @@ def create_eval_functions(loss_fn):
         "loss": loss_fn,
         "acc": lambda preds, y: (preds.argmax(-1) == y).to(torch.float32).mean(),
     }
+
+
+def print_memory_usage(stage_name):
+    allocated = torch.cuda.memory_allocated(0) / 1e9
+    reserved = torch.cuda.memory_reserved(0) / 1e9
+    print(f"{stage_name:30s} | Allocated: {allocated:6.2f} GB | Reserved: {reserved:6.2f} GB")    

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from ..layers import OrPooling2d, GroupSum, LogicConv2d, LogicDense
+from ..layers.binarization import setup_binarization
 
 
 class CNN(torch.nn.Module):
@@ -119,16 +120,20 @@ class ResidualLogicBlock(nn.Module):
         identity = self.shortcut(x)
         return out + identity
 
+
 class ClgnMnist(torch.nn.Sequential):
     """
     Model as described in the paper 'Convolutional Logic Gate Networks'
     for the MNIST dataset.
     """
 
-    def __init__(self, k_num: int=16, parametrization="raw", **llkw):
-        super(ClgnMnist, self).__init__()
+    def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, 
+                 k_num: int=16, parametrization="raw", tau=1.0, **llkw):
+        
+        binarization = "dummy"
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
         self.k_num = k_num
-        layers = []
+        layers = [binarization_module]
         layers.append(
             LogicConv2d(
                 in_dim=28,
@@ -177,25 +182,29 @@ class ClgnMnist(torch.nn.Sequential):
         layers.append(LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, parametrization=parametrization, **llkw))
         layers.append(LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, parametrization=parametrization, **llkw))
 
-        super(ClgnMnist, self).__init__(*layers, GroupSum(k=10, tau=1.0))
+        super(ClgnMnist, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
 class ClgnMnistTiny(ClgnMnist):
     def __init__(self, **llkw):
-        super(ClgnMnistTiny, self).__init__(k_num=4, **llkw)
+        tau = llkw.get("tau", 1.0)
+        super(ClgnMnistTiny, self).__init__(k_num=4, tau=tau, **llkw)
 
 class ClgnMnistSmall(ClgnMnist):
     def __init__(self, **llkw):
-        super(ClgnMnistSmall, self).__init__(k_num=16, **llkw)
+        tau = llkw.get("tau", 1.0)
+        super(ClgnMnistSmall, self).__init__(k_num=16, tau=tau, **llkw)
 
 
 class ClgnMnistMedium(ClgnMnist):
     def __init__(self, **llkw):
-        super(ClgnMnistMedium, self).__init__(k_num=64, **llkw)
+        tau = llkw.get("tau", 1.0)
+        super(ClgnMnistMedium, self).__init__(k_num=64, tau=tau, **llkw)
 
 
 class ClgnMnistLarge(ClgnMnist):
     def __init__(self, **llkw):
-        super(ClgnMnistLarge, self).__init__(k_num=1024, **llkw)
+        tau = llkw.get("tau", 1.0)
+        super(ClgnMnistLarge, self).__init__(k_num=1024, tau=tau, **llkw)
 
 
 class ClgnCifar10(torch.nn.Sequential):
@@ -205,9 +214,17 @@ class ClgnCifar10(torch.nn.Sequential):
     Provided in three sizes: small, medium, large.
     Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
     """
-
-    def __init__(self, n_bits: int, k_num: int, tau: float, parametrization="raw", **llkw):
-        layers = []
+    n_input_bits = None  # optional, to be set in subclasses
+    
+    def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict,
+                 k_num: int, tau: float, parametrization="raw", **llkw):
+        if self.n_input_bits is not None:
+            assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."
+        binarization_kwargs = dict(binarization_kwargs)  # make a copy to avoid modifying the original
+        binarization_kwargs["feature_dim"] = 1  # image data
+        n_bits = thresholds.shape[-1]
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+        layers = [binarization_module]
         layers.append(
             LogicConv2d(
                 in_dim=32,
@@ -280,9 +297,17 @@ class ClgnCifar10Res(torch.nn.Sequential):
     Provided in three sizes: small, medium, large.
     Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
     """
+    n_input_bits = None  # optional, to be set in subclasses
 
-    def __init__(self, n_bits: int, k_num: int, tau: float, parametrization="raw", **llkw):
-        layers = []
+    def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict,
+                 k_num: int, tau: float, parametrization="raw", **llkw):
+        if self.n_input_bits is not None:
+            assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."
+        binarization_kwargs = dict(binarization_kwargs)  # make a copy to avoid modifying the original
+        binarization_kwargs["feature_dim"] = 1  # image data
+        n_bits = thresholds.shape[-1]
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+        layers = [binarization_module]
 
         layers.append(
             ResidualLogicBlock(
@@ -305,39 +330,54 @@ class ClgnCifar10Res(torch.nn.Sequential):
 
         super(ClgnCifar10Res, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
+
 class ClgnCifar10SmallRes(ClgnCifar10Res):
+    n_input_bits = 2
     def __init__(self, **llkw):
-        super(ClgnCifar10SmallRes, self).__init__(n_bits=3, k_num=32, tau=20, **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10SmallRes, self).__init__(k_num=32, tau=tau, **llkw)
 
 
 class ClgnCifar10Small(ClgnCifar10):
+    n_input_bits = 2
     def __init__(self, **llkw):
-        super(ClgnCifar10Small, self).__init__(n_bits=3, k_num=32, tau=20, **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10Small, self).__init__(k_num=32, tau=tau, **llkw)
 
 
 class ClgnCifar10Medium(ClgnCifar10):
+    n_input_bits = 2
     def __init__(self, **llkw):
-        super(ClgnCifar10Medium, self).__init__(n_bits=3, k_num=256, tau=40, **llkw)
+        tau = llkw.get("tau", 40)
+        super(ClgnCifar10Medium, self).__init__(k_num=256, tau=tau, **llkw)
+
 
 class ClgnCifar10MediumRes(ClgnCifar10Res):
+    n_input_bits = 2
     def __init__(self, **llkw):
-        super(ClgnCifar10MediumRes, self).__init__(n_bits=3, k_num=256, tau=40, **llkw)
-
+        tau = llkw.get("tau", 40)
+        super(ClgnCifar10MediumRes, self).__init__(k_num=256, tau=tau, **llkw)
 
 
 class ClgnCifar10Large(ClgnCifar10):
+    n_input_bits = 5
     def __init__(self, **llkw):
-        super(ClgnCifar10Large, self).__init__(n_bits=5, k_num=512, tau=280, **llkw)
+        tau = llkw.get("tau", 280)
+        super(ClgnCifar10Large, self).__init__(k_num=512, tau=tau, **llkw)
 
 
 class ClgnCifar10Large2(ClgnCifar10):
+    n_input_bits = 5
     def __init__(self, **llkw):
-        super(ClgnCifar10Large2, self).__init__(n_bits=5, k_num=1024, tau=340, **llkw)
+        tau = llkw.get("tau", 340)
+        super(ClgnCifar10Large2, self).__init__(k_num=1024, tau=tau, **llkw)
 
 
 class ClgnCifar10Large4(ClgnCifar10):
+    n_input_bits = 5
     def __init__(self, **llkw):
-        super(ClgnCifar10Large4, self).__init__(n_bits=5, k_num=2560, tau=450, **llkw)
+        tau = llkw.get("tau", 450)
+        super(ClgnCifar10Large4, self).__init__(k_num=2560, tau=tau, **llkw)
 
 
 class ClgnCifar10Tiny(torch.nn.Sequential):
@@ -346,10 +386,13 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
     Takes 3-bit-thresholded inputs. 
     """
 
-    def __init__(self, k_num=64, parametrization="raw", **llkw):
+    def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, 
+                 k_num=64, parametrization="raw", tau=20, **llkw):
         n_bits = 3
-        tau = 20
-        layers = []
+        binarization_kwargs["feature_dim"] = 1  # image data
+        binarization_kwargs["num_bits"] = n_bits
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+        layers = [binarization_module]
         layers.append(
             LogicConv2d(
                 in_dim=32,
@@ -388,19 +431,23 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
 
 class ClgnCifar10Tiny32(ClgnCifar10Tiny):
     def __init__(self, **llkw):
-        super(ClgnCifar10Tiny32, self).__init__(k_num=32, **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10Tiny32, self).__init__(k_num=32, tau=tau, **llkw)
 
 class ClgnCifar10Tiny64(ClgnCifar10Tiny):
     def __init__(self, **llkw):
-        super(ClgnCifar10Tiny64, self).__init__(k_num=64, **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10Tiny64, self).__init__(k_num=64, tau=tau, **llkw)
 
 class ClgnCifar10Tiny128(ClgnCifar10Tiny):
     def __init__(self, **llkw):
-        super(ClgnCifar10Tiny128, self).__init__(k_num=128, **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10Tiny128, self).__init__(k_num=128, tau=tau, **llkw)
 
 class ClgnCifar10Tiny256(ClgnCifar10Tiny):
     def __init__(self, **llkw):
-        super(ClgnCifar10Tiny256, self).__init__(k_num=256, **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10Tiny256, self).__init__(k_num=256, tau=tau, **llkw)
 
 
 class ClgnCifar10Mini(torch.nn.Sequential):
@@ -409,10 +456,13 @@ class ClgnCifar10Mini(torch.nn.Sequential):
     Takes continuous (unthresholded) inputs. Only single conv layer.
     """
 
-    def __init__(self, k_num=64, tau=10, parametrization="raw", **llkw):
+    def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, 
+                 k_num=64, tau=20, parametrization="raw", **llkw):
         n_bits = 3
-        tau = 20
-        layers = []
+        binarization_kwargs["feature_dim"] = 1  # image data
+        binarization_kwargs["num_bits"] = n_bits
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+        layers = [binarization_module]
         layers.append(
             LogicConv2d(
                 in_dim=32,
@@ -437,16 +487,21 @@ class ClgnCifar10Mini(torch.nn.Sequential):
 
 class ClgnCifar10Mini32(ClgnCifar10Mini):
     def __init__(self, **llkw):
-        super(ClgnCifar10Mini32, self).__init__(k_num=32, tau=5., **llkw)
+        tau = llkw.get("tau", 5)
+        super(ClgnCifar10Mini32, self).__init__(k_num=32, tau=tau, **llkw)
 
 class ClgnCifar10Mini64(ClgnCifar10Mini):
     def __init__(self, **llkw):
-        super(ClgnCifar10Mini64, self).__init__(k_num=64, tau=10., **llkw)
+        tau = llkw.get("tau", 10)
+        super(ClgnCifar10Mini64, self).__init__(k_num=64, tau=tau, **llkw)
 
 class ClgnCifar10Mini128(ClgnCifar10Mini):
     def __init__(self, **llkw):
-        super(ClgnCifar10Mini128, self).__init__(k_num=128, tau=20., **llkw)
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10Mini128, self).__init__(k_num=128, tau=tau, **llkw)
 
 class ClgnCifar10Mini256(ClgnCifar10Mini):
     def __init__(self, **llkw):
-        super(ClgnCifar10Mini256, self).__init__(k_num=256, tau=40., **llkw)
+        tau = llkw.get("tau", 40)
+        super(ClgnCifar10Mini256, self).__init__(k_num=256, tau=tau, **llkw)
+        

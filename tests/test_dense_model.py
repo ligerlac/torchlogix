@@ -13,6 +13,9 @@ def test_dlgn_model():
     """Test the DLGN model with a simple input."""
     # Create a simple DLGN model
     model = Dlgn(
+        thresholds=None,
+        binarization="dummy",
+        binarization_kwargs={},
         in_dim=100,
         n_layers=3,
         neurons_per_layer=50,

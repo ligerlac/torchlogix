@@ -147,8 +147,10 @@ class LUTParametrization(ABC):
                 - ids: Integer tensor of LUT IDs (or None if not applicable)
         """
         pass
-    
 
+    def update_temperature(self, temperature: float):
+        self.temperature = temperature
+    
 
 class RawLUTParametrization(LUTParametrization):
     """Raw LUT parametrization using direct truth table logits.
@@ -221,15 +223,16 @@ class RawLUTParametrization(LUTParametrization):
         # Compute all logic operations
         ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
 
-        # Apply layer-provided contraction (no layer-type detection)
-        # Convert ops to same dtype as weights for einsum compatibility
-        ops = ops.to(w.dtype)
+        if ops.dtype != w.dtype:
+            ops = ops.to(w.dtype)
 
         # Handle 1D weight case (single neuron) for backward compatibility
         if w.ndim == 1:
             w = w.unsqueeze(0)
 
+        # Apply layer-provided contraction (no layer-type detection)
         return torch.einsum(contraction, ops, w)
+    
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
         """Apply softmax/gumbel_softmax based on forward_sampling mode."""

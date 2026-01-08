@@ -217,7 +217,7 @@ class _LogicConvNd(LogicBase):
     def get_regularization_loss(self, regularizer: str):
         reg_loss = 0.0
         for w in self.tree_weights:
-            reg_loss += get_regularization_loss(w, regularizer).sum(0)
+            reg_loss += get_regularization_loss(w, regularizer)
         return reg_loss
     
     def rescale_weights(self, method):

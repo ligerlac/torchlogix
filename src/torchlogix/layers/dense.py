@@ -89,7 +89,7 @@ class LogicDense(LogicBase):
         x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
 
         # Delegate to parametrization with einsum contraction
-        # b=batch, n=neurons, k=num_basis/16
+        # b=batch, n=neurons, k=num_basis
         return self.parametrization.forward(
             x, self.weight, self.training,
             contraction='bnk,nk->bn'

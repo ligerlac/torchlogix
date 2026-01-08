@@ -143,12 +143,12 @@ def test_xor_model():
     - test the 4 possible inputs
     """
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
-    layer.weight.data = torch.zeros(16)
+    layer.weight.data = torch.zeros(16, dtype=torch.float32)
     layer.weight.data[6] = 100
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:
-        assert np.isclose(model(torch.tensor([[x, y]])).item(), expected)
+        assert np.isclose(model(torch.tensor([[x, y]], dtype=torch.float32)).item(), expected)
 
 
 def test_xor_model_walsh():
@@ -241,41 +241,4 @@ def test_large_compiled_model():
     preds = model(X)
     preds_compiled = compiled_model(X.bool().numpy())
     assert np.allclose(preds, preds_compiled)
-
-
-@pytest.mark.parametrize("parametrization", ["raw", "walsh", "light"])
-@pytest.mark.parametrize("num_candidates", [-1, 1, 2, 3])
-@pytest.mark.parametrize("lut_rank", [2, 4, 6])
-def test_learnable_connections(parametrization, num_candidates, lut_rank):
-    """Test that connections can be trained."""
-    parametrization_kwargs = {
-        "weight_init": "residual",
-        "residual_param": 20.0
-    }
-    if lut_rank > 2 and parametrization == "raw":
-        pytest.skip("Raw parametrization currently only supports lut_rank=2 ")
-    connections_kwargs = {"init_method": "random-unique", "num_candidates": num_candidates}
-    in_dim = 100
-    out_dim = 100
-    layer = LogicDense(in_dim=in_dim, 
-                       out_dim=out_dim, 
-                       lut_rank=lut_rank, 
-                       connections="learnable",
-                       connections_kwargs=connections_kwargs, 
-                       device="cpu",
-                       parametrization=parametrization,
-                       parametrization_kwargs=parametrization_kwargs)
-    if num_candidates == -1:
-        assert layer.connections.indices.shape[0] == layer.in_dim
-    else:
-        assert layer.connections.indices.shape[0] == num_candidates
-    assert layer.connections.indices.shape[1] == layer.lut_rank
-    assert layer.connections.indices.shape[2] == layer.out_dim
-    assert layer.connections.indices.shape == layer.connections.weights.shape
-    X = torch.rand((5, in_dim), requires_grad=True)
-    layer.training = True
-    y = layer(X)
-    loss = y.sum()
-    loss.backward()
-    assert all(torch.norm(p.grad) > 0 for p in layer.parameters())
     

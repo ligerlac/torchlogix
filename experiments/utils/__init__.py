@@ -4,7 +4,7 @@
 from .misc import (
     CreateFolder, IsReadableDir, IsValidFile,
     save_metrics_csv, save_config, load_model_from_checkpoint,
-    evaluate_model, create_eval_functions, train
+    evaluate_model, create_eval_functions, train, print_memory_usage
 )
 from .loading import load_dataset, load_n
 from .model_selection import get_model
