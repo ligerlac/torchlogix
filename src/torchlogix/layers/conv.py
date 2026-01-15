@@ -161,7 +161,7 @@ class _LogicConvNd(LogicBase):
         # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
         x = self.parametrization.forward(
             x, self.tree_weights[0], self.training,
-            contraction='bcsfk,fck->bcsf'
+            contraction='fc,bcsf->bcsf'
         )
         # Process remaining levels
         for level in range(1, self.tree_depth + 1):
@@ -169,7 +169,7 @@ class _LogicConvNd(LogicBase):
             x = x.movedim(-2, 1)
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
-                contraction='bcsfk,fck->bcsf'
+                contraction='fc,bcsf->bcsf'
             )
         # Reshape flattened output
         reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 

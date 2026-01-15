@@ -81,7 +81,7 @@ def test_get_lut_ids_walsh():
         assert torch.allclose(ids, torch.tensor([i]))
         inputs = torch.tensor([[0,0], [0,1], [1,0], [1,1]])
         inputs = inputs.unsqueeze(2)  # add batch dim
-        output = param.forward(x=inputs, training=False, weight=weights, contraction='bnk,nk->bn')
+        output = param.forward(x=inputs, training=False, weight=weights, contraction='n,bn->bn')
         # assert output matches truth table (lut)
         assert torch.allclose(output.squeeze(1), luts.float())
         # assert that the lut matches binary representation of i
@@ -101,7 +101,7 @@ def test_get_lut_ids_light():
         assert torch.allclose(ids, torch.tensor([i]))
         inputs = torch.tensor([[0,0], [0,1], [1,0], [1,1]])
         inputs = inputs.unsqueeze(2)  # add batch dim
-        output = param.forward(x=inputs, training=False, weight=weights, contraction='bnk,nk->bn')
+        output = param.forward(x=inputs, training=False, weight=weights, contraction='n,bn->bn')
         # assert output matches truth table (lut)
         assert torch.allclose(output.squeeze(1), luts.float())
         # assert that the lut matches binary representation of i
@@ -122,7 +122,7 @@ def test_get_luts_walsh(lut_rank):
         weights = 1./2**lut_rank * walsh_hadamard_transform(walsh_input, lut_rank)
         # check L2 norm
         assert torch.allclose(weights.norm(p=2), torch.tensor(1.0))
-        output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='bnk,nk->bn')
+        output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='n,bn->bn')
         assert torch.allclose(output_lut.squeeze(), input_lut.float())
 
 
@@ -139,7 +139,7 @@ def test_get_luts_light(lut_rank):
         weights = input_lut.unsqueeze(0).float()
         # check L2 norm
         assert torch.all(weights >= 0) and torch.all(weights <= 1)
-        output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='bnk,nk->bn')
+        output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='n,bn->bn')
         assert torch.allclose(output_lut.squeeze(), input_lut.float())
 
 
@@ -175,3 +175,29 @@ def test_residual_consistency(num_neurons, residual_param):
     assert torch.allclose(walsh(X), raw(X))
     
 
+@pytest.mark.parametrize("param_cls", [RawLUTParametrization, WalshLUTParametrization, LightLUTParametrization])
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_materialize_basis(param_cls, lut_rank):
+    if lut_rank > 2 and param_cls == RawLUTParametrization:
+        pytest.skip("Raw parametrization not supported for lut_rank > 2")
+
+    weights = torch.randn((10, 2**lut_rank))
+    inputs = torch.randint(0, 2, (8, lut_rank)).unsqueeze(2).float()
+    param_in_place = param_cls(lut_rank=lut_rank, materialize_basis=False)
+    param_materialize = param_cls(lut_rank=lut_rank, materialize_basis=True)
+
+    output_in_place = param_in_place.forward(
+        x=inputs,
+        training=False,
+        weight=weights,
+        contraction='n,bn->bn'
+    )
+
+    output_materialize = param_materialize.forward(
+        x=inputs,
+        training=False,
+        weight=weights,
+        contraction='n,bn->bn'
+    )
+
+    assert torch.allclose(output_in_place, output_materialize)

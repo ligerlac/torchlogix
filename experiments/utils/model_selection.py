@@ -21,7 +21,6 @@ def get_model(thresholds, args):
             "forward_sampling": args.forward_sampling,
             "weight_init": args.weight_init,
             "residual_param": args.residual_param,
-            "arbitrary_basis": args.arbitrary_basis
             },
         "device": args.device,
         "lut_rank": args.lut_rank,

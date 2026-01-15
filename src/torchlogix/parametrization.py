@@ -11,10 +11,13 @@ import torch.nn.functional as F
 import numpy as np
 
 from .functional import (
+    compute_all_logic_ops_vectorized,
     walsh_basis_hard,
     walsh_hadamard_transform,
     light_basis_hard,
-    compute_all_logic_ops_vectorized,
+    weighted_raw_basis_sum,
+    weighted_walsh_basis_sum,
+    weighted_light_basis_sum,
     softmax,
     sigmoid,
     gumbel_sigmoid
@@ -44,19 +47,19 @@ class LUTParametrization(ABC):
     outputs from inputs.
     """
 
-    def __init__(self, 
-                 lut_rank: int, 
-                 arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft",
-                 temperature: float = 1.0,
-                 weight_init: str = "residual",
-                 residual_param: float = 0.9):
+    def __init__(
+        self, 
+        lut_rank: int, 
+        forward_sampling: str = "soft",
+        temperature: float = 1.0,
+        weight_init: str = "residual",
+        residual_param: float = 0.9,
+        materialize_basis: bool = False
+    ):
         """Initialize parametrization.
 
         Args:
             lut_rank: Number of inputs per logic gate (arity of the LUT).
-            arbitrary_basis: If True, allows arbitrary basis functions
-                rather than hard-coded optimized implementations.
             forward_sampling: Sampling strategy during forward pass. One of:
                 - "soft": Continuous relaxation via softmax/sigmoid
                 - "hard": Straight-through hard selection
@@ -65,10 +68,12 @@ class LUTParametrization(ABC):
             temperature: Temperature parameter for sampling operations.
             weight_init: Initialization strategy for weights ("residual" or "random").
             residual_param: Parameter controlling residual initialization.
+            materialize_basis: Whether to materialize the 2^lut_rank-dimensional basis
+                and calculate the sum via the scalar product with weights (strongly discouraged).
+                If False, the weighted sum is calculated in-place, saving memory.
         """
         self.lut_rank = lut_rank
         self.lut_entries = 1 << lut_rank
-        self.arbitrary_basis = arbitrary_basis
 
         # Validate and store sampling configuration
         valid_modes = ["soft", "hard", "gumbel_soft", "gumbel_hard"]
@@ -80,6 +85,7 @@ class LUTParametrization(ABC):
         self.temperature = temperature
         self.weight_init = weight_init
         self.residual_param = residual_param
+        self.materialize_basis = materialize_basis
 
     @abstractmethod
     def init_weights(
@@ -160,18 +166,23 @@ class RawLUTParametrization(LUTParametrization):
     Boolean functions.
     """
 
-    def __init__(self, lut_rank: int, 
-                 arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", 
-                 temperature: float = 1.0,
-                 weight_init: str = "residual",
-                 residual_param: float = 5.0):
-        super().__init__(lut_rank, 
-                         arbitrary_basis, 
-                         forward_sampling, 
-                         temperature, 
-                         weight_init, 
-                         residual_param)
+    def __init__(
+        self,
+        lut_rank: int,
+        forward_sampling: str = "soft",
+        temperature: float = 1.0,
+        weight_init: str = "residual",
+        residual_param: float = 5.0,
+        materialize_basis: bool = False
+    ):
+        super().__init__(
+            lut_rank,
+            forward_sampling,
+            temperature,
+            weight_init,
+            residual_param,
+            materialize_basis
+        )
         if lut_rank != 2:
             raise ValueError("Raw parametrization currently only supports lut_rank=2")
         # Number of possible Boolean functions (not just truth table entries)
@@ -193,6 +204,7 @@ class RawLUTParametrization(LUTParametrization):
             return torch.randn(num_neurons, 1 << lut_entries, device=device)
         raise ValueError(f"Unknown weight_init: {self.weight_init}")
 
+
     def forward(
         self,
         x: torch.Tensor,
@@ -211,6 +223,9 @@ class RawLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
+        if x.dtype != weight.dtype:
+            x = x.to(weight.dtype)
+
         # Extract inputs
         a, b = x[:, 0], x[:, 1]
 
@@ -220,18 +235,17 @@ class RawLUTParametrization(LUTParametrization):
         else:
             w = self._sample_eval(weight)
 
-        # Compute all logic operations
-        ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
-
-        if ops.dtype != w.dtype:
-            ops = ops.to(w.dtype)
-
         # Handle 1D weight case (single neuron) for backward compatibility
         if w.ndim == 1:
             w = w.unsqueeze(0)
 
-        # Apply layer-provided contraction (no layer-type detection)
-        return torch.einsum(contraction, ops, w)
+        if self.materialize_basis:
+            # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
+            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
+            ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
+            return torch.einsum(contraction_with_basis_dim, w, ops)
+
+        return weighted_raw_basis_sum(a, b, w, contraction)
     
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
@@ -270,19 +284,24 @@ class WalshLUTParametrization(LUTParametrization):
     and exploits structure in Boolean functions (parity, correlations).
     """
 
-    def __init__(self, lut_rank: int, 
-                 arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", 
-                 temperature: float = 1.0,
-                 weight_init: str = "residual",
-                 residual_param: float = 5.0):
-        super().__init__(lut_rank, 
-                         arbitrary_basis, 
-                         forward_sampling, 
-                         temperature, 
-                         weight_init, 
-                         residual_param)
-        if not arbitrary_basis and lut_rank not in [1, 2, 4, 6]:
+    def __init__(
+        self,
+        lut_rank: int,
+        forward_sampling: str = "soft",
+        temperature: float = 1.0,
+        weight_init: str = "residual",
+        residual_param: float = 5.0,
+        materialize_basis: bool = False
+    ):
+        super().__init__(
+            lut_rank,
+            forward_sampling,
+            temperature,
+            weight_init,
+            residual_param,
+            materialize_basis
+        )
+        if lut_rank not in [1, 2, 4, 6]:
             raise ValueError(
                 f"Hard-coded Walsh basis only supports lut_rank in [1, 2, 4, 6], got {lut_rank}"
             )
@@ -313,6 +332,7 @@ class WalshLUTParametrization(LUTParametrization):
         else:
             raise ValueError(self.weight_init)
 
+    
     def forward(
         self,
         x: torch.Tensor,
@@ -332,22 +352,23 @@ class WalshLUTParametrization(LUTParametrization):
             Output with lut_rank dimension reduced
         """
 
+        if x.dtype != weight.dtype:
+            x = x.to(weight.dtype)
+
         # Convert to [-1, +1]
         x = 1 - 2 * x
 
-        # Compute Walsh basis
-        if not self.arbitrary_basis:
-            basis = walsh_basis_hard(x, self.lut_rank)
-        else:
-            raise NotImplementedError("Arbitrary basis requires layer context")
-
-        # Handle 1D weight case (single neuron) for backward compatibility
         if weight.ndim == 1:
             weight = weight.unsqueeze(0)
 
-        # Apply layer-provided contraction (no layer-type detection)
-        # Convert basis to same dtype as weights for einsum compatibility
-        x = torch.einsum(contraction, basis.to(weight.dtype), weight)
+        if self.materialize_basis:
+            # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
+            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
+            x = walsh_basis_hard(x, self.lut_rank)
+            x = torch.einsum(contraction_with_basis_dim, weight, x)
+        
+        else:
+            x = weighted_walsh_basis_sum(x, weight, contraction, self.lut_rank)
 
         if training:
             x = self._sample_train(-x)
@@ -355,6 +376,7 @@ class WalshLUTParametrization(LUTParametrization):
             x = self._sample_eval(-x)
 
         return x
+
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
         """Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""
@@ -392,19 +414,24 @@ class LightLUTParametrization(LUTParametrization):
     basis coefficients, which are mapped to [0,1] with sigmoid.
     """
 
-    def __init__(self, lut_rank: int, 
-                 arbitrary_basis: bool = False,
-                 forward_sampling: str = "soft", 
-                 temperature: float = 1.0,
-                 weight_init: str = "residual",
-                 residual_param: float = 5.0):
-        super().__init__(lut_rank, 
-                         arbitrary_basis, 
-                         forward_sampling, 
-                         temperature, 
-                         weight_init, 
-                         residual_param)
-        if not arbitrary_basis and lut_rank not in [2, 4, 6]:
+    def __init__(
+        self,
+        lut_rank: int,
+        forward_sampling: str = "soft",
+        temperature: float = 1.0,
+        weight_init: str = "residual",
+        residual_param: float = 5.0,
+        materialize_basis: bool = False
+    ):
+        super().__init__(
+            lut_rank,
+            forward_sampling,
+            temperature,
+            weight_init,
+            residual_param,
+            materialize_basis
+        )
+        if lut_rank not in [2, 4, 6]:
             raise ValueError(
                 f"Hard-coded Light basis only supports lut_rank in [2, 4, 6], got {lut_rank}"
             )
@@ -421,6 +448,7 @@ class LightLUTParametrization(LUTParametrization):
             return torch.rand(num_neurons, lut_entries, device=device)
         else:
             raise ValueError(self.weight_init)
+    
 
     def forward(
         self,
@@ -440,31 +468,30 @@ class LightLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-
-        # Compute Walsh basis
-        if not self.arbitrary_basis:
-            basis = light_basis_hard(x, self.lut_rank)
-        else:
-            raise NotImplementedError("Arbitrary basis requires layer context")
-
         # Handle 1D weight case (single neuron) for backward compatibility
         if weight.ndim == 1:
             weight = weight.unsqueeze(0)
-        # Sample weights (merged from SoftmaxSampler)
+
         if training:
             w = self._sample_train(weight)
         else:
             w = self._sample_eval(weight)
-        # Apply layer-provided contraction (no layer-type detection)
-        # Convert basis to same dtype as weights for einsum compatibility
-        x = torch.einsum(contraction, basis.to(weight.dtype), w)
-        # Sample output (merged from SigmoidSampler)
+
+        if self.materialize_basis:
+            # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
+            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
+            x = light_basis_hard(x, self.lut_rank)
+            x = torch.einsum(contraction_with_basis_dim, w, x)
+        else:
+            x = weighted_light_basis_sum(x, w, contraction, self.lut_rank)
+
         if training:
             x = self._sample_train(x)
         else:
             x = self._sample_eval(x)
 
         return x
+
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
         """Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""

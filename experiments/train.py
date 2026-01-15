@@ -155,10 +155,6 @@ def get_parser():
         help="Parameter for residual weight initialization. " \
         "Corresponds to percentage of LUTs initialized to identity gate function."
     )
-    parser.add_argument(
-        "--arbitrary-basis", action="store_true", 
-        help="Flag for non-hard-coded basis, which is slower, but flexible. "
-    )
 
     # Regularization parameters
     parser.add_argument(
@@ -314,7 +310,7 @@ def run_training(args, callbacks=None):
     # Get model, loss, and optimizer
     model, loss_fn, optim = get_model(thresholds, args)
     model.to(args.device)
-    model.compile()  # factor ~2 speedup w/ JIT compilation
+    # model.compile()  # factor ~2 speedup w/ JIT compilation
 
     # Create evaluation functions
     eval_functions = create_eval_functions(loss_fn)

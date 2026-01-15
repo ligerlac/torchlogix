@@ -92,7 +92,7 @@ class LogicDense(LogicBase):
         # b=batch, n=neurons, k=num_basis
         return self.parametrization.forward(
             x, self.weight, self.training,
-            contraction='bnk,nk->bn'
+            contraction='n,bn->bn'
         )
 
     def extra_repr(self):

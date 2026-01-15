@@ -10,6 +10,7 @@ import random
 import numpy as np
 import torch
 
+
 BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
 
@@ -112,6 +113,44 @@ def compute_all_logic_ops_vectorized(a, b):
     ], dim=-1)
     
     return ops
+
+
+def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:
+    """
+    Compute the weighted sum of the raw basis functions.
+    The 16-term weighted sum can be expressed using only
+    4 coefficients, which is computationally more efficient.
+    """
+    w = weights
+
+    C1 = (
+        w[...,8] + w[...,9] + w[...,10] + w[...,11] +
+        w[...,12] + w[...,13] + w[...,14] + w[...,15]
+    )
+
+    Ca = (
+        w[...,2] + w[...,3] + w[...,6] + w[...,7]
+        - w[...,8] - w[...,9] - w[...,12] - w[...,13]
+    )
+
+    Cb = (
+        w[...,4] + w[...,5] + w[...,6] + w[...,7]
+        - w[...,8] - w[...,9] - w[...,10] - w[...,11]
+    )
+
+    Cab = (
+        w[...,1] - w[...,2] - w[...,4]
+        - 2*w[...,6] - w[...,7]
+        + w[...,8] + 2*w[...,9]
+        + w[...,11] + w[...,13] - w[...,14]
+    )
+
+    return (
+        torch.einsum(einsum_pattern, C1, a * 0 + 1) +
+        torch.einsum(einsum_pattern, Ca, a) +
+        torch.einsum(einsum_pattern, Cb, b) +
+        torch.einsum(einsum_pattern, Cab, a * b)
+    )
 
 
 ##########################################################################
@@ -278,6 +317,29 @@ def walsh_basis_hard(x, lut_rank):
     return basis
 
 
+def weighted_walsh_basis_sum(x, weights, einsum_pattern, lut_rank) -> torch.Tensor:
+    if lut_rank == 1:
+        A = x[:, 0]
+        basis = weighted_walsh_basis_sum_1(A, weights, einsum_pattern)
+    elif lut_rank == 2:
+        A, B = x[:, 0], x[:, 1]
+        basis = weighted_walsh_basis_sum_2(A, B, weights, einsum_pattern)
+    elif lut_rank == 4:
+        A, B, C, D = (x[:, 0], x[:, 1],
+                        x[:, 2], x[:, 3]
+                        )
+        basis = weighted_walsh_basis_sum_4(A, B, C, D, weights, einsum_pattern)
+    elif lut_rank == 6:
+        A, B, C, D, E, F = (
+            x[:, 0], x[:, 1], x[:, 2],
+            x[:, 3], x[:, 4], x[:, 5],
+        )
+        basis = weighted_walsh_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern)
+    else:
+        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
+    return basis
+
+
 def walsh_basis_1(A) -> torch.Tensor:
     #A = 1- 2 * a
     basis = torch.stack([
@@ -285,6 +347,13 @@ def walsh_basis_1(A) -> torch.Tensor:
         A,
     ], dim=-1)
     return basis
+
+
+def weighted_walsh_basis_sum_1(A, weights, einsum_pattern) -> torch.Tensor:
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], A * 0 + 1) +
+        torch.einsum(einsum_pattern, weights[...,1], A)
+    )
 
 
 def walsh_basis_2(A, B) -> torch.Tensor:
@@ -298,6 +367,16 @@ def walsh_basis_2(A, B) -> torch.Tensor:
     ], dim=-1)
     return basis
 
+
+def weighted_walsh_basis_sum_2(A, B, weights, einsum_pattern) -> torch.Tensor:
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], A * 0 + 1) +
+        torch.einsum(einsum_pattern, weights[...,1], B) +
+        torch.einsum(einsum_pattern, weights[...,2], A) +
+        torch.einsum(einsum_pattern, weights[...,3], A * B)
+    )
+
+
 def walsh_basis_3(A, B, C) -> torch.Tensor:
     basis = torch.stack([
         torch.ones_like(A),
@@ -310,6 +389,7 @@ def walsh_basis_3(A, B, C) -> torch.Tensor:
         A*B*C
     ], dim=-1)
     return basis
+
 
 def walsh_basis_4(A, B, C, D) -> torch.Tensor:
     basis = torch.stack([
@@ -331,6 +411,29 @@ def walsh_basis_4(A, B, C, D) -> torch.Tensor:
         A*B*C*D
     ], dim=-1)
     return basis
+
+
+def weighted_walsh_basis_sum_4(A, B, C, D, weights, einsum_pattern) -> torch.Tensor:
+    AB = A * B
+    CD = C * D
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], A * 0 + 1) +
+        torch.einsum(einsum_pattern, weights[...,1], D) +
+        torch.einsum(einsum_pattern, weights[...,2], C) +
+        torch.einsum(einsum_pattern, weights[...,3], CD) +
+        torch.einsum(einsum_pattern, weights[...,4], B) +
+        torch.einsum(einsum_pattern, weights[...,5], B * D) +
+        torch.einsum(einsum_pattern, weights[...,6], B * C) +
+        torch.einsum(einsum_pattern, weights[...,7], B * CD) +
+        torch.einsum(einsum_pattern, weights[...,8], A) +
+        torch.einsum(einsum_pattern, weights[...,9], A * D) +
+        torch.einsum(einsum_pattern, weights[...,10], A * C) +
+        torch.einsum(einsum_pattern, weights[...,11], A * CD) +
+        torch.einsum(einsum_pattern, weights[...,12], AB) +
+        torch.einsum(einsum_pattern, weights[...,13], AB * D) +
+        torch.einsum(einsum_pattern, weights[...,14], AB * C) +
+        torch.einsum(einsum_pattern, weights[...,15], AB * CD)
+    )
 
 
 def walsh_basis_6(A, B, C, D, E, F) -> torch.Tensor:
@@ -403,6 +506,81 @@ def walsh_basis_6(A, B, C, D, E, F) -> torch.Tensor:
     return basis
 
 
+def weighted_walsh_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern) -> torch.Tensor:
+    AB = A * B
+    CD = C * D
+    EF = E * F
+    AC = A * C
+    AD = A * D
+    AE = A * E
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], A * 0 + 1) +
+        torch.einsum(einsum_pattern, weights[...,1], F) +
+        torch.einsum(einsum_pattern, weights[...,2], E) +
+        torch.einsum(einsum_pattern, weights[...,3], EF) +
+        torch.einsum(einsum_pattern, weights[...,4], D) +
+        torch.einsum(einsum_pattern, weights[...,5], D * F) +
+        torch.einsum(einsum_pattern, weights[...,6], D * E) +
+        torch.einsum(einsum_pattern, weights[...,7], D * EF) +
+        torch.einsum(einsum_pattern, weights[...,8], C) +
+        torch.einsum(einsum_pattern, weights[...,9], C * F) +
+        torch.einsum(einsum_pattern, weights[...,10], C * E) +
+        torch.einsum(einsum_pattern, weights[...,11], C * EF) +
+        torch.einsum(einsum_pattern, weights[...,12], CD) +
+        torch.einsum(einsum_pattern, weights[...,13], CD * F) +
+        torch.einsum(einsum_pattern, weights[...,14], CD * E) +
+        torch.einsum(einsum_pattern, weights[...,15], CD * EF) +
+        torch.einsum(einsum_pattern, weights[...,16], B) +
+        torch.einsum(einsum_pattern, weights[...,17], B * F) +
+        torch.einsum(einsum_pattern, weights[...,18], B * E) +
+        torch.einsum(einsum_pattern, weights[...,19], B * E * F) +
+        torch.einsum(einsum_pattern, weights[...,20], B * D) +
+        torch.einsum(einsum_pattern, weights[...,21], B * D * F) +
+        torch.einsum(einsum_pattern, weights[...,22], B * D * E) +
+        torch.einsum(einsum_pattern, weights[...,23], B * D * EF) +
+        torch.einsum(einsum_pattern, weights[...,24], B * C) +
+        torch.einsum(einsum_pattern, weights[...,25], B * C * F) +
+        torch.einsum(einsum_pattern, weights[...,26], B * C * E) +
+        torch.einsum(einsum_pattern, weights[...,27], B * C * EF) +
+        torch.einsum(einsum_pattern, weights[...,28], B * CD) +
+        torch.einsum(einsum_pattern, weights[...,29], B * CD * F) +
+        torch.einsum(einsum_pattern, weights[...,30], B * CD * E) +
+        torch.einsum(einsum_pattern, weights[...,31], B * CD * EF) +
+        torch.einsum(einsum_pattern, weights[...,32], A) +
+        torch.einsum(einsum_pattern, weights[...,33], A * F) +
+        torch.einsum(einsum_pattern, weights[...,34], AE) +
+        torch.einsum(einsum_pattern, weights[...,35], AE * F) +
+        torch.einsum(einsum_pattern, weights[...,36], AD) +
+        torch.einsum(einsum_pattern, weights[...,37], AD * F) +
+        torch.einsum(einsum_pattern, weights[...,38], AD * E) +
+        torch.einsum(einsum_pattern, weights[...,39], AD * EF) +
+        torch.einsum(einsum_pattern, weights[...,40], AC) +
+        torch.einsum(einsum_pattern, weights[...,41], AC * F) +
+        torch.einsum(einsum_pattern, weights[...,42], AC * E) +
+        torch.einsum(einsum_pattern, weights[...,43], AC * EF) +
+        torch.einsum(einsum_pattern, weights[...,44], AC * D) +
+        torch.einsum(einsum_pattern, weights[...,45], A * CD * F) +
+        torch.einsum(einsum_pattern, weights[...,46], AE * CD) +
+        torch.einsum(einsum_pattern, weights[...,47], A * CD * EF) +
+        torch.einsum(einsum_pattern, weights[...,48], AB) +
+        torch.einsum(einsum_pattern, weights[...,49], AB * F) +
+        torch.einsum(einsum_pattern, weights[...,50], AB * E) +
+        torch.einsum(einsum_pattern, weights[...,51], AB * E * F) +
+        torch.einsum(einsum_pattern, weights[...,52], AB * D) +
+        torch.einsum(einsum_pattern, weights[...,53], AB * D * F) +
+        torch.einsum(einsum_pattern, weights[...,54], AB * D * E) +
+        torch.einsum(einsum_pattern, weights[...,55], AB * D * EF) +
+        torch.einsum(einsum_pattern, weights[...,56], AB * C) +
+        torch.einsum(einsum_pattern, weights[...,57], AB * C * F) +
+        torch.einsum(einsum_pattern, weights[...,58], AB * C * E) +
+        torch.einsum(einsum_pattern, weights[...,59], AB * C * EF) +
+        torch.einsum(einsum_pattern, weights[...,60], AB * CD) +
+        torch.einsum(einsum_pattern, weights[...,61], AB * CD * F) +
+        torch.einsum(einsum_pattern, weights[...,62], AB * CD * E) +
+        torch.einsum(einsum_pattern, weights[...,63], AB * CD * EF)
+    )
+
+
 def light_basis_hard(x, lut_rank):
     if lut_rank == 2:
         A, B = x[:, 0], x[:, 1]
@@ -423,6 +601,26 @@ def light_basis_hard(x, lut_rank):
     return basis
 
 
+def weighted_light_basis_sum(x, weights, einsum_pattern, lut_rank) -> torch.Tensor:
+    if lut_rank == 2:
+        A, B = x[:, 0], x[:, 1]
+        basis = weighted_light_basis_sum_2(A, B, weights, einsum_pattern)
+    elif lut_rank == 4:
+        A, B, C, D = (x[:, 0], x[:, 1],
+                        x[:, 2], x[:, 3]
+                        )
+        basis = weighted_light_basis_sum_4(A, B, C, D, weights, einsum_pattern)
+    elif lut_rank == 6:
+        A, B, C, D, E, F = (
+            x[:, 0], x[:, 1], x[:, 2],
+            x[:, 3], x[:, 4], x[:, 5],
+        )
+        basis = weighted_light_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern)
+    else:
+        raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
+    return basis
+
+
 def light_basis_2(A, B) -> torch.Tensor:
     basis = torch.stack([
         (1 - A) * (1 - B),
@@ -431,6 +629,15 @@ def light_basis_2(A, B) -> torch.Tensor:
         A*B
     ], dim=-1)
     return basis
+
+
+def weighted_light_basis_sum_2(A, B, weights, einsum_pattern) -> torch.Tensor:
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], (1 - A) * (1 - B)) +
+        torch.einsum(einsum_pattern, weights[...,1], (1 - A) * B) +
+        torch.einsum(einsum_pattern, weights[...,2], A * (1 - B)) +
+        torch.einsum(einsum_pattern, weights[...,3], A * B)
+    )
 
 def light_basis_3(A, B, C) -> torch.Tensor:
     basis = torch.stack([
@@ -465,6 +672,27 @@ def light_basis_4(A, B, C, D) -> torch.Tensor:
         A * B * C * D
     ], dim=-1)
     return basis
+
+
+def weighted_light_basis_sum_4(A, B, C, D, weights, einsum_pattern) -> torch.Tensor:
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], (1 - A) * (1 - B) * (1 - C) * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,1], (1 - A) * (1 - B) * (1 - C) * D) +
+        torch.einsum(einsum_pattern, weights[...,2], (1 - A) * (1 - B) * C * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,3], (1 - A) * (1 - B) * C * D) +
+        torch.einsum(einsum_pattern, weights[...,4], (1 - A) * B * (1 - C) * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,5], (1 - A) * B * (1 - C) * D) +
+        torch.einsum(einsum_pattern, weights[...,6], (1 - A) * B * C * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,7], (1 - A) * B * C * D) +
+        torch.einsum(einsum_pattern, weights[...,8], A * (1 - B) * (1 - C) * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,9], A * (1 - B) * (1 - C) * D) +
+        torch.einsum(einsum_pattern, weights[...,10], A * (1 - B) * C * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,11], A * (1 - B) * C * D) +
+        torch.einsum(einsum_pattern, weights[...,12], A * B * (1 - C) * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,13], A * B * (1 - C) * D) +
+        torch.einsum(einsum_pattern, weights[...,14], A * B * C * (1 - D)) +
+        torch.einsum(einsum_pattern, weights[...,15], A * B * C * D)
+    )
 
 
 def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
@@ -535,6 +763,75 @@ def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
         A * B * C * D * E * F
     ], dim=-1)
     return basis
+
+
+def weighted_light_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern) -> torch.Tensor:
+    return (
+        torch.einsum(einsum_pattern, weights[...,0], (1 - A) * (1 - B) * (1 - C) * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,1], (1 - A) * (1 - B) * (1 - C) * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,2], (1 - A) * (1 - B) * (1 - C) * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,3], (1 - A) * (1 - B) * (1 - C) * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,4], (1 - A) * (1 - B) * (1 - C) * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,5], (1 - A) * (1 - B) * (1 - C) * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,6], (1 - A) * (1 - B) * (1 - C) * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,7], (1 - A) * (1 - B) * (1 - C) * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,8], (1 - A) * (1 - B) * C * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,9], (1 - A) * (1 - B) * C * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,10], (1 - A) * (1 - B) * C * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,11], (1 - A) * (1 - B) * C * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,12], (1 - A) * (1 - B) * C * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,13], (1 - A) * (1 - B) * C * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,14], (1 - A) * (1 - B) * C * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,15], (1 - A) * (1 - B) * C * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,16], (1 - A) * B* (1 - C) * (1 - D) * (1 - E)  *(1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,17], (1 - A) * B* (1 - C) * (1 - D) * (1 - E)  * F) +
+        torch.einsum(einsum_pattern, weights[...,18], (1 - A) * B* (1 - C) * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,19], (1 - A) * B* (1 - C) * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,20], (1 - A) * B* (1 - C) * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,21], (1 - A) * B* (1 - C) * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,22], (1 - A) * B* (1 - C) * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,23], (1 - A) * B* (1 - C) * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,24], (1 - A) * B* C * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,25], (1 - A) * B* C * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,26], (1 - A) * B* C * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,27], (1 - A) * B* C * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,28], (1 - A) * B* C * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,29], (1 - A) * B* C * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,30], (1 - A) * B* C * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,31], (1 - A) * B* C * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,32], A * (1 - B) * (1 - C) * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,33], A * (1 - B) * (1 - C) * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,34], A * (1 - B) * (1 - C) * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,35], A * (1 - B) * (1 - C) * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,36], A * (1 - B) * (1 - C) * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,37], A * (1 - B) * (1 - C) * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,38], A * (1 - B) * (1 - C) * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,39], A * (1 - B) * (1 - C) * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,40], A * (1 - B) * C * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,41], A * (1 - B) * C * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,42], A * (1 - B) * C * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,43], A * (1 - B) * C * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,44], A * (1 - B) * C * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,45], A * (1 - B) * C * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,46], A * (1 - B) * C * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,47], A * (1 - B) * C * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,48], A * B * (1 - C) * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,49], A * B * (1 - C) * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,50], A * B * (1 - C) * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,51], A * B * (1 - C) * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,52], A * B * (1 - C) * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,53], A * B * (1 - C) * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,54], A * B * (1 - C) * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,55], A * B * (1 - C) * D * E * F) +
+        torch.einsum(einsum_pattern, weights[...,56], A * B * C * (1 - D) * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,57], A * B * C * (1 - D) * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,58], A * B * C * (1 - D) * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,59], A * B * C * (1 - D) * E * F) +
+        torch.einsum(einsum_pattern, weights[...,60], A * B * C * D * (1 - E) * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,61], A * B * C * D * (1 - E) * F) +
+        torch.einsum(einsum_pattern, weights[...,62], A * B * C * D * E * (1 - F)) +
+        torch.einsum(einsum_pattern, weights[...,63], A * B * C * D * E * F)
+    )
 
 ####################################################################
 
