@@ -1,14 +1,10 @@
+name: parametrization-dense
+
 params:
 
   # ─────────────────────────────────────────────
   # Residual / parametrization hyperparameters
   # ─────────────────────────────────────────────
-
-  residual_param:
-    type: float
-    low: 2.0
-    high: 20.0
-    log: true
 
   parametrization_temperature:
     type: float
@@ -42,14 +38,14 @@ params:
     type: categorical
     choices: [null, "CosineAnnealingWarmRestarts", "ReduceLROnPlateau"]
 
-  lr-patience:
+  lr_patience:
     type: int
     low: 2
     high: 10
     when:
       lr_schedule: ["CosineAnnealingWarmRestarts", "ReduceLROnPlateau"]
 
-  lr-reduction-factor:
+  lr_reduction_factor:
     type: float
     low: 0.1
     high: 1.0
@@ -58,53 +54,91 @@ params:
       lr_schedule: ["ReduceLROnPlateau"]
 
 
-campaigns:
+studies:
   
-  - name: raw-rank_2-soft # ~30 MB per event
-    architecture: DlgnCifar10Small
-    parametrization: raw
-    lut_rank: 2
-    batch_size: 128
-    forward_sampling: soft
-
-  - name: walsh-rank_2-soft # ~30 MB per event
+  - name: walsh-cifar-rank-2
     architecture: DlgnCifar10Small
     parametrization: walsh
+    dataset: cifar-10
     lut_rank: 2
-    batch_size: 128
-    forward_sampling: soft
 
-  - name: walsh-rank_2-hard # ~30 MB per event
-    architecture: DlgnCifar10Small
+  - name: walsh-mnist-rank-2
+    architecture: DlgnMnistSmall
     parametrization: walsh
+    dataset: mnist
     lut_rank: 2
-    batch_size: 128
-    forward_sampling: hard
 
-  - name: walsh-rank_2-gumbel_soft # ~30 MB per event
-    architecture: DlgnCifar10Small
+  - name: walsh-fmnist-rank-2
+    architecture: DlgnFashionMnistSmall
     parametrization: walsh
+    dataset: fashion-mnist
     lut_rank: 2
-    batch_size: 128
-    forward_sampling: gumbel_soft
 
-  - name: walsh-rank_2-gumbel_hard # ~30 MB per event
-    architecture: DlgnCifar10Small
+  - name: walsh-jsc-rank-2
+    architecture: DlgnJscSmall50Bits
     parametrization: walsh
+    dataset: jsc
     lut_rank: 2
-    batch_size: 128
-    forward_sampling: gumbel_hard
+
+  - name: walsh-cifar-rank-4
+    architecture: DlgnCifar10SmallRank4
+    parametrization: walsh
+    dataset: cifar-10
+    lut_rank: 4
+
+  - name: walsh-mnist-rank-4
+    architecture: DlgnMnistSmallRank4
+    parametrization: walsh
+    dataset: mnist
+    lut_rank: 4
+
+  - name: walsh-fmnist-rank-4
+    architecture: DlgnFashionMnistSmallRank4
+    parametrization: walsh
+    dataset: fashion-mnist
+    lut_rank: 4
+
+  - name: walsh-jsc-rank-4
+    architecture: DlgnJscSmall50BitsRank4
+    parametrization: walsh
+    dataset: jsc
+    lut_rank: 4
+
+  - name: walsh-cifar-rank-6
+    architecture: DlgnCifar10SmallRank6
+    parametrization: walsh
+    dataset: cifar-10
+    lut_rank: 6
+
+  - name: walsh-mnist-rank-6
+    architecture: DlgnMnistSmallRank6
+    parametrization: walsh
+    dataset: mnist
+    lut_rank: 6
+
+  - name: walsh-fmnist-rank-6
+    architecture: DlgnFashionMnistSmallRank6
+    parametrization: walsh
+    dataset: fashion-mnist
+    lut_rank: 6
+
+  - name: walsh-jsc-rank-6
+    architecture: DlgnJscSmall50BitsRank6
+    parametrization: walsh
+    dataset: jsc
+    lut_rank: 6
 
 
 defaults:
-  dataset: cifar-10
-  num_iterations: 10000
-  # num_iterations: 6
-  eval_freq: 100
-  # eval_freq: 5
+  num_iterations: 100000
+  # num_iterations: 200
+  eval_freq: 1000
   connections: fixed
   weight_init: residual
   half_precision: true
   device: cuda
   seed: null
   output: null
+  forward_sampling: gumbel_soft
+  batch_size: 128
+  residual_param: 5.0

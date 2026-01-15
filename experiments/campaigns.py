@@ -11,44 +11,46 @@ DEFAULT_KEYS = {
     "lut_rank",
 }
 
-def load_campaigns(yaml_path: str):
+def load_studies(yaml_path: str):
     with open(yaml_path, "r") as f:
         cfg = yaml.safe_load(f)
 
     defaults = cfg.get("defaults", {})
-    raw_campaigns = cfg["campaigns"]
+    raw_studies = cfg["studies"]
     params = cfg["params"]
+    name = cfg["name"]
 
-    campaigns = []
-    for idx, c in enumerate(raw_campaigns):
-        campaign = defaults.copy()
-        campaign.update(c)
-        campaign["params"] = params
+    studies = []
+    for idx, c in enumerate(raw_studies):
+        study = defaults.copy()
+        study.update(c)
+        study["params"] = params
+        study["campaign_name"] = name
 
         # Assign a stable internal index
-        campaign["_index"] = idx
+        study["_index"] = idx
 
         # Ensure required keys exist
-        missing = DEFAULT_KEYS - campaign.keys()
+        missing = DEFAULT_KEYS - study.keys()
         if missing:
             raise ValueError(
-                f"Campaign {idx} missing keys: {missing}"
+                f"Study {idx} missing keys: {missing}"
             )
 
-        campaigns.append(campaign)
+        studies.append(study)
 
-    return campaigns
+    return studies
 
 
-def campaign_to_study_name(campaign: dict) -> str:
+def study_to_campaign_name(study: dict) -> str:
     # Prefer explicit name if provided
-    if "name" in campaign:
-        return f"hpo__{campaign['name']}"
+    if "name" in study:
+        return f"{study['campaign_name']}__{study['name']}"
 
     # Fallback: deterministic name
     parts = [
-        f"{k}={campaign[k]}"
-        for k in sorted(campaign)
+        f"{k}={study[k]}"
+        for k in sorted(study)
         if not k.startswith("_")
     ]
-    return "hpo__" + "__".join(parts)
+    return f"{study['campaign_name']}__" + "__".join(parts)

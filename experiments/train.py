@@ -76,11 +76,10 @@ def get_parser():
              "If CosineAnnealingWarmRestarts, length of each cycle." \
              "Counted in number of evaluations."
     )
-
-    parser.add_argument("--temp-decay", "-td", type=float, default=None,
-                         help="Temperature decay, e.g. 4 (only applicable to walsh-parametrized models)")
     parser.add_argument("--half-precision", action="store_true", 
                         help="Use half-precision (bfloat16) training to reduce memory usage and speed up training")
+    parser.add_argument("--compile-model", action="store_true", 
+                        help="Use TorchScript to compile the model for faster inference (only works for conv models)")
 
     parser.add_argument(
         "--output", "-o", action=CreateFolder, type=Path, default="results/training/",
@@ -249,7 +248,7 @@ class LearningRateSchedulerCallback:
         if self.scheduler is None:
             pass
         elif isinstance(self.scheduler, ReduceLROnPlateau):
-            self.scheduler.step(ctx.metrics["val_loss"])
+            self.scheduler.step(ctx.metrics["val_loss_discrete"])
         elif isinstance(self.scheduler, CosineAnnealingWarmRestarts):
             self.scheduler.step()
 
@@ -310,7 +309,8 @@ def run_training(args, callbacks=None):
     # Get model, loss, and optimizer
     model, loss_fn, optim = get_model(thresholds, args)
     model.to(args.device)
-    # model.compile()  # factor ~2 speedup w/ JIT compilation
+    if args.compile_model:
+        model.compile()  # factor ~2 speedup w/ JIT compilation
 
     # Create evaluation functions
     eval_functions = create_eval_functions(loss_fn)
@@ -375,7 +375,7 @@ def run_training(args, callbacks=None):
                 regularization_weight=regularization_schedule(i),
             )
 
-        print_memory_usage("After training step")
+        # print_memory_usage("After training step")
 
         n += y.size(0)
         running_train_loss += loss

@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 import argparse
 import optuna
+from optuna.storages import RDBStorage
+from sqlalchemy import event
 
-from campaigns import load_campaigns, campaign_to_study_name
+from campaigns import load_studies, study_to_campaign_name
 from train import run_training, get_parser, CallbackContext
+
+
+def _enable_wal(dbapi_conn, conn_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL;")
+    cursor.execute("PRAGMA synchronous=NORMAL;")
+    cursor.close()
 
 
 def condition_met(spec, params):
@@ -66,15 +75,15 @@ def suggest_from_space(trial, space):
     return params
 
 
-def objective(trial, campaign):
+def objective(trial, study):
 
-    suggest_from_space(trial, campaign["params"])
+    suggest_from_space(trial, study["params"])
 
     parser = get_parser()
     args = parser.parse_args([])
 
-    # update all args from campaign
-    for key, value in campaign.items():
+    # update all args from study
+    for key, value in study.items():
         setattr(args, key, value)
 
     for key, value in trial.params.items():
@@ -113,33 +122,44 @@ def main():
     parser.add_argument("--n-trials", type=int, default=100)
     args = parser.parse_args()
 
-    campaigns = load_campaigns(args.campaigns_yaml)
-    campaign = campaigns[args.campaign_index]
+    studies = load_studies(args.campaigns_yaml)
+    study = studies[args.campaign_index]
 
-    study_name = campaign_to_study_name(campaign)
+    study_name = study_to_campaign_name(study)
 
     print(f"Starting study: {study_name}")
-    print(f"With campaign:\n{campaign}")
+    print(f"With study:\n{study}")
 
-    study = optuna.create_study(
+    storage = RDBStorage(
+        url=args.storage,
+        engine_kwargs={
+            "connect_args": {
+                "timeout": 10,  # seconds to wait on DB lock
+            }
+        },
+    )
+
+    event.listen(storage.engine, "connect", _enable_wal)
+
+    optuna_study = optuna.create_study(
         study_name=study_name,
-        storage=args.storage,
+        storage=storage,
         direction="minimize",
         load_if_exists=True,
     )
 
     # Store campaign metadata (very useful)
-    study.set_user_attr("campaign", campaign)
+    optuna_study.set_user_attr("study", study)
 
-    study.optimize(
-        lambda trial: objective(trial, campaign),
+    optuna_study.optimize(
+        lambda trial: objective(trial, study),
         n_trials=args.n_trials,
-        catch=(Exception,),
+        catch=(optuna.TrialPruned,)
     )
 
-    if study.best_trials:
-        print("Best value:", study.best_value)
-        print("Best params:", study.best_params)
+    if optuna_study.best_trials:
+        print("Best value:", optuna_study.best_value)
+        print("Best params:", optuna_study.best_params)
 
 
 if __name__ == "__main__":

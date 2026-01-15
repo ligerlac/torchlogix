@@ -42,14 +42,14 @@ params:
     type: categorical
     choices: [null, "CosineAnnealingWarmRestarts", "ReduceLROnPlateau"]
 
-  lr-patience:
+  lr_patience:
     type: int
     low: 2
     high: 10
     when:
       lr_schedule: ["CosineAnnealingWarmRestarts", "ReduceLROnPlateau"]
 
-  lr-reduction-factor:
+  lr_reduction_factor:
     type: float
     low: 0.1
     high: 1.0
@@ -133,7 +133,7 @@ campaigns:
 
 
 defaults:
-  dataset: cifar-10-2-thresholds
+  dataset: cifar-10
   num_iterations: 10000
   # num_iterations: 6
   eval_freq: 100

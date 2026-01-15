@@ -119,6 +119,7 @@ class ResidualLogicBlock(nn.Module):
         out = self.main(x)
         identity = self.shortcut(x)
         return out + identity
+        # return out + identity - out * identity  # Relaxed OR
 
 
 class ClgnMnist(torch.nn.Sequential):
@@ -189,22 +190,35 @@ class ClgnMnistTiny(ClgnMnist):
         tau = llkw.get("tau", 1.0)
         super(ClgnMnistTiny, self).__init__(k_num=4, tau=tau, **llkw)
 
+
 class ClgnMnistSmall(ClgnMnist):
     def __init__(self, **llkw):
-        tau = llkw.get("tau", 1.0)
+        tau = llkw.get("tau", 6.5)
         super(ClgnMnistSmall, self).__init__(k_num=16, tau=tau, **llkw)
 
 
 class ClgnMnistMedium(ClgnMnist):
     def __init__(self, **llkw):
-        tau = llkw.get("tau", 1.0)
+        tau = llkw.get("tau", 28.)
         super(ClgnMnistMedium, self).__init__(k_num=64, tau=tau, **llkw)
 
 
 class ClgnMnistLarge(ClgnMnist):
     def __init__(self, **llkw):
-        tau = llkw.get("tau", 1.0)
+        tau = llkw.get("tau", 35.)
         super(ClgnMnistLarge, self).__init__(k_num=1024, tau=tau, **llkw)
+
+
+class ClgnMnistSmallRank4(ClgnMnist):
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 6.5)
+        super(ClgnMnistSmallRank4, self).__init__(k_num=8, tau=tau, **llkw)
+
+
+class ClgnMnistSmallRank6(ClgnMnist):
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 6.5)
+        super(ClgnMnistSmallRank6, self).__init__(k_num=6, tau=tau, **llkw)
 
 
 class ClgnCifar10(torch.nn.Sequential):
