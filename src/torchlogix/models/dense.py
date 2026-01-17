@@ -63,7 +63,7 @@ class DlgnFashionMnistSmallRank4(DlgnFashionMnist):
 class DlgnFashionMnistSmallRank6(DlgnFashionMnist):
     def __init__(self, **llkw):
         tau = llkw.get("tau", 1./0.1)
-        super(DlgnFashionMnistSmallRank6, self).__init__(neurons_per_layer=2333, tau=tau, **llkw)
+        super(DlgnFashionMnistSmallRank6, self).__init__(neurons_per_layer=2330, tau=tau, **llkw)
 
 
 class DlgnMnist(Dlgn):
@@ -103,7 +103,7 @@ class DlgnMnistSmallRank4(DlgnMnist):
 class DlgnMnistSmallRank6(DlgnMnist):
     def __init__(self, **llkw):
         tau = llkw.get("tau", 1./0.1)
-        super(DlgnMnistSmallRank6, self).__init__(neurons_per_layer=2333, tau=tau, **llkw)
+        super(DlgnMnistSmallRank6, self).__init__(neurons_per_layer=2330, tau=tau, **llkw)
 
 class DlgnMnistMedium(DlgnMnist):
     def __init__(self, **llkw):
@@ -394,7 +394,7 @@ class DlgnJscMediumRank6(DlgnJsc):
     n_input_bits = None
     def __init__(self, **llkw):
         tau = llkw.get("tau", 1./0.02)
-        super(DlgnJscMediumRank6, self).__init__(n_layers=4, neurons_per_layer=42_333, tau=tau, **llkw)
+        super(DlgnJscMediumRank6, self).__init__(n_layers=4, neurons_per_layer=42_330, tau=tau, **llkw)
 
 class DlgnJscMedium10BitsRank6(DlgnJscMediumRank6):
     n_input_bits = 10
