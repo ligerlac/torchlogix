@@ -38,9 +38,10 @@ class DlgnFashionMnist(Dlgn):
     n_input_bits = 2
 
     def __init__(self, neurons_per_layer: int, tau: float, **llkw):
+        n_bits = llkw["thresholds"].shape[-1]
         llkw["binarization"] = "uniform"
         super(DlgnFashionMnist, self).__init__(
-            in_dim=28*28,
+            in_dim=28*28*n_bits,
             n_layers=5,
             neurons_per_layer=neurons_per_layer,
             class_count=10,
