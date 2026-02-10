@@ -672,7 +672,6 @@ def test_conv_model_rect():
         )    
 
 
-
 def test_compiled_model():
     """Test model compilation and inference."""
     connections_kwargs = {"init_method": "random-unique"}

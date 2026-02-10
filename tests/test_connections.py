@@ -1,7 +1,7 @@
 import pytest
 import torch
 from torchlogix.layers import LogicDense
-from torchlogix.connections import LearnableDenseConnections
+from torchlogix.connections import LearnableDenseConnections, FixedConvConnections
 from torchlogix.functional import softmax
 from torch.nn.functional import softmax as softmax_torch
 
@@ -42,6 +42,7 @@ def test_learnable_connections(parametrization, num_candidates, lut_rank):
     loss.backward()
     assert all(torch.norm(p.grad) > 0 for p in layer.parameters())
 
+
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_learnable_gradients(lut_rank):
     """Test that gradients flow through learnable connections."""
@@ -73,3 +74,27 @@ def test_learnable_gradients(lut_rank):
     assert torch.allclose(parameters[0].grad.flatten(start_dim=-2), weights_grad, atol=1e-3, rtol=1e-3)
     input_grad = output_grad @ softmax_torch(weights, dim=0).T
     assert torch.allclose(X.grad, input_grad, atol=1e-3, rtol=1e-3)
+
+
+@pytest.mark.parametrize("channel_group_size", [None, 1, 2])
+def test_fixed_conv_connections(channel_group_size):
+    """
+    indices: (lut_rank, num_kernels, kernel_position, sample_size, 3)
+        where the last dim is (h, w, c)
+        for each tree level
+    """
+    num_kernels = 3
+
+    conn = FixedConvConnections(
+        in_dim=28, channels=3, num_kernels=num_kernels, tree_depth=3, receptive_field_size=3, channel_group_size=channel_group_size
+    )
+
+    # only the first matters (field of view)
+    fow_indices = conn.indices[0]
+
+    for kernel_idx in range(num_kernels):
+        considered_channels = fow_indices[:, kernel_idx, :, :, 2].unique()
+        if channel_group_size is not None:
+            assert len(considered_channels) <= channel_group_size, (
+                "channel_group_size must be smaller than the number of channels"
+            )
