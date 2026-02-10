@@ -17,7 +17,7 @@ def load_studies(yaml_path: str):
 
     defaults = cfg.get("defaults", {})
     raw_studies = cfg["studies"]
-    params = cfg["params"]
+    params = cfg.get("params", {})
     name = cfg["name"]
 
     studies = []

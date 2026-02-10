@@ -11,8 +11,8 @@ from ..functional import sigmoid, gumbel_sigmoid
 def setup_binarization(thresholds, binarization: str, **binarization_kwargs):
     bin_dict = {
         "dummy": DummyBinarization,
-        "uniform": FixedBinarization,
-        "distributive": FixedBinarization,
+        "fixed": FixedBinarization,
+        "soft": SoftBinarization,
         "learnable": LearnableBinarization
     }
     if binarization not in bin_dict:
@@ -37,27 +37,106 @@ class Binarization(torch.nn.Module, ABC):
         pass
     
     @staticmethod
-    def get_uniform_thresholds(data_set: Tensor, num_bits: int, feature_wise: bool) -> Tensor:
-        min_value = data_set.min(dim=0)[0] if feature_wise else data_set.min()
-        max_value = data_set.max(dim=0)[0] if feature_wise else data_set.max()
-        return min_value.unsqueeze(-1) + torch.arange(1, num_bits+1).unsqueeze(0) * (
+    def get_uniform_thresholds(data_set: Tensor, num_bits: int, one_per: str) -> Tensor:
+        print(f"Data set shape for uniform threshold calculation (per={one_per}): {data_set.shape}")
+        if one_per == "feature":
+            min_value = data_set.min(dim=0)[0]
+            max_value = data_set.max(dim=0)[0]
+        elif one_per == "channel":
+            # For conv: (batch_size, num_channels, h, w)
+            # We want min/max per channel across all other dimensions
+            batch_size, num_channels = data_set.shape[:2]
+            # Reshape to (num_channels, -1) to flatten all non-channel dims
+            reshaped = data_set.transpose(0, 1).reshape(num_channels, -1)
+            min_value = reshaped.min(dim=1)[0]  # (num_channels,)
+            max_value = reshaped.max(dim=1)[0]  # (num_channels,)
+        elif one_per == "global":
+            min_value = data_set.min()
+            max_value = data_set.max()
+        else:
+            raise ValueError(f"one_per must be 'feature', 'channel', or 'global'. Got {one_per}.")
+        threshs = min_value.unsqueeze(-1) + torch.arange(1, num_bits+1).unsqueeze(0) * (
             (max_value - min_value) / (num_bits + 1)).unsqueeze(-1)
+        print(f"Uniform thresholds shape: {threshs.shape}")
+        print(f"threshs =\n{threshs}")
+        return threshs
     
     @staticmethod
-    def get_distributive_thresholds(data_set: Tensor, num_bits: int, feature_wise: bool) -> Tensor:
+    def get_distributive_thresholds_old(data_set: Tensor, num_bits: int, feature_wise: bool) -> Tensor:
         data = torch.sort(data_set.flatten())[0] if not feature_wise else torch.sort(data_set, dim=0)[0]
         indicies = torch.tensor([int(data.shape[0]*i/(num_bits+1)) for i in range(1, num_bits+1)])
         thresholds = data[indicies]
         return torch.permute(thresholds, (*list(range(1, thresholds.ndim)), 0))
     
     @staticmethod
-    def get_initial_thresholds(data_set: Tensor, num_bits: int, feature_wise: bool, method: str = "uniform") -> Tensor:
-        if method == "dummy":
-            return None
-        elif method in ["uniform", "learnable"]:
-            return Binarization.get_uniform_thresholds(data_set, num_bits, feature_wise)
+    def get_distributive_thresholds(
+        data_set: Tensor,
+        num_bits: int,
+        one_per: str
+    ) -> Tensor:
+        """
+        Compute distributive (quantile-based) thresholds.
+
+        one_per:
+            - "global":   one set of thresholds for entire tensor
+            - "feature":  per-feature thresholds (last dimension)
+            - "channel":  per-channel thresholds (dim=1, conv tensors)
+        """
+        if one_per == "global":
+            # Flatten everything
+            data = torch.sort(data_set.flatten())[0]  # (N,)
+            indices = torch.tensor(
+                [int(data.numel() * i / (num_bits + 1)) for i in range(1, num_bits + 1)],
+                device=data.device
+            )
+            thresholds = data[indices]  # (num_bits,)
+            return thresholds
+
+        elif one_per == "feature":
+            # Feature = last dimension
+            # Shape: (..., F)
+            data = torch.sort(data_set, dim=0)[0]  # sort along batch dimension
+            n = data.shape[0]
+
+            indices = torch.tensor(
+                [int(n * i / (num_bits + 1)) for i in range(1, num_bits + 1)],
+                device=data.device
+            )
+
+            thresholds = data[indices, ...]  # (num_bits, F)
+            return thresholds.permute(1, 0)  # (F, num_bits)
+
+        elif one_per == "channel":
+            # Expected shape: (batch, channels, ...)
+            batch_size, num_channels = data_set.shape[:2]
+
+            # Move channels first and flatten everything else
+            reshaped = data_set.transpose(0, 1).reshape(num_channels, -1)
+            sorted_data = torch.sort(reshaped, dim=1)[0]  # (C, N)
+
+            n = sorted_data.shape[1]
+            indices = torch.tensor(
+                [int(n * i / (num_bits + 1)) for i in range(1, num_bits + 1)],
+                device=sorted_data.device
+            )
+
+            thresholds = sorted_data[:, indices]  # (C, num_bits)
+            return thresholds
+
+        else:
+            raise ValueError(
+                f"one_per must be 'global', 'feature', or 'channel'. Got {one_per}."
+            )
+
+    
+    @staticmethod
+    def get_initial_thresholds(data_set: Tensor, num_bits: int, one_per: str, method: str = "uniform") -> Tensor:
+        assert one_per in ["feature", "channel", "global"], "one_per must be 'feature', 'channel', or 'global'."
+        assert method in ["uniform", "distributive"], "method must be 'uniform' or 'distributive'"
+        if method == "uniform":
+            return Binarization.get_uniform_thresholds(data_set, num_bits, one_per)
         elif method == "distributive":
-            return Binarization.get_distributive_thresholds(data_set, num_bits, feature_wise)
+            return Binarization.get_distributive_thresholds(data_set, num_bits, one_per)
         else:
             raise ValueError(f"Unknown threshold initialization method: {method}.")
 
@@ -71,7 +150,14 @@ class FixedBinarization(Binarization):
         if self.thresholds is None:
             raise ValueError('Need to fit before calling apply')
         x = x.unsqueeze(-1)
-        x = (x > self.thresholds).float()
+        if self.thresholds.dim() == 2 and x.dim() == 5:  # Conv with channel-wise thresholds
+            # thresholds: (num_channels, num_bits)
+            # x: (batch, channels, h, w, 1)
+            # Reshape to (1, num_channels, 1, 1, num_bits)
+            thresholds = self.thresholds.view(1, -1, 1, 1, self.thresholds.shape[1])
+            x = (x > thresholds).float()
+        else:
+            x = (x > self.thresholds).float()
         return merge_dim_with_last(x, self.feature_dim)
         
 
@@ -84,42 +170,100 @@ class DummyBinarization(Binarization):
         return x.float()
     
 
+class SoftBinarization(Binarization):
+    """ Soft binarization with fixed thresholds using sigmoid."""
+    def __init__(self, thresholds: Tensor, temperature=0.1, feature_dim=-2, **kwargs):
+        super().__init__(thresholds, feature_dim, **kwargs)
+        self.temperature_sampling = temperature
+    
+    def forward(self, x: Tensor) -> Tensor:
+        x = x.unsqueeze(-1)
+        if self.thresholds.dim() == 2 and x.dim() == 5:  # Conv with channel-wise thresholds
+            # thresholds: (num_channels, num_bits)
+            # x: (batch, channels, h, w, 1)
+            # Reshape to (1, num_channels, 1, 1, num_bits)
+            thresholds = self.thresholds.view(1, -1, 1, 1, self.thresholds.shape[1])
+        else:
+            thresholds = self.thresholds
+        if self.training:
+            x = sigmoid((x - thresholds) / self.temperature_sampling)
+        else:
+            x = (x > thresholds).to(dtype=torch.float32)
+        return merge_dim_with_last(x, self.feature_dim)
+    
+
 class LearnableBinarization(Binarization):
-    def __init__(self, 
-                 thresholds: Tensor = None, 
-                 feature_wise=True, 
-                 feature_dim=-2,
-                 temperature_sampling=0.1, 
-                 temperature_softplus=1.0,
-                 forward_sampling="soft", 
-                 **kwargs):
+    def __init__(
+        self, 
+        thresholds: Tensor = None,
+        lowest_value: float = 0.0,  # set this to lowest value in dataset (e.g. 0 for images)
+        feature_wise=False, 
+        channel_wise=False,
+        feature_dim=-2,
+        temperature_sampling=0.1,
+        temperature_softplus=0.1,
+        forward_sampling="soft", 
+        max_grad_norm=0.001,
+        **kwargs
+    ):
         self.forward_sampling = forward_sampling
+        assert not (channel_wise and feature_wise), "Cannot be both channel-wise and feature-wise."        
         self.feature_wise = feature_wise
+        self.channel_wise = channel_wise
         super().__init__(thresholds, feature_dim)
         self.temperature_sampling = temperature_sampling
-        self.temperature_softplus = temperature_softplus  
-        self._frozen = False  # switch to control hard/soft behavior
+        self.temperature_softplus = temperature_softplus
+        # self._frozen = False  # switch to control hard/soft behavior
         diffs = torch.diff(thresholds, 
                            prepend=thresholds.new_zeros(*thresholds.shape[:-1], 1), dim=-1)
         self.raw_diffs = torch.nn.Parameter(diffs)
+        self.raw_diffs.register_hook(self._clip_grad)
+        self._max_grad_norm = max_grad_norm
 
+    def _clip_grad(self, grad):
+        norm = grad.norm()
+        if norm > self._max_grad_norm:
+            grad = grad * (self._max_grad_norm / (norm + 1e-6))
+        return grad
+
+    # def get_thresholds(self):
+    #     if self.training:
+    #         diffs_pos = (self.temperature_softplus + 1e-6) * F.softplus(self.raw_diffs / (self.temperature_softplus + 1e-6))
+    #         return torch.cumsum(diffs_pos, dim=-1)
+    #     else:
+    #         return torch.cumsum(self.raw_diffs, dim=-1)
+            
     def get_thresholds(self):
-        if self._frozen:
-            return torch.cumsum(self.raw_diffs, dim=-1)
-        else:
-            diffs_pos = self.temperature_softplus * F.softplus(self.raw_diffs / self.temperature_softplus)
-            return torch.cumsum(diffs_pos, dim=-1)
+        if self.training:
+            # first diff can be negative: global shift
+            first_diff = self.raw_diffs[..., :1]  # unconstrained
 
-    def freeze_thresholds(self):
-        """I dont get this function"""
-        with torch.no_grad():
-            thresholds = self.get_thresholds()  #.round()
-            diffs = torch.diff(thresholds, 
-                               prepend=thresholds.new_zeros(*thresholds.shape[:-1], 1))
-            self.raw_diffs.data = diffs
-            self.raw_diffs.detach_()
-        # self.raw_diffs.requires_grad = False
-        self._frozen = True
+            # remaining diffs are positive
+            if self.raw_diffs.shape[-1] > 1:
+                rest_diffs = (self.temperature_softplus + 1e-6) * F.softplus(
+                    self.raw_diffs[..., 1:] / (self.temperature_softplus + 1e-6)
+                )
+                diffs_pos = torch.cat([first_diff, rest_diffs], dim=-1)
+            else:
+                diffs_pos = first_diff
+
+            thresholds = torch.cumsum(diffs_pos, dim=-1)
+
+        else:
+            thresholds = torch.cumsum(self.raw_diffs, dim=-1)
+
+        return thresholds        
+            
+    # def freeze_thresholds(self):
+    #     """I dont get this function"""
+    #     with torch.no_grad():
+    #         thresholds = self.get_thresholds()  #.round()
+    #         diffs = torch.diff(thresholds, 
+    #                            prepend=thresholds.new_zeros(*thresholds.shape[:-1], 1))
+    #         self.raw_diffs.data = diffs
+    #         self.raw_diffs.detach_()
+    #     # self.raw_diffs.requires_grad = False
+    #     self._frozen = True
 
     def _sample_train(self, x: torch.Tensor, thresholds: torch.Tensor) -> torch.Tensor:
         """Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""
@@ -139,11 +283,16 @@ class LearnableBinarization(Binarization):
     def forward(self, x):
         x = x.unsqueeze(-1)
         thresholds = self.get_thresholds()
-        if self._frozen:
+        if thresholds.dim() == 2 and x.dim() == 5:  # Conv with channel-wise thresholds
+            # thresholds: (num_channels, num_bits)
+            # x: (batch, channels, h, w, 1)
+            # Reshape to (1, num_channels, 1, 1, num_bits)
+            thresholds = thresholds.view(1, -1, 1, 1, thresholds.shape[1])
+        if self.training:
             # Hard thermometer encoding
-            outputs = self._sample_eval(x, thresholds)
-        else:
             outputs = self._sample_train(x, thresholds)
+        else:
+            outputs = self._sample_eval(x, thresholds)
         return merge_dim_with_last(outputs, self.feature_dim)
     
 

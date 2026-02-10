@@ -13,7 +13,7 @@ def test_learnable_connections(parametrization, num_candidates, lut_rank):
     """Test that connections can be trained."""
     parametrization_kwargs = {
         "weight_init": "residual",
-        "residual_param": 20.0
+        "residual_probability": 0.9
     }
     if lut_rank > 2 and parametrization == "raw":
         pytest.skip("Raw parametrization currently only supports lut_rank=2 ")

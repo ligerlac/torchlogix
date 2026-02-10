@@ -15,14 +15,24 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingWarmResta
 import torch
 from tqdm import tqdm
 
-from torchlogix.layers import Binarization
+from torchlogix.layers import Binarization, LearnableBinarization, FixedBinarization, SoftBinarization
 from utils import (
     DATASET_CHOICES, ARCHITECTURE_CHOICES,
-    IMPL_TO_DEVICE, setup_experiment, CreateFolder, save_metrics_csv, save_config,
+    IMPL_TO_DEVICE, setup_experiment, CreateFolder, save_metrics_csv, save_config, save_thresholds_csv,
     create_eval_functions, evaluate_model, train, get_model, load_dataset, load_n, print_memory_usage
 )
 
 import torchlogix
+from hist import Hist
+
+
+class OneMinusResidualProb(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values <= 0 or values >= 1:
+            raise argparse.ArgumentTypeError(
+                "--one-minus-res-prob must be in (0, 1)"
+            )
+        setattr(namespace, "residual_probability", 1.0 - values)
 
 
 def get_parser():
@@ -108,7 +118,7 @@ def get_parser():
         help="Temperature for softmax in learnable connections"
     )
     parser.add_argument(
-        "--connections-temperature-decay", type=str, default=None, choices=[None, "linear", "exponential"],
+        "--connections-temperature-decay", type=str, default=None, choices=[None, "linear", "linear-half", "exponential"],
         help="Temperature decay for softmax in learnable connections"
     )
     parser.add_argument(
@@ -126,7 +136,7 @@ def get_parser():
         help="Number of inputs to each LUT node"
     )
     parser.add_argument(
-        "--parametrization", type=str, default="raw", choices=["raw", "walsh", "light"],
+        "--parametrization", type=str, default="raw", choices=["raw", "walsh", "walsh2", "light", "dwn"],
         help="Parametrization to use"
     )
     parser.add_argument(
@@ -146,13 +156,18 @@ def get_parser():
         help="Sampling method in forward pass during training"
     )
     parser.add_argument(
-        "--weight-init", type=str, default="residual", choices=["residual", "random"],
+        "--weight-init", type=str, default="residual", choices=["residual", "random", "residual-catalog"],
         help="Initialization method for model weights"
     )
     parser.add_argument(
-        "--residual-param", type=float, default=5.0,
+        "--residual-probability", type=float, default=0.951,
         help="Parameter for residual weight initialization. " \
-        "Corresponds to percentage of LUTs initialized to identity gate function."
+        "Corresponds to probability of a LUT entry corresponding to identity LUT entry."
+    )
+    parser.add_argument(
+        "--one-minus-res-prob", type=float, default=None, action=OneMinusResidualProb,
+        help="Helper parameter specifying 1 - residual_probability. "
+        "Overrides --residual-probability if set."
     )
 
     # Regularization parameters
@@ -169,7 +184,7 @@ def get_parser():
         help="Final regularization strength"
     )
     parser.add_argument(
-        "--regularization", type=str, default=None, choices=[None, "abs_sum", "L2"],
+        "--regularization", type=str, default=None, choices=[None, "abs_sum", "L2", "walsh"],
         help="Regularization method"
     )
     parser.add_argument(
@@ -183,19 +198,23 @@ def get_parser():
         help="Number of batches for initializing thresholds in binarization"
     )
     parser.add_argument(
-        "--binarization", type=str, default="uniform", choices=["dummy", "uniform", "learnable"],
+        "--binarization", type=str, default="fixed", choices=["dummy", "fixed", "soft", "learnable"],
         help="Binarization method for input data"
     )
     parser.add_argument(
-        "--binarization-feature-wise", action="store_true", 
-        help="Flag for feature-wise binarization thresholds"
+        "--binarization-init", type=str, default="uniform", choices=["uniform", "distributive"],
+        help="Method to find initial thresholds for binarization"
     )
     parser.add_argument(
-        "--binarization-temperature", type=float, default=0.1,
+        "--binarization-per", type=str, default="global", choices=["global", "feature", "channel"],
+        help="Binarization thresholds global, per channel, or per feature"
+    )
+    parser.add_argument(
+        "--binarization-temperature", type=float, default=0.01,
         help="Temperature for sampling in learnable binarization"
     )
     parser.add_argument(
-        "--binarization-temperature-decay", type=str, default=None, choices=[None, "linear", "exponential"],
+        "--binarization-temperature-decay", type=str, default=None, choices=[None, "linear", "linear-half", "exponential"],
         help="Temperature decay for sigmoid in walsh parametrization"
     )
     parser.add_argument(
@@ -203,8 +222,16 @@ def get_parser():
         help="Final temperature of decay for sigmoid in walsh parametrization"
     )
     parser.add_argument(
-        "--binarization-temperature-softplus", type=float, default=1.0,
+        "--binarization-temperature-softplus", type=float, default=0.01,
         help="Temperature for softplus in learnable binarization"
+    )
+    parser.add_argument(
+        "--binarization-learning-rate", type=float, default=None,
+        help="Learning rate for binarization (as fraction of main learning rate). If None, uses main learning rate."
+    )
+    parser.add_argument(
+        "--binarization-forward-sampling", type=str, default="soft", choices=["soft", "hard", "gumbel_soft", "gumbel_hard"],
+        help="Sampling method in forward pass during training for learnable binarization"
     )
 
     return parser
@@ -216,13 +243,16 @@ class DecaySchedule:
         self.final_value = final_value
         self.decay_type = decay_type
         self.total_steps = total_steps
-        assert decay_type in [None, "linear", "exponential"], f"Unknown decay type: {decay_type}"
+        assert decay_type in [None, "linear", "linear-half", "exponential"], f"Unknown decay type: {decay_type}"
 
     def __call__(self, step) -> float:
         if self.decay_type is None:
             value = self.initial_value
         elif self.decay_type == "linear":
             value = self.initial_value - (self.initial_value - self.final_value) * (step / self.total_steps)
+            value = max(value, self.final_value)
+        elif self.decay_type == "linear-half":
+            value = self.initial_value - 2 * (self.initial_value - self.final_value) * (step / self.total_steps)
             value = max(value, self.final_value)
         elif self.decay_type == "exponential":
             decay_rate = math.log(self.final_value / self.initial_value) / self.total_steps
@@ -258,7 +288,7 @@ class LearningRateSchedulerCallback:
             scheduler = None
         elif args.lr_schedule == "ReduceLROnPlateau":
             scheduler = ReduceLROnPlateau(
-                optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.lr_patience, verbose=False
+                optimizer, mode='min', factor=args.lr_reduction_factor, patience=args.lr_patience#, verbose=False
             )
         elif args.lr_schedule == "CosineAnnealingWarmRestarts":
             scheduler = CosineAnnealingWarmRestarts(
@@ -271,13 +301,13 @@ class LearningRateSchedulerCallback:
 
 def save_best_model(ctx: CallbackContext, output_dir: Path):
     """Callback to save the best model based on validation accuracy."""
-    val_acc = ctx.metrics.get("val_accuracy_eval", 0.0)
+    val_acc = ctx.metrics.get("val_acc_discrete", 0.0)
     if not hasattr(save_best_model, "best_val_acc"):
         save_best_model.best_val_acc = 0.0
 
     if val_acc > save_best_model.best_val_acc:
         save_best_model.best_val_acc = val_acc
-        model_path = output_dir / "best_model.pt"
+        model_path = f"{output_dir}/best_model.pt"
         torch.save(ctx.model.state_dict(), model_path)
         print(f"New best model saved with val_accuracy: {val_acc:.4f} at step {ctx.step}")
 
@@ -302,15 +332,46 @@ def run_training(args, callbacks=None):
     thresholds = Binarization.get_initial_thresholds(
         data_set,
         num_bits=model_cls.n_input_bits,
-        feature_wise=args.binarization_feature_wise,
-        method=args.binarization
+        one_per=args.binarization_per,
+        method=args.binarization_init
     )
+
+    # print(f"data_set shape: {data_set.shape}")
+    # if data_set.ndim == 4:
+    #     for i in range(3):
+    #         print(f"dist of channel {i}:")
+    #         h = Hist.new.Regular(12, -0.1, 1.1, name=f"x_{i}").Double()
+    #         h.fill(data_set[:, i, :, :].flatten().cpu().numpy())
+    #         print(h)
+    # else:
+    #     print(f"dist of features:")
+    #     h = Hist.new.Regular(12, -2, 2, name=f"x").Double()
+    #     h.fill(data_set.flatten().cpu().numpy())
+    #     print(h)
+
+    print("Initial thresholds:", thresholds)
 
     # Get model, loss, and optimizer
     model, loss_fn, optim = get_model(thresholds, args)
+
+    print(f"model.parameters(): {[p.shape for p in model.parameters()]}")
+    # p = next(model.parameters())
+    # for i in range(p.shape[1]):
+    #     print(f"param {i}, mean: {p[:, i].mean().item():.4f}, std: {p[:, i].std().item():.4f}")
+        # h = Hist.new.Regular(12, -2, 2, name=f"x").Double()
+        # h.fill(p[:, i].detach().cpu().numpy())
+        # print(h)
+
+    # exit(0)
+
     model.to(args.device)
     if args.compile_model:
-        model.compile()  # factor ~2 speedup w/ JIT compilation
+        print("compiling...")
+        model.compile(dynamic=True)  # speedup w/ JIT compilation
+
+    # bin_layer = model[0]
+    # print(f"bin layer args: {bin_layer.__dict__}")
+    # print(f"Initial binarization thresholds: {bin_layer.get_thresholds()}")
 
     # Create evaluation functions
     eval_functions = create_eval_functions(loss_fn)
@@ -361,6 +422,7 @@ def run_training(args, callbacks=None):
         enumerate(load_n(train_loader, args.num_iterations)),
         desc="Training",
         total=args.num_iterations,
+        mininterval=1,
     )
     running_train_loss, n = 0.0, 0
     for i, (x, y) in pbar:
@@ -375,29 +437,64 @@ def run_training(args, callbacks=None):
                 regularization_weight=regularization_schedule(i),
             )
 
-        # print_memory_usage("After training step")
+        # # print_memory_usage("After training step")
+
+        # bin_layer = model[0]
+        # print(f"relaxed thresholds after training step {i}: {bin_layer.get_thresholds()} ")
+
+        # bin_layer._frozen = True
+        # print(f"discrete thresholds after training step {i}: {bin_layer.get_thresholds()} ")
+        # bin_layer._frozen = False
+
+        # print(f"softly binarized inputs:")
+        # x_binarized = bin_layer(x)
+        # h = Hist.new.Regular(12, -0.1, 1.1, name=f"x_{i}").Double()
+        # h.fill(x_binarized.flatten().cpu().detach().numpy())
+        # print(h)
+
+        # print(f"discrete binarized inputs (discrete model)")
+        # model.train(False)
+        # x_binarized = model[0](x)
+        # h = Hist.new.Regular(12, -0.1, 1.1, name=f"x_{i}").Double()
+        # h.fill(x_binarized.flatten().cpu().detach().numpy())
+        # print(h)
+        # model.train(True)
 
         n += y.size(0)
         running_train_loss += loss
 
         # Update layer parameters according to schedules
-        model[0].temperature_sampling = binarization_schedule(i)
+        if isinstance(model[0], (LearnableBinarization, SoftBinarization)):
+            binarization_temp = binarization_schedule(i)
+            if binarization_temp <= 0:
+                print("Binarization temperature reached 0, freezing binarization layer.")
+                new_layer = FixedBinarization(thresholds=model[0].get_thresholds().detach(), feature_dim=model[0].feature_dim)
+                model[0] = new_layer.to(args.device)
+            else:
+                model[0].temperature_sampling = binarization_schedule(i)
+
         for idx in range(1, len(model)):
             layer = model[idx]
             if hasattr(layer, "rescale_weights") and args.weight_rescale is not None:
                 layer.rescale_weights(args.weight_rescale)
             if hasattr(layer, "parametrization") and args.parametrization_temperature_decay is not None:
-                # Parametrization temperature decay
                 layer.parametrization.temperature = parametrization_schedule(i)
             if hasattr(layer, "connections") and args.connections == "learnable" and args.connections_temperature_decay is not None:
                 # Connection temperature decay
                 layer.connections.temperature = connection_schedule(i)
 
-        if i % 10 == 0:
+        if i % 100 == 0:
             pbar.set_postfix(loss=f"{loss:.4f}")
 
         # Evaluation
         if (args.eval_freq > 0 and ((i + 1) % args.eval_freq == 0)):
+
+            # for layer in model:
+            #     if hasattr(layer, "parametrization"):
+            #         print(f"Current temp: {layer.parametrization.temperature:.4f}")
+            #         print(f"Avg norm param: {layer.parameters().__next__()[:, -1].mean().item():.4f}")
+            #         break
+
             # if args.reg_lambda > 0.0:
             if args.verbose == 1:
                 print(f"\nEvaluation at iteration {i + 1}")          
@@ -413,8 +510,8 @@ def run_training(args, callbacks=None):
             metrics = \
                 {f"val_{k}_discrete": v for k, v in discrete_metrics.items()} | \
                 {f"val_{k}_relaxed": v for k, v in relaxed_metrics.items()} | \
-                {"train_loss": running_train_loss / n * len(validation_loader)}
-
+                {"train_loss": running_train_loss.cpu().detach().item() / n * len(validation_loader)}
+        
             print(f"Iteration {i + 1:6d} | " +
                   " | ".join([f"{k}: {v:.4f}" for k, v in metrics.items()]))
 
@@ -453,8 +550,14 @@ def main():
 
     call_backs = [
         lambda ctx: save_best_model(ctx, args.output),
-        lambda ctx: save_metrics_csv(ctx.metrics, args.output),
+        lambda ctx: save_metrics_csv(ctx.step, ctx.metrics, args.output),
+        lambda ctx: save_thresholds_csv(ctx.step, thresholds=ctx.model[0].get_thresholds().detach(), output_path=args.output) if hasattr(ctx.model[0], "get_thresholds") else None
     ]
+
+    # pretty print args
+    print("Training configuration:")
+    for arg in vars(args):
+        print(f"  {arg}: {getattr(args, arg)}")
 
     run_training(args, call_backs)
 

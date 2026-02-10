@@ -96,22 +96,23 @@ def objective(trial, study):
         step = ctx.step
         m = ctx.metrics
 
-        # 🔴 pruning metric
-        trial.report(m["val_loss_discrete"], step)
+        offset = args.num_iterations
+
+        # 🔴 pruning metric (plotted last)
+        trial.report(m["val_acc_discrete"], step + 4 * offset)
         if trial.should_prune():
             raise optuna.TrialPruned()
 
         # 🟢 auxiliary metrics
-        offset = args.num_iterations
-        trial.report(m["train_loss"], step + offset)
-        trial.report(m["val_acc_discrete"], step + 2 * offset)
-        trial.report(m["val_loss_relaxed"], step + 3 * offset)
-        trial.report(m["val_acc_relaxed"], step + 4 * offset)
+        trial.report(m["train_loss"], step)
+        trial.report(m["val_loss_relaxed"], step + 1 * offset)
+        trial.report(m["val_acc_relaxed"], step + 2 * offset)
+        trial.report(m["val_loss_discrete"], step + 3 * offset)
 
         return True
 
     result = run_training(args, callbacks=[pruning_callback])
-    return result["val_loss_discrete"]
+    return result["val_acc_discrete"]
 
 
 def main():
@@ -137,6 +138,7 @@ def main():
                 "timeout": 10,  # seconds to wait on DB lock
             }
         },
+        heartbeat_interval=180,
     )
 
     event.listen(storage.engine, "connect", _enable_wal)
@@ -144,7 +146,7 @@ def main():
     optuna_study = optuna.create_study(
         study_name=study_name,
         storage=storage,
-        direction="minimize",
+        direction="maximize",
         load_if_exists=True,
     )
 

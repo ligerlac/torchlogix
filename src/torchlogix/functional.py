@@ -842,6 +842,12 @@ def get_regularization_loss(weights, regularizer=None):
         return (1 - weights.pow(2).sum(-1)).pow(2)
     elif regularizer == "abs_sum":
         return (1 - weights.sum(-1).abs()).pow(2)
+    elif regularizer == "walsh":
+        # to enforce a growing norm factor (towards infinity)
+        norm_factor = weights[:, -1]
+        loss = torch.exp(-norm_factor).mean()
+        # print(f"Walsh regularization loss: {loss.item()}")
+        return loss
     else:
         raise ValueError(f"Unknown regularizer: {regularizer}")
     
@@ -989,3 +995,18 @@ def take_tuples(
     y = x[..., idx]   # advanced indexing broadcasts over leading dims
 
     return y
+
+
+def id_to_truth_table(id: torch.Tensor, rank: int, device):
+    lut_entries = 1 << rank
+    bits = torch.arange(lut_entries, device=device)
+    # Reshape for broadcasting: id becomes [..., 1], bits becomes [lut_entries]
+    truth01 = (id.unsqueeze(-1) >> (lut_entries - 1 - bits)) & 1
+    return 1 - 2 * truth01   # {0,1} → {+1,-1}
+
+
+def id_to_walsh_coefficients(id: torch.Tensor, rank: int, device):
+    truth = id_to_truth_table(id, rank, device=device)
+    coeffs = walsh_hadamard_transform(truth, n=rank)
+    coeffs = coeffs / (1 << rank)
+    return coeffs

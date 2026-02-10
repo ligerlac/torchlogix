@@ -15,6 +15,7 @@ from torchlogix import PackBitsTensor
 from torchlogix.models.baseline_nn import FullyConnectedNN
 from torchlogix.models.conv import CNN
 from torchlogix.models.nn import RandomlyConnectedNN
+from torchlogix.layers.binarization import LearnableBinarization
 
 from .shared_config import IMPL_TO_DEVICE, BITS_TO_TORCH_FLOATING_POINT_TYPE
 
@@ -73,36 +74,79 @@ class CreateFolder(argparse.Action):
 
 
 # Shared experiment utilities
-
-def save_metrics_csv(metrics: Dict[str, Any], output_path: Path, filename: str = "metrics.csv"):
-    """Save metrics to CSV file."""
+def save_metrics_csv(step: int, metrics: Dict[str, Any], output_path: Path, filename: str = "metrics.csv"):
+    """Append single step metrics to CSV file."""
     filepath = f"{output_path}/{filename}"
+    
+    # Determine if file exists to write headers
+    file_exists = Path(filepath).exists()
 
-    # Convert defaultdict to regular dict for JSON serialization
-    if isinstance(metrics, defaultdict):
-        metrics = dict(metrics)
+    # Convert tensor/numpy values to Python primitives
+    row = {'step': step}
+    for key, value in metrics.items():
+        if hasattr(value, 'item'):  # numpy/torch scalar
+            row[key] = value.item()
+        else:
+            row[key] = value
+    
+    fieldnames = ['step'] + sorted(metrics.keys())
+    
+    with open(filepath, 'a', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
 
-    with open(filepath, 'w', newline='') as csvfile:
-        if not metrics:
-            return
 
-        # Get all unique keys from nested structure
-        all_keys = set()
-        for step_data in metrics.values():
-            if isinstance(step_data, dict):
-                all_keys.update(step_data.keys())
-            else:
-                all_keys.add('value')
+def save_thresholds_csv(
+    step: int, 
+    thresholds: torch.Tensor, 
+    output_path: Path, 
+    filename: str = "thresholds.csv"
+):
+    """Append threshold values to CSV file.
+    
+    Args:
+        step: Training step number
+        thresholds: Threshold tensor with last dimension = num_bits
+                   Shapes can be (num_bits,), (num_features, num_bits), 
+                   (num_channels, num_bits), or higher dimensional
+        output_path: Directory to save CSV
+        filename: Name of CSV file
+    """
+    filepath = f"{output_path}/{filename}"
+    file_exists = Path(filepath).exists()
 
-        writer = csv.DictWriter(csvfile, fieldnames=['step'] + sorted(all_keys))
-        writer.writeheader()
+    # Flatten thresholds into a single row
+    row = {'step': step}
+    
+    # Convert to numpy for easier indexing
+    thresh_np = thresholds.detach().cpu().numpy()
+    
+    if thresh_np.ndim == 1:
+        # Global case: (num_bits,)
+        for bit_idx in range(len(thresh_np)):
+            col_name = f"thresh_{bit_idx}"
+            row[col_name] = float(thresh_np[bit_idx])
+    
+    else:
+        # Multi-dimensional case: (..., num_bits)
+        # Iterate through all indices
+        import numpy as np
+        for index in np.ndindex(thresh_np.shape):
+            # Create column name from indices: thresh_0_1_2 for index (0,1,2)
+            col_name = "thresh_" + "_".join(map(str, index))
+            row[col_name] = float(thresh_np[index])
+    
+    # Write to CSV
+    fieldnames = ['step'] + sorted([k for k in row.keys() if k != 'step'])
+    
+    with open(filepath, 'a', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
 
-        for step, data in metrics.items():
-            if isinstance(data, dict):
-                row = {'step': step, **data}
-            else:
-                row = {'step': step, 'value': data}
-            writer.writerow(row)
 
 
 def save_config(config: Dict[str, Any], output_path: Path, filename: str = "config.json"):

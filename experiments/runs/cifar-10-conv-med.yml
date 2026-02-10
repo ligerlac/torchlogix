@@ -1,0 +1,61 @@
+name: cifar-10-conv-medium
+
+studies:
+  - name: raw-rank_2-soft
+    architecture: ClgnCifar10Medium
+    parametrization: raw
+    lut_rank: 2
+    forward_sampling: soft
+    output: results/cifar-10-conv-medium/raw-rank_2-soft
+
+  - name: raw-rank_2-gsoft
+    architecture: ClgnCifar10Medium
+    parametrization: raw
+    lut_rank: 2
+    forward_sampling: gumbel_soft
+    output: results/cifar-10-conv-medium/raw-rank_2-gsoft
+
+  - name: walsh-rank_2-gsoft
+    architecture: ClgnCifar10Medium
+    parametrization: walsh
+    lut_rank: 2
+    forward_sampling: gumbel_soft
+    parametrization_temperature: 3.
+    output: results/cifar-10-conv-medium/walsh-rank_2-gsoft
+
+  - name: walsh-rank_4-gsoft
+    architecture: ClgnCifar10MediumRank4
+    parametrization: walsh
+    lut_rank: 4
+    forward_sampling: gumbel_soft
+    parametrization_temperature: 3.
+    output: results/cifar-10-conv-medium/walsh-rank_4-gsoft
+
+  - name: walsh-rank_mixed-gsoft
+    architecture: ClgnCifar10MediumRankMixed
+    lut_rank: mixed
+    forward_sampling: gumbel_soft
+    parametrization_temperature: 3.
+    output: results/cifar-10-conv-medium/walsh-rank_mixed-gsoft
+
+  - name: walsh-rank_mixed-gsoft
+    architecture: ClgnCifar10MediumRankMixed
+    lut_rank: mixed
+    forward_sampling: hard
+    parametrization_temperature: 4.
+    output: results/cifar-10-conv-medium/walsh-rank_mixed-hard
+
+
+defaults:
+  dataset: cifar-10
+  batch_size: 128
+  connections: fixed
+  weight_init: residual
+  device: cuda
+  seed: null
+  num_iterations: 100_000
+  eval_freq: 1000
+  compile_model: true
+  # num_iterations: 10
+  # eval_freq: 10
+  # compile_model: false

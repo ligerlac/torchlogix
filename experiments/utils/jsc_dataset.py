@@ -32,13 +32,14 @@ class JSC(Dataset):
         split_seed: int = 1337,
         train_fraction: float = 0.8,
         dtype: torch.dtype = torch.float32,
+        normalize: bool = True,
     ):
         self.root = Path(root).expanduser()
         self.train = train
         self.transform = transform
         self.target_transform = target_transform
         self.dtype = dtype
-
+        self.normalize = normalize
         self.raw_dir = self.root / "JSC" / "raw"
         self.proc_dir = self.root / "JSC" / "processed"
         self.proc_dir.mkdir(parents=True, exist_ok=True)
@@ -64,6 +65,10 @@ class JSC(Dataset):
             self.X: Tensor = obj["X_test"].to(dtype)
             self.y: Tensor = obj["y_test"]
 
+        if self.normalize:
+            mean = self.X.mean(dim=0, keepdim=True)
+            std = self.X.std(dim=0, keepdim=True)
+            self.X = (self.X - mean) / std
         # Optional metadata
         self.feature_names = obj.get("feature_names", None)
         self.class_names = obj.get("class_names", None)

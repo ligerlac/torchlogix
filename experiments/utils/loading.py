@@ -1,4 +1,5 @@
 import math
+import os
 
 import torch
 import torchvision
@@ -40,12 +41,15 @@ class BooleanTransform:
 
 def load_dataset(args):
     """Load a public dataset."""
+    # check env varaible for dataset path
+    data_path = os.getenv("DATASET_PATH", ".")
+
     validation_loader = None
     if args.dataset == "adult":
         train_set = uci_datasets.AdultDataset(
-            "./data-uci", split="train", download=True, with_val=False
+            f"{data_path}/data-uci", split="train", download=True, with_val=False
         )
-        test_set = uci_datasets.AdultDataset("./data-uci", split="test", with_val=False)
+        test_set = uci_datasets.AdultDataset(f"{data_path}/data-uci", split="test", with_val=False)
         train_loader = torch.utils.data.DataLoader(
             train_set, batch_size=args.batch_size, shuffle=True
         )
@@ -54,10 +58,10 @@ def load_dataset(args):
         )
     elif args.dataset == "breast_cancer":
         train_set = uci_datasets.BreastCancerDataset(
-            "./data-uci", split="train", download=True, with_val=False
+            f"{data_path}/data-uci", split="train", download=True, with_val=False
         )
         test_set = uci_datasets.BreastCancerDataset(
-            "./data-uci", split="test", with_val=False
+            f"{data_path}/data-uci", split="test", with_val=False
         )
         train_loader = torch.utils.data.DataLoader(
             train_set, batch_size=args.batch_size, shuffle=True
@@ -68,10 +72,10 @@ def load_dataset(args):
     elif args.dataset.startswith("monk"):
         style = int(args.dataset[4])
         train_set = uci_datasets.MONKsDataset(
-            "./data-uci", style, split="train", download=True, with_val=False
+            f"{data_path}/data-uci", style, split="train", download=True, with_val=False
         )
         test_set = uci_datasets.MONKsDataset(
-            "./data-uci", style, split="test", with_val=False
+            f"{data_path}/data-uci", style, split="test", with_val=False
         )
         train_loader = torch.utils.data.DataLoader(
             train_set, batch_size=args.batch_size, shuffle=True
@@ -82,19 +86,18 @@ def load_dataset(args):
     elif args.dataset in ["mnist", "mnist20x20"]:
         transforms = torchvision.transforms.Compose(
             [
-                torchvision.transforms.ToTensor(),
-                BooleanTransform(),  # Binarize the input
+                torchvision.transforms.ToTensor()
             ]
         )        
         train_set = mnist_dataset.MNIST(
-            "./data-mnist",
+            f"{data_path}/data-mnist",
             train=True,
             download=True,
             remove_border=args.dataset == "mnist20x20",
             transform=transforms
         )
         test_set = mnist_dataset.MNIST(
-            "./data-mnist", train=False, remove_border=args.dataset == "mnist20x20", transform=transforms
+            f"{data_path}/data-mnist", train=False, remove_border=args.dataset == "mnist20x20", transform=transforms
         )
 
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
@@ -109,7 +112,7 @@ def load_dataset(args):
             shuffle=True,
             pin_memory=True,
             drop_last=True,
-            num_workers=4,
+            num_workers=0,
         )
         validation_loader = torch.utils.data.DataLoader(
             validation_set,
@@ -128,10 +131,10 @@ def load_dataset(args):
     elif args.dataset == "cifar-10":
         trafo = torchvision.transforms.ToTensor()
         train_set = torchvision.datasets.CIFAR10(
-            "./data-cifar", train=True, download=True, transform=trafo
+            f"{data_path}/data-cifar", train=True, download=True, transform=trafo
         )
         test_set = torchvision.datasets.CIFAR10(
-            "./data-cifar", train=False, transform=trafo
+            f"{data_path}/data-cifar", train=False, transform=trafo
         )
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
         valid_set_size = len(train_set) - train_set_size
@@ -145,7 +148,7 @@ def load_dataset(args):
             shuffle=True,
             pin_memory=True,
             drop_last=True,
-            num_workers=4,
+            num_workers=0,
         )
         validation_loader = torch.utils.data.DataLoader(
             validation_set,
@@ -164,10 +167,10 @@ def load_dataset(args):
     elif "fashion-mnist" in args.dataset:
         trafo = torchvision.transforms.ToTensor()
         train_set = torchvision.datasets.FashionMNIST(
-            "./data-fashion-mnist", train=True, download=True, transform=trafo
+            f"{data_path}/data-fashion-mnist", train=True, download=True, transform=trafo
         )
         test_set = torchvision.datasets.FashionMNIST(
-            "./data-fashion-mnist", train=False, transform=trafo
+            f"{data_path}/data-fashion-mnist", train=False, transform=trafo
         )
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
         valid_set_size = len(train_set) - train_set_size
@@ -181,7 +184,7 @@ def load_dataset(args):
             shuffle=True,
             pin_memory=True,
             drop_last=True,
-            num_workers=4,
+            num_workers=0,
         )
         validation_loader = torch.utils.data.DataLoader(
             validation_set,
@@ -200,10 +203,10 @@ def load_dataset(args):
 
     elif "jsc" in args.dataset:
         train_set = JSC(
-            root="./data-jsc", train=True, download=True, split_seed=42, train_fraction=0.8
+            root=f"{data_path}/data-jsc", train=True, download=True, split_seed=42, train_fraction=0.8
         )
         test_set = JSC(
-            root="./data-jsc", train=False, split_seed=42, train_fraction=0.8
+            root=f"{data_path}/data-jsc", train=False, split_seed=42, train_fraction=0.8
         )
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
         valid_set_size = len(train_set) - train_set_size
@@ -217,7 +220,7 @@ def load_dataset(args):
             shuffle=True,
             pin_memory=True,
             drop_last=True,
-            num_workers=4,
+            num_workers=0,
         )
         validation_loader = torch.utils.data.DataLoader(
             validation_set,
@@ -237,7 +240,7 @@ def load_dataset(args):
     elif args.dataset in ["cora", "citeseer", "pubmed"]:
         print("ARGS.DATASET", args.dataset)
         dataset = Planetoid(
-            root=f"./data-{args.dataset}",
+            root=f"{data_path}/data-{args.dataset}",
             name=args.dataset,
             split="public",
             transform=MinMaxNormalize(),

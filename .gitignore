@@ -1,4 +1,6 @@
 venv/
+*.png
+*.svg
 *pyc
 .idea
 *.so
@@ -22,6 +24,7 @@ experiments/data-mnist/
 experiments/data-fmnist/
 experiments/data-fashion-mnist/
 experiments/data-jsc/
+experiments/data-cifar/
 
 # env files with concrete paths
 experiments/env.sh

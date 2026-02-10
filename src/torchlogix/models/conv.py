@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from ..layers import OrPooling2d, GroupSum, LogicConv2d, LogicDense
 from ..layers.binarization import setup_binarization
+from ..modules.resblock import ResidualLogicBlock, ResidualLogicBlockLiv
 
 
 class CNN(torch.nn.Module):
@@ -65,61 +66,6 @@ class CNN(torch.nn.Module):
     def forward(self, x):
         """Forward pass of the logic gate convolutional neural network."""
         return self.model(x)
-
-
-class ResidualLogicBlock(nn.Module):
-    def __init__(
-        self,
-        in_dim,
-        in_channels,
-        out_channels,
-        tree_depth=3,
-        receptive_field_size=3,
-        padding=1,
-        downsample=False,
-        parametrization="raw",
-        **llkw,
-    ):
-        super().__init__()
-
-        stride = 2 if downsample else 1
-
-        self.main = nn.Sequential(
-            LogicConv2d(
-                in_dim=in_dim,
-                channels=in_channels,
-                num_kernels=out_channels,
-                tree_depth=tree_depth,
-                receptive_field_size=receptive_field_size,
-                padding=padding,
-                parametrization=parametrization,
-                **llkw,
-            ),
-            OrPooling2d(kernel_size=2, stride=stride, padding=0) if downsample else nn.Identity(),
-        )
-
-        self.shortcut = nn.Identity()
-        # we can either project the input to the output channels, or use a standard skip connection
-        if downsample or in_channels != out_channels:
-            self.shortcut = nn.Sequential(
-                LogicConv2d(
-                    in_dim=in_dim,
-                    channels=in_channels,
-                    num_kernels=out_channels,
-                    tree_depth=1,
-                    receptive_field_size=1,
-                    padding=0,
-                    parametrization=parametrization,
-                    **llkw,
-                ),
-                OrPooling2d(kernel_size=2, stride=stride, padding=0) if downsample else nn.Identity(),
-            )
-
-    def forward(self, x):
-        out = self.main(x)
-        identity = self.shortcut(x)
-        return out + identity
-        # return out + identity - out * identity  # Relaxed OR
 
 
 class ClgnMnist(torch.nn.Sequential):
@@ -226,9 +172,14 @@ class ClgnCifar10(torch.nn.Sequential):
     An implementation of a logic gate convolutional neural network for CIFAR-10,
     as described in the paper 'convolutional logic gate networks'.
     Provided in three sizes: small, medium, large.
-    Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
+    Small and medium take 2-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
     """
-    n_input_bits = None  # optional, to be set in subclasses
+    conv_lut_rank = 2
+    dense_lut_rank = 2
+    tree_depth = 3
+    n_input_bits = None
+    conv_parametrization = None
+    dense_parametrization = None
     
     def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict,
                  k_num: int, tau: float, parametrization="raw", **llkw):
@@ -238,16 +189,26 @@ class ClgnCifar10(torch.nn.Sequential):
         binarization_kwargs["feature_dim"] = 1  # image data
         n_bits = thresholds.shape[-1]
         binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+
+        del llkw['lut_rank']  # remove lut_rank from llkw to avoid conflict
+
+        assert (self.conv_parametrization is None) == (self.dense_parametrization is None), "conv and dense parametrization must be both None or both set."
+        self._conv_parametrization = self.conv_parametrization if self.conv_parametrization is not None else parametrization
+        self._dense_parametrization = self.dense_parametrization if self.dense_parametrization is not None else parametrization
+        if 'parametrization' in llkw:
+            del llkw['parametrization']  # remove parametrization from llkw to avoid conflict
+
         layers = [binarization_module]
         layers.append(
             LogicConv2d(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
-                tree_depth=3,
+                tree_depth=self.tree_depth,
                 receptive_field_size=3,
                 padding=1,
-                parametrization=parametrization,
+                parametrization=self._conv_parametrization,
+                lut_rank=self.conv_lut_rank,
                 **llkw,
             )
         )
@@ -258,10 +219,11 @@ class ClgnCifar10(torch.nn.Sequential):
                 in_dim=16,
                 channels=k_num,
                 num_kernels=4*k_num,
-                tree_depth=3,
+                tree_depth=self.tree_depth,
                 receptive_field_size=3,
                 padding=1,
-                parametrization=parametrization,
+                parametrization=self._conv_parametrization,
+                lut_rank=self.conv_lut_rank,
                 **llkw,
             )
         )
@@ -272,10 +234,11 @@ class ClgnCifar10(torch.nn.Sequential):
                 in_dim=8,
                 channels=4*k_num,
                 num_kernels=16*k_num,
-                tree_depth=3,
+                tree_depth=self.tree_depth,
                 receptive_field_size=3,
                 padding=1,
-                parametrization=parametrization,
+                parametrization=self._conv_parametrization,
+                lut_rank=self.conv_lut_rank,
                 **llkw,
             )
         )
@@ -286,10 +249,11 @@ class ClgnCifar10(torch.nn.Sequential):
                 in_dim=4,
                 channels=16*k_num,
                 num_kernels=32*k_num,
-                tree_depth=3,
+                tree_depth=self.tree_depth,
                 receptive_field_size=3,
                 padding=1,
-                parametrization=parametrization,
+                parametrization=self._conv_parametrization,
+                lut_rank=self.conv_lut_rank,
                 **llkw,
             )
         )
@@ -297,9 +261,9 @@ class ClgnCifar10(torch.nn.Sequential):
 
         layers.append(torch.nn.Flatten()) # 128k
 
-        layers.append(LogicDense(in_dim=128*k_num, out_dim=1280*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, parametrization=parametrization, **llkw))
+        layers.append(LogicDense(in_dim=128*k_num, out_dim=1280*k_num, parametrization=self._dense_parametrization, lut_rank=self.dense_lut_rank, **llkw))
+        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, parametrization=self._dense_parametrization, lut_rank=self.dense_lut_rank, **llkw))
+        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, parametrization=self._dense_parametrization, lut_rank=self.dense_lut_rank, **llkw))
 
         super(ClgnCifar10, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
@@ -311,7 +275,11 @@ class ClgnCifar10Res(torch.nn.Sequential):
     Provided in three sizes: small, medium, large.
     Small and medium take 3-bit-thresholded inputs, large takes 5-bit-thresholded inputs. 
     """
-    n_input_bits = None  # optional, to be set in subclasses
+    conv_lut_rank = 2
+    dense_lut_rank = 2
+    tree_depth = 3
+    n_input_bits = None
+
 
     def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict,
                  k_num: int, tau: float, parametrization="raw", **llkw):
@@ -321,26 +289,43 @@ class ClgnCifar10Res(torch.nn.Sequential):
         binarization_kwargs["feature_dim"] = 1  # image data
         n_bits = thresholds.shape[-1]
         binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
-        layers = [binarization_module]
 
+        del llkw['lut_rank']  # remove lut_rank from llkw to avoid conflict
+
+        layers = [binarization_module]
         layers.append(
             ResidualLogicBlock(
                 in_dim=32,
                 in_channels=3*n_bits,
-                out_channels=2*k_num,
+                out_channels=4*k_num,
+                tree_depth=self.tree_depth,
+                receptive_field_size=3,
+                padding=1,
+                downsample=True,
+                parametrization=parametrization,
+                lut_rank=self.conv_lut_rank,
+                **llkw,
+            )
+        )
+        layers.append(
+            ResidualLogicBlock(
+                in_dim=8,
+                in_channels=2*k_num,
+                out_channels=32*k_num,
                 tree_depth=3,
                 receptive_field_size=3,
                 padding=1,
                 downsample=True,
                 parametrization=parametrization,
+                lut_rank=self.conv_lut_rank,
                 **llkw,
             )
         )
         layers.append(torch.nn.Flatten()) # 4x4x16k = 256k
 
-        layers.append(LogicDense(in_dim=256*2*k_num, out_dim=512*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=256*k_num, out_dim=320*k_num, parametrization=parametrization, **llkw))
+        layers.append(LogicDense(in_dim=128*k_num, out_dim=1280*k_num, parametrization=parametrization, lut_rank=self.dense_lut_rank, **llkw))
+        layers.append(LogicDense(in_dim=1280*k_num, out_dim=640*k_num, parametrization=parametrization, lut_rank=self.dense_lut_rank, **llkw))
+        layers.append(LogicDense(in_dim=640*k_num, out_dim=320*k_num, parametrization=parametrization, lut_rank=self.dense_lut_rank, **llkw))
 
         super(ClgnCifar10Res, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
@@ -353,10 +338,45 @@ class ClgnCifar10SmallRes(ClgnCifar10Res):
 
 
 class ClgnCifar10Small(ClgnCifar10):
+    conv_lut_rank = 2
+    dense_lut_rank = 2
     n_input_bits = 2
+    tree_depth = 3
     def __init__(self, **llkw):
         tau = llkw.get("tau", 20)
         super(ClgnCifar10Small, self).__init__(k_num=32, tau=tau, **llkw)
+
+
+class ClgnCifar10SmallRank4(ClgnCifar10):
+    conv_lut_rank = 4
+    dense_lut_rank = 4
+    n_input_bits = 2
+    tree_depth = 1
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10SmallRank4, self).__init__(k_num=32, tau=tau, **llkw)
+
+
+class ClgnCifar10SmallRank6(ClgnCifar10):
+    conv_lut_rank = 6
+    dense_lut_rank = 6
+    n_input_bits = 2
+    tree_depth = 1
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10SmallRank6, self).__init__(k_num=32, tau=tau, **llkw)
+
+
+class ClgnCifar10SmallRankMixed(ClgnCifar10):
+    conv_lut_rank = 4
+    dense_lut_rank = 2
+    n_input_bits = 2
+    tree_depth = 1
+    conv_parametrization = "walsh"
+    dense_parametrization = "raw"
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 20)
+        super(ClgnCifar10SmallRankMixed, self).__init__(k_num=32, tau=tau, **llkw)
 
 
 class ClgnCifar10Medium(ClgnCifar10):
@@ -364,6 +384,38 @@ class ClgnCifar10Medium(ClgnCifar10):
     def __init__(self, **llkw):
         tau = llkw.get("tau", 40)
         super(ClgnCifar10Medium, self).__init__(k_num=256, tau=tau, **llkw)
+
+
+class ClgnCifar10Medium(ClgnCifar10):
+    conv_lut_rank = 2
+    dense_lut_rank = 2
+    n_input_bits = 2
+    tree_depth = 3
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 40)
+        super(ClgnCifar10Medium, self).__init__(k_num=256, tau=tau, **llkw)
+
+
+class ClgnCifar10MediumRank4(ClgnCifar10):
+    conv_lut_rank = 4
+    dense_lut_rank = 4
+    n_input_bits = 2
+    tree_depth = 1
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 40)
+        super(ClgnCifar10MediumRank4, self).__init__(k_num=256, tau=tau, **llkw)
+
+
+class ClgnCifar10MediumRankMixed(ClgnCifar10):
+    conv_lut_rank = 4
+    dense_lut_rank = 2
+    n_input_bits = 2
+    tree_depth = 1
+    conv_parametrization = "walsh"
+    dense_parametrization = "raw"
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 40)
+        super(ClgnCifar10MediumRankMixed, self).__init__(k_num=256, tau=tau, **llkw)
 
 
 class ClgnCifar10MediumRes(ClgnCifar10Res):
@@ -395,6 +447,12 @@ class ClgnCifar10Large4(ClgnCifar10):
 
 
 class ClgnCifar10Tiny(torch.nn.Sequential):
+    conv_lut_rank = 2
+    dense_lut_rank = 2
+    tree_depth = 3
+    n_input_bits = None
+    conv_parametrization = None
+    dense_parametrization = None
     """
     An implementation of a logic gate convolutional neural network for CIFAR-10,
     Takes 3-bit-thresholded inputs. 
@@ -402,10 +460,20 @@ class ClgnCifar10Tiny(torch.nn.Sequential):
 
     def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, 
                  k_num=64, parametrization="raw", tau=20, **llkw):
-        n_bits = 3
-        binarization_kwargs["feature_dim"] = 1  # image data
-        binarization_kwargs["num_bits"] = n_bits
+        if self.n_input_bits is not None:
+            assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."        
+        binarization_kwargs = dict(binarization_kwargs)  # make a copy to avoid modifying the original
+        n_bits = thresholds.shape[-1]
         binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+
+        del llkw['lut_rank']  # remove lut_rank from llkw to avoid conflict
+
+        assert (self.conv_parametrization is None) == (self.dense_parametrization is None), "conv and dense parametrization must be both None or both set."
+        self._conv_parametrization = self.conv_parametrization if self.conv_parametrization is not None else parametrization
+        self._dense_parametrization = self.dense_parametrization if self.dense_parametrization is not None else parametrization
+        if 'parametrization' in llkw:
+            del llkw['parametrization']  # remove parametrization from llkw to avoid conflict
+
         layers = [binarization_module]
         layers.append(
             LogicConv2d(
@@ -469,40 +537,70 @@ class ClgnCifar10Mini(torch.nn.Sequential):
     An implementation of a logic gate convolutional neural network for CIFAR-10,
     Takes continuous (unthresholded) inputs. Only single conv layer.
     """
+    conv_lut_rank = 2
+    dense_lut_rank = 2
+    tree_depth = 3
+    n_input_bits = 3
+    conv_parametrization = None
+    dense_parametrization = None
 
     def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, 
-                 k_num=64, tau=20, parametrization="raw", **llkw):
-        n_bits = 3
+                 k_num=16, tau=20, parametrization="raw", **llkw):
+        if self.n_input_bits is not None:
+            assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."
+
+        binarization_kwargs = dict(binarization_kwargs)  # make a copy to avoid modifying the original
         binarization_kwargs["feature_dim"] = 1  # image data
-        binarization_kwargs["num_bits"] = n_bits
-        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+        n_bits = thresholds.shape[-1]
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)  
+
+        del llkw['lut_rank']  # remove lut_rank from llkw to avoid conflict
+
+        assert (self.conv_parametrization is None) == (self.dense_parametrization is None), "conv and dense parametrization must be both None or both set."
+        self._conv_parametrization = self.conv_parametrization if self.conv_parametrization is not None else parametrization
+        self._dense_parametrization = self.dense_parametrization if self.dense_parametrization is not None else parametrization
+        if 'parametrization' in llkw:
+            del llkw['parametrization']  # remove parametrization from llkw to avoid conflict
+
         layers = [binarization_module]
         layers.append(
             LogicConv2d(
                 in_dim=32,
                 num_kernels=k_num,
                 channels=3*n_bits,
-                tree_depth=3,
-                receptive_field_size=4,
+                tree_depth=1,
+                receptive_field_size=3,
                 parametrization=parametrization,
                 **llkw,
-            )
-        ) # kx28x28
+            )  # kx30x30=900k
+        )
+        layers.append(
+            OrPooling2d(kernel_size=2, stride=2) # kx15x15=225k
+        )
 
-        layers.append(torch.nn.Flatten()) # kx29x29=841k
+        layers.append(torch.nn.Flatten())
 
-        layers.append(LogicDense(in_dim=841*k_num, out_dim=512*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=256*k_num, out_dim=128*k_num, parametrization=parametrization, **llkw))
-        layers.append(LogicDense(in_dim=128*k_num, out_dim=60*k_num, parametrization=parametrization, **llkw))
+        # layers.append(LogicDense(in_dim=225*k_num, out_dim=160*k_num, parametrization=parametrization, **llkw))
+        # layers.append(LogicDense(in_dim=160*k_num, out_dim=80*k_num, parametrization=parametrization, **llkw))
+
+        layers.append(LogicDense(in_dim=225*k_num, out_dim=200*k_num, parametrization=parametrization, **llkw))
+        layers.append(LogicDense(in_dim=200*k_num, out_dim=200*k_num, parametrization=parametrization, **llkw))
 
         super(ClgnCifar10Mini, self).__init__(*layers, GroupSum(k=10, tau=tau))
+
 
 
 class ClgnCifar10Mini32(ClgnCifar10Mini):
     def __init__(self, **llkw):
         tau = llkw.get("tau", 5)
         super(ClgnCifar10Mini32, self).__init__(k_num=32, tau=tau, **llkw)
+
+
+class ClgnCifar10Mini32Mixed(ClgnCifar10Mini):
+    def __init__(self, **llkw):
+        tau = llkw.get("tau", 5)
+        self.conv_parametrization
+
 
 class ClgnCifar10Mini64(ClgnCifar10Mini):
     def __init__(self, **llkw):
@@ -518,4 +616,66 @@ class ClgnCifar10Mini256(ClgnCifar10Mini):
     def __init__(self, **llkw):
         tau = llkw.get("tau", 40)
         super(ClgnCifar10Mini256, self).__init__(k_num=256, tau=tau, **llkw)
+
+
+class ClgnCifar10TinyRes(torch.nn.Sequential):
+    conv_lut_rank = 2
+    dense_lut_rank = 2
+    tree_depth = 3
+    n_input_bits = 3
+    conv_parametrization = None
+    dense_parametrization = None
+
+    # def __init__(self, n_bits: int, k_num: int, tau: float, parametrization="raw", **llkw):
+    def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, 
+            k_num=32, tau=20, parametrization="raw", **llkw):
+
+        if self.n_input_bits is not None:
+            assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."
+
+        binarization_kwargs = dict(binarization_kwargs)  # make a copy to avoid modifying the original
+        binarization_kwargs["feature_dim"] = 1  # image data
+        n_bits = thresholds.shape[-1]
+        binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
+
+        del llkw['lut_rank']  # remove lut_rank from llkw to avoid conflict
+
+        assert (self.conv_parametrization is None) == (self.dense_parametrization is None), "conv and dense parametrization must be both None or both set."
+        self._conv_parametrization = self.conv_parametrization if self.conv_parametrization is not None else parametrization
+        self._dense_parametrization = self.dense_parametrization if self.dense_parametrization is not None else parametrization
+        if 'parametrization' in llkw:
+            del llkw['parametrization']  # remove parametrization from llkw to avoid conflict
         
+        layers = [binarization_module]
+        layers.append(
+            ResidualLogicBlockLiv(
+                in_dim=32,
+                in_channels=3*n_bits,
+                out_channels=2*k_num,
+                tree_depth=self.tree_depth,
+                receptive_field_size=3,
+                padding=1,
+                downsample=True,
+                lut_rank=self.conv_lut_rank,
+                parametrization=self.conv_parametrization,
+                **llkw,
+            )
+        )
+        layers.append(torch.nn.Flatten()) # 4x4x16k = 256k
+
+        layers.append(LogicDense(in_dim=256*2*k_num, out_dim=512*k_num, parametrization=self.dense_parametrization, lut_rank=self.dense_lut_rank, **llkw))
+        layers.append(LogicDense(in_dim=512*k_num, out_dim=256*k_num, parametrization=self.dense_parametrization, lut_rank=self.dense_lut_rank, **llkw))
+        layers.append(LogicDense(in_dim=256*k_num, out_dim=320*k_num, parametrization=self.dense_parametrization, lut_rank=self.dense_lut_rank, **llkw))
+
+        for layer in layers:
+            print(f"isinstance(layer, nn.Module): {isinstance(layer, nn.Module)}")
+
+        super(ClgnCifar10TinyRes, self).__init__(*layers, GroupSum(k=10, tau=tau))
+
+
+class ClgnCifar10TinyResMixed(ClgnCifar10TinyRes):
+    conv_parametrization = "walsh"
+    dense_parametrization = "raw"
+    conv_lut_rank = 4
+    dense_lut_rank = 2
+    tree_depth = 1
