@@ -22,7 +22,7 @@ class LogicBase(torch.nn.Module, ABC):
     """
     def __init__(
         self, 
-        device: str = "cuda",
+        device: str = "cpu",
         grad_factor: float = 1.0,
         lut_rank: int = 2,
         parametrization: str = "raw",

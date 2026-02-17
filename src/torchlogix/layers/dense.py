@@ -30,7 +30,7 @@ class LogicDense(LogicBase):
         self,
         in_dim: int,
         out_dim: int,
-        device: str = "cuda",
+        device: str = "cpu",
         grad_factor: float = 1.0,
         lut_rank: int = 2,
         parametrization: str = "raw",
