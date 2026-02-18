@@ -2,7 +2,6 @@
 This module contains tests for a model that contains and dense layers.
 """
 
-import pytest
 import numpy as np
 import torch
 
@@ -14,14 +13,18 @@ def test_dlgn_model():
     """Test the DLGN model with a simple input."""
     # Create a simple DLGN model
     model = Dlgn(
+        thresholds=None,
+        binarization="dummy",
+        binarization_kwargs={},
         in_dim=100,
         n_layers=3,
-        neurons_per_layer=10,
+        neurons_per_layer=50,
         class_count=10,
         tau=1.0,
         device="cpu",
-        connections='random',
-        weight_init='random'
+        connections_kwargs={"init_method": "random"},
+        parametrization_kwargs={"weight_init": "random"},
+        parametrization='raw'
     )
     model.train(False)  # Switch model to eval mode
 

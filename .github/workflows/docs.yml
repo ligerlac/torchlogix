@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install -r docs/requirements.txt
-        pip install -e .
+        pip install --no-cache-dir .
 
     - name: Build docs
       run: |

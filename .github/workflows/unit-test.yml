@@ -18,7 +18,7 @@ jobs:
             - name: Install this package
               run: |
                   pip install --upgrade pip
-                  pip install ".[dev]"
+                  pip install --no-cache-dir ".[dev]"
 
             - name: Run the unit tests
               run: pytest -s

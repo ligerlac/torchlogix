@@ -1,706 +1,315 @@
-from typing import Union
 import math
-import numpy as np
+import random
+from typing import Union
+
 import torch
-import torch.nn as nn
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
-from torch.nn.functional import gumbel_softmax
 
-from ..functional import bin_op_cnn, bin_op_cnn_walsh, gumbel_sigmoid, soft_raw, soft_walsh, hard_raw, hard_walsh, WALSH_COEFFICIENTS
+from ..connections import setup_connections
+from ..functional import (
+    get_regularization_loss, rescale_weights
+    )
+from .base import LogicBase
 
 
-class LogicConv2d(nn.Module):
-    """2d convolutional layer with differentiable logic operations.
-
-    This layer implements a 2d convolution with differentiable logic operations.
-    It uses a binary tree structure to combine input features using logical
-    operations.
-    """
+class _LogicConvNd(LogicBase):
+    """Abstract baseclass for convolutional logic layers.
+    This module provides common functionality for 2D and 3D logic convolutional
+    layers with differentiable learning.
+    
+    Args:
+        in_dim: Input spatial dimensions ``(depth, height, width)``.
+        channels: Number of input channels.
+        num_kernels: Number of output logic kernels (analogous to output channels)
+        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses
+            ``2**d`` leaves per receptive field.
+        receptive_field_size: Spatial size (depth, height and width) of the
+            receptive field (assumed cubic).
+        stride: Convolution stride in all spatial dimensions.
+        padding: Zero-padding applied symmetrically to depth, height and width
+            before selecting receptive fields.
+        conv_dimension: Dimension of the convolution (2 or 3).
+        device (str): Device to run the layer on ('cpu' or 'cuda').
+        grad_factor (float): Gradient scaling factor.
+        lut_rank (int): Rank of the LUTs used in the layer.
+        parametrization (str): Type of parametrization to use ('raw', 'walsh', 'light').
+        parametrization_kwargs (dict): Additional keyword arguments for parametrization.
+        connections (str): Type of connections to use ('fixed', 'learnable', etc.).
+        connections_kwargs (dict): Additional keyword arguments for connections."""
 
     def __init__(
         self,
-        in_dim: _size_2_t,
-        device: str = "cuda",
-        grad_factor: float = 1.0,
+        in_dim: Union[_size_2_t, _size_3_t, int],
         channels: int = 1,
         num_kernels: int = 16,
         tree_depth: int = None,
-        receptive_field_size: int = None,
-        implementation: str = None,
-        connections: str = "random",  # or 'random-unique'
-        weight_init: str = "residual",  # "residual" or "random"
+        receptive_field_size: Union[_size_2_t, _size_3_t, int] = 2,
         stride: int = 1,
         padding: int = 0,
-        parametrization: str = "raw", # or 'walsh'
-        temperature: float = 1.0,
-        forward_sampling: str = "soft" # or "hard", "gumbel_soft", or "gumbel_hard"
+        conv_dimension: int = 2,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        lut_rank: int = 2,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
     ):
-        """Initialize the 2d logic convolutional layer.
-
-        Args:
-            in_dim: Input dimensions (height, width)
-            device: Device to run the layer on
-            grad_factor: Gradient factor for the logic operations
-            channels: Number of input channels
-            num_kernels: Number of output kernels
-            tree_depth: Depth of the binary tree
-            receptive_field_size: Size of the receptive field
-            implementation: Implementation type ("python" or "cuda")
-            connections: Connection type: "random" or "unique". The latter will overwrite
-                the tree_depth parameter and use a full binary tree of all possible connections
-                within the receptive field.
-            stride: Stride of the convolution
-            padding: Padding of the convolution
-            parametrization: Parametrization to use ("raw" or "walsh")
-        """
-        super().__init__()
-        self.parametrization = parametrization
-        self.forward_sampling = forward_sampling
-
-        # self.tree_weights = []
-        assert stride <= receptive_field_size, (
-            f"Stride ({stride}) cannot be larger than receptive field size "
-            f"({receptive_field_size})."
-        )
-        self.tree_weights = torch.nn.ModuleList()
-        for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
-            level_weights = torch.nn.ParameterList()
-            for _ in range(2**i):  # Iterate over nodes at this level
-                if self.parametrization == "raw":
-                    if weight_init == "residual":
-                        weights = torch.zeros(
-                            num_kernels, 16, device=device
-                        )  # Initialize with zeros
-                        weights[:, 3] = 5  # Set the fourth element (index 3) to 5
-                    elif weight_init == "random":
-                        weights = torch.randn(num_kernels, 16, device=device)
-                elif self.parametrization == "walsh":
-                    if weight_init == "residual":
-                        # chose randomly from walsh_coefficients, but prefer id=10
-                        walsh_coefficients_tensor = torch.tensor(list(WALSH_COEFFICIENTS.values()), device=device)
-                        weights = walsh_coefficients_tensor[
-                            torch.randint(0, 16, (num_kernels,), device=device)
-                        ].clone()  # .clone() for safety
-                        n = num_kernels // 2
-                        # set half of weights to id=10 (pick index randomly)
-                        indices = torch.randperm(num_kernels, device=device)
-                        weights[indices[:n]] = walsh_coefficients_tensor[10]
-                    elif weight_init == "random":
-                        weights = torch.randn(num_kernels, 4, device=device) * 0.1
-                level_weights.append(torch.nn.Parameter(weights))
-            self.tree_weights.append(level_weights)
-        self.in_dim = _pair(in_dim)
-        self.device = device
-        self.grad_factor = grad_factor
+        super().__init__(
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
+            connections=connections,
+            connections_kwargs=connections_kwargs,
+            )
         self.num_kernels = num_kernels
         self.tree_depth = tree_depth
         self.channels = channels
-        self.receptive_field_size = receptive_field_size
+        self.conv_dimension = conv_dimension
+        assert conv_dimension in [2, 3], "conv_dimension must be 2 or 3"
+        if conv_dimension == 2:
+            self.receptive_field_size = _pair(receptive_field_size)
+            self.in_dim = _pair(in_dim)
+        else:
+            self.receptive_field_size = _triple(receptive_field_size)
+            self.in_dim = _triple(in_dim)
+        assert (
+            all(stride <= dim for dim in self.receptive_field_size)
+        ), (
+            f"Stride ({stride}) cannot be larger than "
+            f"receptive field size ({receptive_field_size})"
+        )        
         self.stride = stride
         self.padding = padding
-        self.connections = connections
-        if connections == "random":
-            self.kernel_pairs = self.get_random_receptive_field_pairs()
-        elif connections == "random-unique":
-            self.kernel_pairs = self.get_random_unique_receptive_field_pairs()
-        else:
-            raise ValueError(f"Unknown connections type: {connections}")
-        self.indices = self.get_indices_from_kernel_pairs(self.kernel_pairs)
-        self.temperature = temperature
+        self.tree_weights = self._init_weights()
+        self.connections = self._init_connections()
+        
+    def _init_weights(self):
+        # Initialize tree weights using parametrization
+        tree_weights = torch.nn.ParameterList()
+        for i in reversed(range(self.tree_depth + 1)):
+            # each tree level has lut_rank**i nodes per kernel
+            level_weights = torch.nn.Parameter(torch.stack(
+                [
+                    self.parametrization.init_weights(
+                        self.num_kernels, 
+                        self.device
+                    ) for _ in range(self.lut_rank**i)
+                ]
+            ))
+            tree_weights.append(level_weights)
+        return tree_weights
 
+    def _init_connections(self):
+         # Setup connections
+        self.connections = setup_connections(
+            structure="conv",
+            connections=self.connections,
+            lut_rank=self.lut_rank,
+            device=self.device,
+            in_dim=self.in_dim,
+            channels=self.channels,
+            num_kernels=self.num_kernels,
+            tree_depth=self.tree_depth,
+            receptive_field_size=self.receptive_field_size,
+            conv_dimension=self.conv_dimension,
+            stride=self.stride,
+            padding=self.padding,
+            **self.connections_kwargs
+        )
+        return self.connections
 
     def forward(self, x):
-        """Implement the binary tree using the pre-selected indices."""
-        current_level = x
+        """Applies the logic convolution to the input.
+
+        The forward pass proceeds as follows:
+
+        1. Optionally pad the input spatially.
+        2. Select all receptive-field positions for the first tree level using
+           precomputed index tensors.
+        3. For each tree level:
+            a. Sample or select LUT weights for all nodes at that level.
+            b. Apply binary logic operations to the child activations,
+               reducing them up the tree.
+        4. Reshape the final per-kernel outputs into a 4D tensor of shape
+           ``(batch_size, num_kernels, out_height, out_width)``.
+
+        Args:
+            x: Input tensor of shape ``(batch_size, channels, height, width)``.
+
+        Returns:
+            Tensor of shape ``(batch_size, num_kernels, out_height, out_width)``,
+            where ``out_height`` and ``out_width`` are determined by the
+            convolution parameters:
+
+            * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
+            * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
+        """
         if self.padding > 0:
-            current_level = torch.nn.functional.pad(
-                current_level,
+            x = torch.nn.functional.pad(
+                x,
                 (self.padding, self.padding, self.padding, self.padding, 0, 0),
                 mode="constant",
                 value=0
             )
-
-        left_indices, right_indices = self.indices[0]
-        a_h, a_w, a_c = left_indices[..., 0], left_indices[..., 1], left_indices[..., 2]
-        b_h, b_w, b_c = right_indices[..., 0], right_indices[..., 1], right_indices[..., 2]
-        a = current_level[:, a_c, a_h, a_w]
-        b = current_level[:, b_c, b_h, b_w]
-
-        if self.parametrization == "raw":
-            weighting_func = {
-                "soft": soft_raw,
-                "hard": hard_raw,
-                "gumbel_soft": lambda w: gumbel_softmax(w, tau=self.temperature, hard=False),
-                "gumbel_hard": lambda w: gumbel_softmax(w, tau=self.temperature, hard=True),
-            }[self.forward_sampling]
-
-            level_weights = torch.stack(
-                [weighting_func(w) for w in self.tree_weights[0]], dim=0
+        # First level tree indices
+        x = self.connections(x, 0)
+        # Process first level with einsum contraction
+        # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
+        x = self.parametrization.forward(
+            x, self.tree_weights[0], self.training,
+            contraction='fc,bcsf->bcsf'
+        )
+        # Process remaining levels
+        for level in range(1, self.tree_depth + 1):
+            x = self.connections(x, level)
+            x = x.movedim(-2, 1)
+            x = self.parametrization.forward(
+                x, self.tree_weights[level], self.training,
+                contraction='fc,bcsf->bcsf'
             )
-            if not self.training:
-                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                    torch.float32
-                )
-
-            current_level = bin_op_cnn(a, b, level_weights)
-
-            # Process remaining levels
-            for level in range(1, self.tree_depth + 1):
-                left_indices, right_indices = self.indices[level]
-                a = current_level[..., left_indices]
-                b = current_level[..., right_indices]
-                level_weights = torch.stack(
-                    [weighting_func(w) for w in self.tree_weights[level]], dim=0
-                )
-                if not self.training:
-                    level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                        torch.float32
-                    )
-
-                current_level = bin_op_cnn(a, b, level_weights)
-
-        elif self.parametrization == "walsh":
-            level_weights = torch.stack([w for w in self.tree_weights[0]], dim=0)
-            current_level = bin_op_cnn_walsh(a, b, level_weights)
-            if self.training:
-                if self.forward_sampling == "soft":
-                    current_level = soft_walsh(current_level, tau=self.temperature)
-                elif self.forward_sampling == "hard":
-                    current_level = hard_walsh(current_level, tau=self.temperature)
-                elif self.forward_sampling == "gumbel_soft":
-                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=False)
-                elif self.forward_sampling == "gumbel_hard":
-                    current_level = gumbel_sigmoid(current_level, tau=self.temperature, hard=True)
-            else:
-                current_level = (current_level > 0).to(torch.float32)
-
-            # Process remaining levels
-            for level in range(1, self.tree_depth + 1):
-                left_indices, right_indices = self.indices[level]
-                a = current_level[..., left_indices]
-                b = current_level[..., right_indices]
-                # level_weights = self.tree_weights[level]
-                level_weights = torch.stack([w for w in self.tree_weights[level]], dim=0)
-                current_level = bin_op_cnn_walsh(a, b, level_weights)
-                if self.training:
-                    current_level = torch.sigmoid(current_level / self.temperature)
-                else:
-                    current_level = (current_level > 0).to(torch.float32)
-
         # Reshape flattened output
-        reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size) // self.stride + 1
-        reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size) // self.stride + 1
+        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
+                   for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
+        x = x.view(x.shape[0], x.shape[1], *reshape)
 
-        current_level = current_level.view(
-            current_level.shape[0],
-            current_level.shape[1],
-            reshape_h,
-            reshape_w,
-        )
+        return x
 
-        return current_level
+    def get_luts_and_ids(self):
+        """Computes the most probable LUT and its ID for each neuron.
 
-
-    def get_random_receptive_field_pairs(self):
-        """Generate random index pairs within the receptive field for each kernel.
-        May contain self connections and duplicate connections.
+        Returns:
+            Tuple[List[List[torch.Tensor]], List[List[torch.Tensor]]]:
+                - ``tree_luts``: Nested list of Boolean tensors (truth tables)
+                - ``tree_ids``: Nested list of integer tensors (LUT IDs)
         """
-        c, h_k, w_k = self.channels, self.receptive_field_size, self.receptive_field_size
-        sample_size = 2**self.tree_depth
-
-        all_pairs_a = []
-        all_pairs_b = []
-
-        # Generate different random pairs for each kernel
-        for _ in range(self.num_kernels):
-            # Randomly select positions within the receptive field
-            h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
-            w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
-            c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
-
-            # Stack the indices
-            indices = torch.stack([h_indices, w_indices, c_indices], dim=-1)
-
-            # Split for binary tree (split the random connections)
-            pairs_a = indices[:sample_size]
-            pairs_b = indices[sample_size:]
-
-            all_pairs_a.append(pairs_a)
-            all_pairs_b.append(pairs_b)
-
-        # Stack all kernel pairs: shape (num_kernels, sample_size, 3)
-        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
-
-
-    def get_random_unique_receptive_field_pairs(self):
-        """Generate random unique index pairs within the receptive field for each kernel.
-        No self-connections or duplicate pairs.
-        """
-        c, h_k, w_k = self.channels, self.receptive_field_size, self.receptive_field_size
-        sample_size = 2**self.tree_depth
-
-        # Pre-compute all RF positions
-        h_rf = torch.arange(0, h_k, device=self.device)
-        w_rf = torch.arange(0, w_k, device=self.device)
-        c_rf = torch.arange(0, c, device=self.device)
-
-        h_rf_grid, w_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, c_rf, indexing="ij")
-        all_positions = torch.stack([
-            h_rf_grid.flatten(),
-            w_rf_grid.flatten(),
-            c_rf_grid.flatten()
-        ], dim=1)
-
-        num_positions = h_k * w_k * c
-        max_unique_pairs = num_positions * (num_positions - 1) // 2
-
-        if sample_size > max_unique_pairs:
-            raise ValueError(f"Not enough unique pairs: need {sample_size}, have {max_unique_pairs}")
-
-        # Use torch.randperm for efficient unique sampling
-        # Create all possible pair indices
-        triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=self.device)
-        total_pairs = triu_indices.shape[1]
-
-        all_pairs_a = []
-        all_pairs_b = []
-
-        # Generate different unique pairs for each kernel
-        for _ in range(self.num_kernels):
-            # Randomly select sample_size pairs
-            selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
-            selected_i = triu_indices[0, selected_pair_indices]
-            selected_j = triu_indices[1, selected_pair_indices]
-
-            pairs_a = all_positions[selected_i]
-            pairs_b = all_positions[selected_j]
-
-            all_pairs_a.append(pairs_a)
-            all_pairs_b.append(pairs_b)
-
-        # Stack all kernel pairs: shape (num_kernels, sample_size, 3)
-        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
-
-
-    def apply_sliding_window(self, pairs_tuple):
-        """Apply sliding window to the receptive field pairs across all kernel positions."""
-        pairs_a, pairs_b = pairs_tuple  # Shape: (num_kernels, sample_size, 3)
-        h, w = self.in_dim[0], self.in_dim[1]
-        h_k, w_k = self.receptive_field_size, self.receptive_field_size
-
-        # Account for padding
-        h_padded = h + 2 * self.padding
-        w_padded = w + 2 * self.padding
-
-        assert h_k <= h_padded and w_k <= w_padded, (
-            f"Receptive field size ({h_k}, {w_k}) must fit within input dimensions "
-            f"({h_padded}, {w_padded}) after padding."
-        )
-
-        # Generate all possible positions the kernel can slide to
-        h_starts = torch.arange(0, h_padded - h_k + 1, self.stride, device=self.device)
-        w_starts = torch.arange(0, w_padded - w_k + 1, self.stride, device=self.device)
-
-        # Generate meshgrid for all possible starting points of the receptive field
-        h_grid, w_grid = torch.meshgrid(h_starts, w_starts, indexing="ij")
-
-        all_stacked_as = []
-        all_stacked_bs = []
-
-        # Process for each kernel with its unique pairs
-        for kernel_idx in range(self.num_kernels):
-            stacked_as = []
-            stacked_bs = []
-
-            # Get the pairs for this specific kernel
-            kernel_pairs_a = pairs_a[kernel_idx]  # Shape: (sample_size, 3)
-            kernel_pairs_b = pairs_b[kernel_idx]  # Shape: (sample_size, 3)
-
-            # Slide the kernel over the image (across all positions)
-            for h_start, w_start in zip(h_grid.flatten(), w_grid.flatten()):
-                # Apply sliding window offset
-                indices_a = torch.stack([
-                    kernel_pairs_a[:, 0] + h_start,
-                    kernel_pairs_a[:, 1] + w_start,
-                    kernel_pairs_a[:, 2]
-                ], dim=-1)
-
-                indices_b = torch.stack([
-                    kernel_pairs_b[:, 0] + h_start,
-                    kernel_pairs_b[:, 1] + w_start,
-                    kernel_pairs_b[:, 2]
-                ], dim=-1)
-
-                stacked_as.append(indices_a)
-                stacked_bs.append(indices_b)
-
-            # After sliding over the whole image, store the result for this kernel
-            all_stacked_as.append(torch.stack(stacked_as, dim=0))
-            all_stacked_bs.append(torch.stack(stacked_bs, dim=0))
-
-        # Stack the results for all kernels
-        return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
-
+        tree_ids = []
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_ids = []
+            level_luts = []
+            for w in self.tree_weights[level]:
+                luts, ids = self.parametrization.get_luts_and_ids(w)
+                level_ids.append(ids)
+                level_luts.append(luts)
+            tree_ids.append(level_ids)
+            tree_luts.append(level_luts)
+        return tree_luts, tree_ids
     
-    def get_indices_from_kernel_pairs(self, pairs_tuple):
-        indices = [
-            self.apply_sliding_window(pairs_tuple)
-        ]
-        for level in range(self.tree_depth):
-            size = 2 ** (self.tree_depth - level)
-            left_indices = torch.arange(0, size, 2, device=self.device)
-            right_indices = torch.arange(1, size, 2, device=self.device)
-            indices.append((left_indices, right_indices))
-        return indices
+    def get_luts(self):
+        """Computes the most probable LUT for each neuron.
+
+        Returns:
+           List[List[torch.Tensor]]: Nested list of Boolean tensors (LUTs)
+        """
+        tree_luts = []
+        for level in range(self.tree_depth + 1):
+            level_luts = []
+            for w in self.tree_weights[level]:
+                luts = self.parametrization.get_luts(w)
+                level_luts.append(luts)
+            tree_luts.append(level_luts)
+        return tree_luts
+    
+    def get_regularization_loss(self, regularizer: str):
+        reg_loss = 0.0
+        for w in self.tree_weights:
+            reg_loss += get_regularization_loss(w, regularizer)
+        return reg_loss
+    
+    def rescale_weights(self, method):
+        for w in self.tree_weights:
+            rescale_weights(w, method)
 
 
-class LogicConv3d(nn.Module):
-    """3d convolutional layer with differentiable logic operations.
+class LogicConv2d(_LogicConvNd):
+    """2D convolutional layer with differentiable logic operations.
 
-    This layer implements a 3d convolution with differentiable logic operations.
-    It uses a binary tree structure to combine input features using logical
-    operations.
+    This layer implements a 2D convolution where each output location is
+    computed by evaluating a learned logic tree over a receptive field.
+    Instead of linear filters, it uses a binary tree of differentiable
+    logic operations (LUTs) applied to selected positions in the receptive
+    field, per kernel and per spatial location.
     """
-
     def __init__(
         self,
-        in_dim: _size_3_t,
-        device: str = "cuda",
-        grad_factor: float = 1.0,
+        in_dim: Union[_size_2_t, int],
         channels: int = 1,
         num_kernels: int = 16,
         tree_depth: int = None,
-        receptive_field_size: _size_3_t = None,
-        implementation: str = None,
-        connections: str = "random",  # or 'random-unique'
+        receptive_field_size: Union[_size_2_t, int] = 2,
         stride: int = 1,
-        padding: int = None,
+        padding: int = 0,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        lut_rank: int = 2,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
     ):
-        """Initialize the 3d logic convolutional layer.
-
-        Args:
-            in_dim: Input dimensions (height, width, depth)
-            device: Device to run the layer on
-            grad_factor: Gradient factor for the logic operations
-            channels: Number of input channels
-            num_kernels: Number of output kernels
-            tree_depth: Depth of the binary tree
-            receptive_field_size: Size of the receptive field
-            implementation: Implementation type ("python" or "cuda")
-            connections: Connection type: "random" or "unique". The latter will overwrite
-                the tree_depth parameter and use a full binary tree of all possible connections
-                within the receptive field.
-            stride: Stride of the convolution
-            padding: Padding of the convolution
-        """
-        super().__init__()
-
-        self.receptive_field_size = _triple(receptive_field_size)
-        assert (
-            (stride <= self.receptive_field_size[0]) and
-            (stride <= self.receptive_field_size[1]) and
-            (stride <= self.receptive_field_size[2])), (
-                f"Stride ({stride}) cannot be larger than receptive field size "
-                f"({receptive_field_size})"
-            )
-
-        self.tree_weights = torch.nn.ModuleList()
-        for i in reversed(range(tree_depth + 1)):  # Iterate over tree levels
-            level_weights = torch.nn.ParameterList()
-            for _ in range(2**i):  # Iterate over nodes at this level
-                weights = torch.zeros(
-                    num_kernels, 16, device=device
-                )  # Initialize with zeros
-                weights[:, 3] = 5  # Set the fourth element (index 3) to 5
-                # Wrap as a trainable parameter
-                level_weights.append(torch.nn.Parameter(weights))
-            self.tree_weights.append(level_weights)
-        self.in_dim = _triple(in_dim)
-        self.device = device
-        self.grad_factor = grad_factor
-        self.num_kernels = num_kernels
-        self.tree_depth = tree_depth
-        self.channels = channels
-        self.stride = stride
-        self.padding = padding
-        self.connections = connections
-        if connections == "random":
-            self.kernel_pairs = self.get_random_receptive_field_pairs()
-        elif connections == "random-unique":
-            self.kernel_pairs = self.get_random_unique_receptive_field_pairs()
-        else:
-            raise ValueError(f"Unknown connections type: {connections}")
-        self.indices = self.get_indices_from_kernel_pairs(self.kernel_pairs)
-
-
-    def forward(self, x):
-        """Implement the binary tree using the pre-selected indices."""
-        current_level = x
-        # apply zero padding
-        left_indices, right_indices = self.indices[0]
-        a_h, a_w, a_d, a_c = (
-            left_indices[..., 0],
-            left_indices[..., 1],
-            left_indices[..., 2],
-            left_indices[..., 3]
-        )
-        b_h, b_w, b_d, b_c = (
-            right_indices[..., 0],
-            right_indices[..., 1],
-            right_indices[..., 2],
-            right_indices[..., 3]
-        )
-        a = current_level[:, a_c, a_h, a_w, a_d]
-        b = current_level[:, b_c, b_h, b_w, b_d]
-
-        # Process first level
-        level_weights = torch.stack(
-            [torch.nn.functional.softmax(w, dim=-1) for w in self.tree_weights[0]],
-            dim=0,
-        )
-        if not self.training:
-            level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                torch.float32
-            )
-
-        current_level = bin_op_cnn(a, b, level_weights)
-
-        # Process remaining levels
-        for level in range(1, self.tree_depth + 1):
-            left_indices, right_indices = self.indices[level]
-            a = current_level[..., left_indices]
-            b = current_level[..., right_indices]
-            level_weights = torch.stack(
-                [
-                    torch.nn.functional.softmax(w, dim=-1)
-                    for w in self.tree_weights[level]
-                ],
-                dim=0,
-            )
-
-            if not self.training:
-                level_weights = torch.nn.functional.one_hot(level_weights.argmax(-1), 16).to(
-                    torch.float32
-                )
-
-            current_level = bin_op_cnn(a, b, level_weights)
-
-        # Reshape flattened output
-        reshape_h = (self.in_dim[0] + 2*self.padding - self.receptive_field_size[0]) // self.stride + 1
-        reshape_w = (self.in_dim[1] + 2*self.padding - self.receptive_field_size[1]) // self.stride + 1
-        reshape_d = (self.in_dim[2] + 2*self.padding - self.receptive_field_size[2]) // self.stride + 1
-
-        current_level = current_level.view(
-            current_level.shape[0],
-            current_level.shape[1],
-            reshape_h,
-            reshape_w,
-            reshape_d
+        super().__init__(
+            in_dim=in_dim,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            stride=stride,
+            padding=padding,
+            conv_dimension=2,
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
+            connections=connections,
+            connections_kwargs=connections_kwargs,
         )
 
-        return current_level
 
+class LogicConv3d(_LogicConvNd):
+    """3D convolutional layer with differentiable logic operations.
 
-    def get_random_receptive_field_pairs(self):
-        """Generate random index pairs within the receptive field for each kernel.
-        May contain self connections and duplicate connections.
-        """
-        c, h_k, w_k, d_k = (
-            self.channels,
-            self.receptive_field_size[0],
-            self.receptive_field_size[1],
-            self.receptive_field_size[2]
+    This layer implements a 3D convolution where each output location is
+    computed by evaluating a learned logic tree over a receptive field.
+    Instead of linear filters, it uses a binary tree of differentiable
+    logic operations (LUTs) applied to selected positions in the receptive
+    field, per kernel and per spatial location.
+    """
+    def __init__(
+        self,
+        in_dim: Union[_size_3_t, int],
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: Union[_size_3_t, int] = 2,
+        stride: int = 1,
+        padding: int = 0,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        lut_rank: int = 2,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
+    ):
+        super().__init__(
+            in_dim=in_dim,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            stride=stride,
+            padding=padding,
+            conv_dimension=3,
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
+            connections=connections,
+            connections_kwargs=connections_kwargs,
         )
-        sample_size = 2**self.tree_depth
-
-        all_pairs_a = []
-        all_pairs_b = []
-
-        # Generate different random pairs for each kernel
-        for _ in range(self.num_kernels):
-            # Randomly select positions within the receptive field
-            h_indices = torch.randint(0, h_k, (2 * sample_size,), device=self.device)
-            w_indices = torch.randint(0, w_k, (2 * sample_size,), device=self.device)
-            d_indices = torch.randint(0, d_k, (2 * sample_size,), device=self.device)
-            c_indices = torch.randint(0, c, (2 * sample_size,), device=self.device)
-
-            # Stack the indices
-            indices = torch.stack([h_indices, w_indices, d_indices, c_indices], dim=-1)
-
-            # Split for binary tree (split the random connections)
-            pairs_a = indices[:sample_size]
-            pairs_b = indices[sample_size:]
-
-            all_pairs_a.append(pairs_a)
-            all_pairs_b.append(pairs_b)
-
-        # Stack all kernel pairs: shape (num_kernels, sample_size, 4)
-        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
-
-
-    def get_random_unique_receptive_field_pairs(self):
-        """Generate random unique index pairs within the receptive field for each kernel.
-        No self-connections or duplicate pairs.
-        """
-        c, h_k, w_k, d_k = (
-            self.channels,
-            self.receptive_field_size[0],
-            self.receptive_field_size[1],
-            self.receptive_field_size[2]
-        )
-        sample_size = 2**self.tree_depth
-
-        # Pre-compute all RF positions
-        h_rf = torch.arange(0, h_k, device=self.device)
-        w_rf = torch.arange(0, w_k, device=self.device)
-        d_rf = torch.arange(0, d_k, device=self.device)
-        c_rf = torch.arange(0, c, device=self.device)
-
-        h_rf_grid, w_rf_grid, d_rf_grid, c_rf_grid = torch.meshgrid(h_rf, w_rf, d_rf, c_rf, indexing="ij")
-        all_positions = torch.stack([
-            h_rf_grid.flatten(),
-            w_rf_grid.flatten(),
-            d_rf_grid.flatten(),
-            c_rf_grid.flatten()
-        ], dim=1)
-
-        num_positions = h_k * w_k * d_k * c
-        max_unique_pairs = num_positions * (num_positions - 1) // 2
-
-        if sample_size > max_unique_pairs:
-            raise ValueError(f"Not enough unique pairs: need {sample_size}, have {max_unique_pairs}")
-
-        # Use torch.randperm for efficient unique sampling
-        # Create all possible pair indices
-        triu_indices = torch.triu_indices(num_positions, num_positions, offset=1, device=self.device)
-        total_pairs = triu_indices.shape[1]
-
-        all_pairs_a = []
-        all_pairs_b = []
-
-        # Generate different unique pairs for each kernel
-        for _ in range(self.num_kernels):
-            # Randomly select sample_size pairs
-            selected_pair_indices = torch.randperm(total_pairs, device=self.device)[:sample_size]
-            selected_i = triu_indices[0, selected_pair_indices]
-            selected_j = triu_indices[1, selected_pair_indices]
-
-            pairs_a = all_positions[selected_i]
-            pairs_b = all_positions[selected_j]
-
-            all_pairs_a.append(pairs_a)
-            all_pairs_b.append(pairs_b)
-
-        # Stack all kernel pairs: shape (num_kernels, sample_size, 4)
-        return torch.stack(all_pairs_a), torch.stack(all_pairs_b)
-
-
-    def apply_sliding_window(self, pairs_tuple):
-        """Apply sliding window to the receptive field pairs across all kernel positions."""
-        pairs_a, pairs_b = pairs_tuple  # Shape: (num_kernels, sample_size, 4)
-        h, w, d = self.in_dim[0], self.in_dim[1], self.in_dim[2]
-        h_k, w_k, d_k = self.receptive_field_size
-
-        # Account for padding
-        h_padded = h + 2 * self.padding
-        w_padded = w + 2 * self.padding
-        d_padded = d + 2 * self.padding
-
-        assert (h_k <= h_padded and w_k <= w_padded) and d_k <= d_padded, (
-            f"Receptive field size ({h_k}, {w_k}, {d_k}) must fit within input dimensions "
-            f"({h_padded}, {w_padded}, {d_padded}) after padding."
-        )
-
-        # Generate all possible positions the kernel can slide to
-        h_starts = torch.arange(0, h_padded - h_k + 1, self.stride, device=self.device)
-        w_starts = torch.arange(0, w_padded - w_k + 1, self.stride, device=self.device)
-        d_starts = torch.arange(0, d_padded - d_k + 1, self.stride, device=self.device)
-
-        # Generate meshgrid for all possible starting points of the receptive field
-        h_grid, w_grid, d_grid = torch.meshgrid(h_starts, w_starts, d_starts, indexing="ij")
-
-        all_stacked_as = []
-        all_stacked_bs = []
-
-        # Process for each kernel with its unique pairs
-        for kernel_idx in range(self.num_kernels):
-            stacked_as = []
-            stacked_bs = []
-
-            # Get the pairs for this specific kernel
-            kernel_pairs_a = pairs_a[kernel_idx]  # Shape: (sample_size, 4)
-            kernel_pairs_b = pairs_b[kernel_idx]  # Shape: (sample_size, 4)
-
-            # Slide the kernel over the image (across all positions)
-            for h_start, w_start, d_start in zip(h_grid.flatten(), w_grid.flatten(), d_grid.flatten()):
-                # Apply sliding window offset
-                indices_a = torch.stack([
-                    kernel_pairs_a[:, 0] + h_start,
-                    kernel_pairs_a[:, 1] + w_start,
-                    kernel_pairs_a[:, 2] + d_start,
-                    kernel_pairs_a[:, 3]
-                ], dim=-1)
-
-                indices_b = torch.stack([
-                    kernel_pairs_b[:, 0] + h_start,
-                    kernel_pairs_b[:, 1] + w_start,
-                    kernel_pairs_b[:, 2] + d_start,
-                    kernel_pairs_b[:, 3]
-                ], dim=-1)
-
-                stacked_as.append(indices_a)
-                stacked_bs.append(indices_b)
-
-            # After sliding over the whole image, store the result for this kernel
-            all_stacked_as.append(torch.stack(stacked_as, dim=0))
-            all_stacked_bs.append(torch.stack(stacked_bs, dim=0))
-
-        # Stack the results for all kernels
-        return torch.stack(all_stacked_as), torch.stack(all_stacked_bs)
-
-
-    def get_indices_from_kernel_pairs(self, pairs_tuple):
-        indices = [
-            self.apply_sliding_window(pairs_tuple)
-        ]
-        for level in range(self.tree_depth):
-            size = 2 ** (self.tree_depth - level)
-            left_indices = torch.arange(0, size, 2, device=self.device)
-            right_indices = torch.arange(1, size, 2, device=self.device)
-            indices.append((left_indices, right_indices))
-        return indices
-
-
-class OrPooling(torch.nn.Module):
-    """Logic gate based pooling layer."""
-
-    # create layer that selects max in the kernel
-
-    def __init__(self, kernel_size, stride, padding=0):
-        super(OrPooling, self).__init__()
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
-
-    def forward(self, x):
-        """Pool the max value in the kernel."""
-        if (x.dim() == 4):
-            x = torch.nn.functional.max_pool2d(
-                x,
-                kernel_size=self.kernel_size,
-                stride=self.stride,
-                padding=self.padding,
-            )
-        elif (x.dim() == 5):
-            x = torch.nn.functional.max_pool3d(
-                x,
-                kernel_size=self.kernel_size,
-                stride=self.stride,
-                padding=self.padding,
-            )
-        else:
-            raise NotImplementedError(
-                "OrPooling only implemented for input tensor with rank 4 or 5"
-            )
-        return x
