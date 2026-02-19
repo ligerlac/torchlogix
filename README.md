@@ -1,4 +1,4 @@
-# torchlogix - Differentiable Logic Gate Networks in PyTorch
+# torchlogix - Logic Neural Networks in PyTorch
 
 ![torchlogix_logo](assets/logo.png)
 
@@ -12,7 +12,7 @@ and a continuously parameterized approximation of the network. This allows learn
 is optimal for each neuron. The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a
 million images of MNIST per second on a single CPU core.
 
-`torchlogix` is a Python 3.6+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
+`torchlogix` is a Python 3.10+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
 
 ## Installation
 

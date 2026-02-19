@@ -1,3 +1,60 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools-scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchlogix"
+version = "0.1.0"
+description = "Logic Neural Networks in PyTorch"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Lino Gerlach", email = "lino.oscar.gerlach@cern.ch"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "torch>=1.6.0",
+    "numpy>=1.26",
+    "tqdm",
+    "scikit-learn",
+    "torchvision",
+    "rich",
+    "torch-geometric",
+    "wheel",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8>=6.1.0",
+    "black>=23.12.1",
+    "isort>=5.13.2",
+    "pre-commit>=3.6.0",
+    "pytest>=8.0.0",
+    "autopep8>=2.0.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/ligerlac/torchlogix"
+Bug Tracker = "https://github.com/ligerlac/torchlogix/issues"
+Documentation = "https://ligerlac.github.io/torchlogix/"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.black]
 line-length = 88
 target-version = ['py36']
