@@ -1,45 +1,32 @@
-# torchlogix - Logic Neural Networks in PyTorch
-
+<!-- begin-logo -->
 ![torchlogix_logo](assets/logo.png)
+<!-- end-logo -->
 
-**Note:** `torchlogix` is based on the original `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), which serves as the official implementation of the NeurIPS 2022 Paper "Deep Differentiable Logic Gate Networks"
-(Paper @ [ArXiv](https://arxiv.org/abs/2210.08277)) by Felix Petersen et al. As the aforementioned repository is not maintained anymore, `torchlogix` extends `difflogic` by bugfixes and new concepts such as learnable thermometer thresholding and the walsh-decomposition-based reparametrization of differentiable logic gates with 4 instead of 16 parameters as described in "WARP-LUTs - Walsh-Assisted Relaxation for Probabilistic Look Up Tables" (Paper @ [ArXiv](https://www.arxiv.org/abs/2510.15655)). It also implements convolutional logic gate layers as described in the NeurIPS 2024 Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
+[![PyPI version](https://badge.fury.io/py/torchlogix.svg)](https://pypi.org/project/torchlogix/)
+[![Python 3.10‒3.13](https://img.shields.io/badge/python-3.10%E2%80%923.14-blue)](https://www.python.org)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Build Test](https://github.com/ligerlac/torchlogix/actions/workflows/unit-test.yml/badge.svg?branch=main)](https://github.com/ligerlac/torchlogix/actions/workflows/unit-test.yml)
+[![Documentation](https://img.shields.io/badge/docs-online-success)](https://ligerlac.github.io/torchlogix/)
 
-The goal behind differentiable logic gate networks is to solve machine learning tasks by learning combinations of logic
-gates, i.e., logic gate networks. As the choice of a logic is conventionally non-differentiable, relaxations are applied
-to allow training logic gate networks with gradient-based methods. Specifically, `torchlogix` combines real-valued logic
-and a continuously parameterized approximation of the network. This allows learning which logic gate (out of 16 possible)
-is optimal for each neuron. The resulting discretized logic gate networks achieve fast inference speeds, e.g., beyond a
+`torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
 million images of MNIST per second on a single CPU core.
 
-`torchlogix` is a Python 3.10+ and PyTorch 1.9.0+ based library for training and inference with logic gate networks.
+**Note:** `torchlogix` is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), and extends it by new concepts such as learnable connections, higher-dimensional logic expressions, and learnable thermometer thresholding as described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)). It also implements convolutional logic layers as described in the Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 ## Installation
-
 ```shell
 pip install torchlogix                 # basic
 pip install "torchlogix[dev]"          # with dev tools
 ```
+The following software stacks have validated performance:
+`python3.12` / `python3.13`, `cuda12.4` / `cuda13.0`, `torch2.6` / `torch2.9`.
 
 ## 📚 Documentation
 
-**Full documentation is available at:** [TorchLogix Documentation](https://ligerlac.github.io/torchlogix/)
-
+**Full documentation is available [here](https://ligerlac.github.io/torchlogix/)**, including a full **API Reference**. Some quick links:
 - **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions
 - **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
-- **[Logic Gates Guide](docs/guides/logic_gates.md)** - Understanding the 16 Boolean operations
-- **[Examples](docs/guides/examples.md)** - Complete training examples and tutorials
-- **[API Reference](docs/api/torchlogix.rst)** - Comprehensive API documentation
-
-### Building Documentation
-
-```bash
-cd docs
-pip install -r requirements.txt
-make html
-open _build/html/index.html  # macOS
-```
-
+- **[Concepts](docs/guides/concepts.md)** - Understand some of the design choices behind `torchlogix`
 ## 🌱 Intro and Training
 
 This library provides a framework for both training and inference with logic gate networks.
