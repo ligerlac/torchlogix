@@ -3,9 +3,6 @@ jobs:
     Unit-Tests:
         runs-on: ubuntu-latest
 
-        env:
-          DIFFLOGIC_BUILD_CUDA_EXT: false
-
         steps:
             - name: Print job info
               run: |

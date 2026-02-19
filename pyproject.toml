@@ -57,7 +57,7 @@ where = ["src"]
 
 [tool.black]
 line-length = 88
-target-version = ['py36']
+target-version = ['py310']
 include = '\.pyi?$'
 extend-exclude = '''
 # A regex preceded with ^/ will apply only to files and directories

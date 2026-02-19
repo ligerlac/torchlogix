@@ -90,10 +90,7 @@ layer = LogicConv2d(
 )
 ```
 
-At this point, it is important to discuss the options for `device` and the provided implementations. Specifically,
-`torchlogix` provides two implementations (both of which work with PyTorch):
-
-* **`python`** the Python implementation is a substantially slower implementation that is easy to understand as it is implemented directly in Python with PyTorch and does not require any C++ / CUDA extensions. It is compatible with `device='cpu'` and `device='cuda'`.
+At this point, it is important to discuss the `device` option. `torchlogix` is implemented in pure PyTorch and works with both `device='cpu'` and `device='cuda'`. For best performance, use PyTorch's built-in optimizations like `torch.compile`.
 
 To aggregate output neurons into a lower dimensional output space, we can use `GroupSum`, which aggregates a number of output neurons into
 a `k` dimensional output, e.g., `k=10` for a 10-dimensional classification setting.
@@ -127,8 +124,7 @@ To apply a model to the `PackBitsTensor`, simply call:
 output = model(data_bits)
 ```
 This requires that the `model` is in `.eval()` mode, and if supplied with a `PackBitsTensor`, will automatically use
-a logic gate-based inference on the tensor. This also requires that `model.implementation = 'cuda'` as the mode is only
-implemented in CUDA.
+a logic gate-based inference on the tensor. Note that `PackBitsTensor` requires a CUDA-enabled device.
 It is notable that, while the model is in `.eval()` mode, we can still also feed float tensors through the model, in
 which case it will simply use a hard variant of the real-valued logics.
 
@@ -166,6 +162,9 @@ Thus, the model inference modes have some deviation from the implementations for
 focussed on making it more scalable, efficient, and easier to apply in applications.
 We have especially focussed on modularity and efficiency for larger models and have opted to polish the presented
 implementations over publishing a plethora of different competing implementations.
+
+We experimented with custom CUDA kernels for acceleration but found that we were unable to beat `torch.compile`'s performance.
+As a result, the library uses pure PyTorch implementations that benefit from PyTorch's built-in optimizations.
 
 ## 🧪 Experiments
 
