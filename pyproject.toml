@@ -45,9 +45,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ligerlac/torchlogix"
-Bug Tracker = "https://github.com/ligerlac/torchlogix/issues"
-Documentation = "https://ligerlac.github.io/torchlogix/"
+"Homepage" = "https://github.com/ligerlac/torchlogix"
+"Bug Tracker" = "https://github.com/ligerlac/torchlogix/issues"
+"Documentation" = "https://ligerlac.github.io/torchlogix/"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
