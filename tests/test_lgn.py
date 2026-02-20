@@ -142,7 +142,7 @@ def test_xor_model():
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
     layer.weight.data = torch.zeros(16, dtype=torch.float32)
     layer.weight.data[6] = 100
     model = torch.nn.Sequential(layer)
