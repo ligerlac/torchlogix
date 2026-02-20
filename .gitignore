@@ -1,6 +1,7 @@
 venv/
 *.png
 *.svg
+*.ps1
 *pyc
 .idea
 *.so
@@ -11,7 +12,6 @@ __pycache__/
 *.pytest_cache/
 build/
 experiments/results/
-experiments/
 
 # Documentation build artifacts
 docs/_build/
