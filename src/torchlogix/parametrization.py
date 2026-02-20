@@ -464,6 +464,7 @@ class LightLUTParametrization(LUTParametrization):
             weights = torch.randn(num_neurons, lut_entries, device=device)
             weights[:, :lut_entries // 2] -= 3
             weights[:, lut_entries // 2:] += 3
+            return weights
         elif self.weight_init == "random":
             return torch.rand(num_neurons, lut_entries, device=device)
         else:
