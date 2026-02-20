@@ -160,3 +160,6 @@ There are experiments on CIFAR-10 in the `experiments` directory. We will add mo
 ## 📜 License
 
 `torchlogix` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it.
+
+# TODO
+- [] revert .gitignore
