@@ -23,9 +23,7 @@ python train.py --dataset mnist --num-iterations 100000 --output results/mnist_r
 **Key Arguments:**
 - `--dataset`: Dataset to train on (mnist, cifar-10-3-thresholds, adult, etc.)
 - `--architecture`: Model architecture (randomly_connected, cnn, fully_connected)
-- `--num-neurons`, `--num-layers`: Model size parameters
 - `--num-iterations`, `--eval-freq`: Training schedule
-- `--implementation`: cuda (fast) or python (slow, CPU-only)
 
 ### 2. Evaluation (`evaluate.py`)
 

@@ -105,12 +105,12 @@ def get_parser():
         help="Number of inputs to each LUT node"
     )
     parser.add_argument(
-        "--parametrization", type=str, default="raw", choices=["raw", "walsh", "walsh2", "light", "dwn"],
+        "--parametrization", type=str, default="raw", choices=["raw", "warp", "light"],
         help="Parametrization to use"
     )
     parser.add_argument(
         "--parametrization-temperature", type=float, default=0.1,
-        help="Temperature for sigmoid in walsh parametrization"
+        help="Temperature for sigmoid/softmax in parametrization"
     )
     parser.add_argument(
         "--forward-sampling", type=str, default="soft", choices=["soft", "hard", "gumbel_soft", "gumbel_hard"],
