@@ -183,3 +183,4 @@ There are experiments on CIFAR-10 in the `experiments` directory. We will add mo
 - [] revert .gitignore
 - [] rework evaluate.py and compile.py
 - [] Move all helper functions, except for run_training in utils.py?
+- [] Describe MNIST example
