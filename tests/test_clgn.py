@@ -170,7 +170,7 @@ class TestIndeces:
                         f"Kernel {kernel_idx}, position {pos_idx}: Found self-connection {left_tuple}"
 
 
-def test_unique_connections_walsh():
+def test_unique_connections_warp():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 6
     import time
@@ -178,7 +178,7 @@ def test_unique_connections_walsh():
     connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(30, 20),
-        parametrization="walsh",
+        parametrization="warp",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -192,13 +192,13 @@ def test_unique_connections_walsh():
     assert time.time() - start < 10, "Unique connections generation took too long"
 
 
-def test_lut_rank_walsh():
+def test_lut_rank_warp():
     """Test scaling up to multiple inputs, that is n=4."""
     lut_rank = 4
     connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
-        parametrization="walsh",
+        parametrization="warp",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -215,12 +215,12 @@ def test_lut_rank_walsh():
             assert luts_.shape[-1] == 1 << lut_rank
 
 
-def test_regularizer_walsh():
+def test_regularizer_warp():
     lut_rank = 2
     connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
-        parametrization="walsh",
+        parametrization="warp",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -247,12 +247,12 @@ def test_regularizer_walsh():
     assert reg_loss.item() > 0.0
 
 
-def test_weight_rescale_walsh():
+def test_weight_rescale_warp():
     lut_rank = 2
     connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=(3, 4),
-        parametrization="walsh",
+        parametrization="warp",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -384,7 +384,7 @@ def test_get_luts_and_ids():
     
 
 
-def test_get_luts_and_ids_and_walsh():
+def test_get_luts_and_ids_and_warp():
     """Test the AND gate implementation.
 
     AND is the 1-st gate:
@@ -394,7 +394,7 @@ def test_get_luts_and_ids_and_walsh():
     connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
-        parametrization="walsh",
+        parametrization="warp",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -412,7 +412,7 @@ def test_get_luts_and_ids_and_walsh():
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
-    # Correct Walsh weights for AND gate with {-1, +1} conversion
+    # Correct WARP weights for AND gate with {-1, +1} conversion
     with torch.no_grad():
         and_weights = torch.tensor([[50., 50., 50., -50.]])
         layer.tree_weights[0].data[0] = and_weights
@@ -428,7 +428,7 @@ def test_get_luts_and_ids_and_walsh():
     assert torch.allclose(ids[1][0], torch.tensor([1]))
     
 
-def test_and_model_walsh():
+def test_and_model_warp():
     """Test the AND gate implementation.
 
     AND is the 1-st gate:
@@ -438,7 +438,7 @@ def test_and_model_walsh():
     connections_kwargs = {"init_method": "random-unique"}
     layer = LogicConv2d(
         in_dim=3,
-        parametrization="walsh",
+        parametrization="warp",
         device="cpu",
         channels=1,
         num_kernels=1,
@@ -456,7 +456,7 @@ def test_and_model_walsh():
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
     # Set weights to select AND operation
-    # Correct Walsh weights for AND gate with {-1, +1} conversion
+    # Correct WARP weights for AND gate with {-1, +1} conversion
     # Basis: [1, B, A, A*B] where inputs are converted via x = 1 - 2*x
     # Sigmoid sampler negates: output = ((-x) > 0).float()
     # Scale weights to make sigmoid outputs sharp (like raw parametrization uses 100.0)

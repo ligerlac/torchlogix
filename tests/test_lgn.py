@@ -14,13 +14,13 @@ from torchlogix.functional import take_tuples, walsh_basis_hard
 
 connections_kwargs = {"init_method": "random-unique"}
 llkw = {"connections": "fixed", "device": "cpu", "connections_kwargs": connections_kwargs}
-llkw_walsh = {"connections": "fixed", "device": "cpu", "parametrization": "walsh", "connections_kwargs": connections_kwargs}
+llkw_warp = {"connections": "fixed", "device": "cpu", "parametrization": "warp", "connections_kwargs": connections_kwargs}
 llkw_light = {"connections": "fixed", "device": "cpu", "parametrization": "light", "connections_kwargs": connections_kwargs}
 
 
 
-def test_get_luts_and_ids_xor_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+def test_get_luts_and_ids_xor_warp():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
     layer.weight.data = torch.zeros((1, 4))
     layer.weight.data[0, 3] = 1
     luts, ids = layer.get_luts_and_ids()
@@ -28,16 +28,16 @@ def test_get_luts_and_ids_xor_walsh():
     assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 1, 1, 0]]]))
 
 
-def test_get_luts_and_ids_and_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+def test_get_luts_and_ids_and_warp():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
     luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(ids, torch.tensor([1]))
     assert torch.allclose(luts.to(torch.long), torch.tensor([[[0, 0, 0, 1]]]))
 
 
-def test_regularizer_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+def test_regularizer_warp():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, -0.5]])
     reg_loss = layer.get_regularization_loss("abs_sum")
     assert np.isclose(reg_loss.item(), 0.0)
@@ -51,8 +51,8 @@ def test_regularizer_walsh():
     assert reg_loss.item() > 0.0
 
 
-def test_weight_rescale_walsh():
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+def test_weight_rescale_warp():
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
     layer.weight.data = torch.tensor([[0.5, 0.5, 0.5, 1.0]])
     reg_loss = layer.get_regularization_loss("abs_sum")
     assert reg_loss.item() > 0.0
@@ -119,9 +119,9 @@ def test_trivial_layer():
 
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
-def test_trivial_layer_walsh(lut_rank):
-    llkw_walsh["connections_kwargs"]["init_method"] = "random"
-    layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, **llkw_walsh)
+def test_trivial_layer_warp(lut_rank):
+    llkw_warp["connections_kwargs"]["init_method"] = "random"
+    layer = LogicDense(in_dim=lut_rank, out_dim=1, lut_rank=lut_rank, **llkw_warp)
     assert layer.connections.indices.shape == (lut_rank, 1)
     # the connections must be random permutation of all inputs
     assert set(layer.connections.indices[:, 0].tolist()) == set(range(lut_rank))
@@ -132,7 +132,7 @@ def test_trivial_layer_walsh(lut_rank):
 def test_in_dim_less_than_lut_rank(lut_rank):
     """Test that an error is raised when in_dim < lut_rank."""
     with pytest.raises(AssertionError):
-        LogicDense(in_dim=2, out_dim=1, lut_rank=lut_rank, **llkw_walsh)
+        LogicDense(in_dim=2, out_dim=1, lut_rank=lut_rank, **llkw_warp)
 
 
 def test_xor_model():
@@ -142,7 +142,7 @@ def test_xor_model():
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw)
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
     layer.weight.data = torch.zeros(16, dtype=torch.float32)
     layer.weight.data[6] = 100
     model = torch.nn.Sequential(layer)
@@ -151,14 +151,14 @@ def test_xor_model():
         assert np.isclose(model(torch.tensor([[x, y]], dtype=torch.float32)).item(), expected)
 
 
-def test_xor_model_walsh():
+def test_xor_model_warp():
     """Test the XOR gate implementation.
 
     XOR is the 6-th gate:
     - set the weights to 0, except for the 6-th element (set to some high value)
     - test the 4 possible inputs
     """
-    layer = LogicDense(in_dim=2, out_dim=1, **llkw_walsh)
+    layer = LogicDense(in_dim=2, out_dim=1, **llkw_warp)
     layer.weight.data = torch.zeros(4)
     layer.weight.data[3] = 100
     model = torch.nn.Sequential(layer)
@@ -170,8 +170,8 @@ def test_xor_model_walsh():
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_take_tuples(lut_rank):
-    llkw_walsh["connections_kwargs"]["init_method"] = "random-unique"
-    layer = LogicDense(in_dim=400, out_dim=400, lut_rank=lut_rank, **llkw_walsh)
+    llkw_warp["connections_kwargs"]["init_method"] = "random-unique"
+    layer = LogicDense(in_dim=400, out_dim=400, lut_rank=lut_rank, **llkw_warp)
     # column-wise unique test
     assert all(len(torch.unique(layer.connections.indices[..., col])
                    ) == lut_rank for col in range(layer.connections.indices.shape[1]))

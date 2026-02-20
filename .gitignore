@@ -26,6 +26,7 @@ experiments/data-fmnist/
 experiments/data-fashion-mnist/
 experiments/data-jsc/
 experiments/data-cifar/
+experiments/data
 
 # env files with concrete paths
 experiments/env.sh

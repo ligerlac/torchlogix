@@ -6,7 +6,7 @@ from torchlogix.functional import softmax
 from torch.nn.functional import softmax as softmax_torch
 
 
-@pytest.mark.parametrize("parametrization", ["raw", "walsh", "light"])
+@pytest.mark.parametrize("parametrization", ["raw", "warp", "light"])
 @pytest.mark.parametrize("num_candidates", [-1, 1, 2, 3])
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_learnable_connections(parametrization, num_candidates, lut_rank):

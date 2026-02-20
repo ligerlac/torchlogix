@@ -1,7 +1,7 @@
 import torch
 from torchlogix.parametrization import (
     RawLUTParametrization, 
-    WalshLUTParametrization,
+    WarpLUTParametrization,
     LightLUTParametrization
 )
 from torchlogix.functional import ID_TO_WALSH_COEFFICIENTS, walsh_hadamard_transform
@@ -17,7 +17,7 @@ def int_to_bits(n, width=4):
 
 @pytest.mark.parametrize("param_cls, forward_sampling, temperature", [
     (RawLUTParametrization, "hard", 0.5),
-    (WalshLUTParametrization, "soft", 1.0),
+    (WarpLUTParametrization, "soft", 1.0),
     (LightLUTParametrization, "gumbel_soft", 2.0),
 ])
 def test_lut_parametrization_init(param_cls, forward_sampling, temperature):
@@ -53,7 +53,7 @@ def test_weight_init_raw(num_neurons):
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 @pytest.mark.parametrize("num_neurons", [42, 69])
-@pytest.mark.parametrize("param_cls", [WalshLUTParametrization, LightLUTParametrization])
+@pytest.mark.parametrize("param_cls", [WarpLUTParametrization, LightLUTParametrization])
 def test_weight_init_not_raw(lut_rank, num_neurons, param_cls):
     param = param_cls(lut_rank=lut_rank, weight_init="random", residual_probability=0.9)
     weights = param.init_weights(
@@ -75,8 +75,8 @@ def test_get_luts_and_ids():
         assert torch.allclose(luts, expected_lut)
 
 
-def test_get_lut_ids_walsh():
-    param = WalshLUTParametrization(lut_rank=2)
+def test_get_lut_ids_warp():
+    param = WarpLUTParametrization(lut_rank=2)
     for i, coeff in ID_TO_WALSH_COEFFICIENTS.items():
         weights = torch.tensor(coeff).float()
         luts, ids = param.get_luts_and_ids(weights)
@@ -111,17 +111,17 @@ def test_get_lut_ids_light():
 
 
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
-def test_get_luts_walsh(lut_rank):
+def test_get_luts_warp(lut_rank):
     all_inputs = torch.empty((2**lut_rank, lut_rank), dtype=torch.int32)
     for j in range(2**lut_rank):
         input = int_to_bits(j, width=lut_rank)
         all_inputs[j] = torch.tensor(input)
 
-    param = WalshLUTParametrization(lut_rank=lut_rank)
+    param = WarpLUTParametrization(lut_rank=lut_rank)
     for i in range(16):
         input_lut = torch.tensor(int_to_bits(i, width=2**lut_rank))
-        walsh_input = 1 - 2 * input_lut.unsqueeze(0).float()
-        weights = 1./2**lut_rank * walsh_hadamard_transform(walsh_input, lut_rank)
+        warp_input = 1 - 2 * input_lut.unsqueeze(0).float()
+        weights = 1./2**lut_rank * walsh_hadamard_transform(warp_input, lut_rank)
         # check L2 norm
         assert torch.allclose(weights.norm(p=2), torch.tensor(1.0))
         output_lut = param.forward(x=all_inputs.unsqueeze(2), training=False, weight=weights, contraction='n,bn->bn')
@@ -148,8 +148,8 @@ def test_get_luts_light(lut_rank):
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 @pytest.mark.parametrize("num_neurons", [42, 69])
 @pytest.mark.parametrize("residual_probability", [0.6, 0.8, 0.95, 0.99])
-def test_residual_init_walsh(lut_rank, num_neurons, residual_probability):
-    param = WalshLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_probability=residual_probability)
+def test_residual_init_warp(lut_rank, num_neurons, residual_probability):
+    param = WarpLUTParametrization(lut_rank=lut_rank, weight_init="residual", residual_probability=residual_probability)
     weights = param.init_weights(
         num_neurons=num_neurons,
         device="cpu"
@@ -165,17 +165,17 @@ def test_residual_consistency(num_neurons, residual_probability):
     lut_rank = 2
     parametrization_kwargs = {
         "weight_init": "residual", "residual_probability": residual_probability}
-    walsh = LogicDense(in_dim=lut_rank, out_dim=num_neurons, lut_rank=lut_rank, parametrization="walsh", 
+    warp = LogicDense(in_dim=lut_rank, out_dim=num_neurons, lut_rank=lut_rank, parametrization="warp", 
                        parametrization_kwargs=parametrization_kwargs, device="cpu")
-    walsh.connections.indices = torch.arange(2).unsqueeze(-1)
+    warp.connections.indices = torch.arange(2).unsqueeze(-1)
     raw = LogicDense(in_dim=lut_rank, out_dim=num_neurons, lut_rank=lut_rank, parametrization="raw", 
                        parametrization_kwargs=parametrization_kwargs, device="cpu")
     raw.connections.indices = torch.arange(2).unsqueeze(-1)
     X = (torch.arange(1 << lut_rank)[:, None] >> torch.arange(lut_rank) & 1).flip(-1).to(torch.float32)
-    assert torch.allclose(walsh(X), raw(X))
+    assert torch.allclose(warp(X), raw(X))
     
 
-@pytest.mark.parametrize("param_cls", [RawLUTParametrization, WalshLUTParametrization, LightLUTParametrization])
+@pytest.mark.parametrize("param_cls", [RawLUTParametrization, WarpLUTParametrization, LightLUTParametrization])
 @pytest.mark.parametrize("lut_rank", [2, 4, 6])
 def test_materialize_basis(param_cls, lut_rank):
     if lut_rank > 2 and param_cls == RawLUTParametrization:

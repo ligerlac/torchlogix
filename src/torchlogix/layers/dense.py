@@ -20,7 +20,7 @@ class LogicDense(LogicBase):
         device (str): Device to run the layer on ('cpu' or 'cuda').
         grad_factor (float): Gradient scaling factor.
         lut_rank (int): Rank of the LUTs used in the layer.
-        parametrization (str): Type of parametrization to use ('raw', 'walsh', 'light').
+        parametrization (str): Type of parametrization to use ('raw', 'warp', 'light').
         parametrization_kwargs (dict): Additional keyword arguments for parametrization.
         connections (str): Type of connections to use ('fixed', 'learnable', etc.).
         connections_kwargs (dict): Additional keyword arguments for connections.

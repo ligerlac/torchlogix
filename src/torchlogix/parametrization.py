@@ -26,7 +26,7 @@ from .functional import (
 def setup_parametrization(parametrization: str, lut_rank: int, **parametrization_kwargs):
     param_dict = {
         "raw": RawLUTParametrization,
-        "walsh": WalshLUTParametrization,
+        "warp": WarpLUTParametrization,
         "light": LightLUTParametrization
     }
     if parametrization not in param_dict:
@@ -278,7 +278,7 @@ class RawLUTParametrization(LUTParametrization):
         return luts, ids
 
 
-class WalshLUTParametrization(LUTParametrization):
+class WarpLUTParametrization(LUTParametrization):
     """Walsh-Hadamard parametrization using basis coefficients.
 
     This parametrization represents Boolean functions via Walsh-Hadamard

@@ -372,7 +372,7 @@ class ClgnCifar10SmallRankMixed(ClgnCifar10):
     dense_lut_rank = 2
     n_input_bits = 2
     tree_depth = 1
-    conv_parametrization = "walsh"
+    conv_parametrization = "warp"
     dense_parametrization = "raw"
     def __init__(self, **llkw):
         tau = llkw.get("tau", 20)
@@ -411,7 +411,7 @@ class ClgnCifar10MediumRankMixed(ClgnCifar10):
     dense_lut_rank = 2
     n_input_bits = 2
     tree_depth = 1
-    conv_parametrization = "walsh"
+    conv_parametrization = "warp"
     dense_parametrization = "raw"
     def __init__(self, **llkw):
         tau = llkw.get("tau", 40)
@@ -674,7 +674,7 @@ class ClgnCifar10TinyRes(torch.nn.Sequential):
 
 
 class ClgnCifar10TinyResMixed(ClgnCifar10TinyRes):
-    conv_parametrization = "walsh"
+    conv_parametrization = "warp"
     dense_parametrization = "raw"
     conv_lut_rank = 4
     dense_lut_rank = 2

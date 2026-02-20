@@ -842,11 +842,11 @@ def get_regularization_loss(weights, regularizer=None):
         return (1 - weights.pow(2).sum(-1)).pow(2)
     elif regularizer == "abs_sum":
         return (1 - weights.sum(-1).abs()).pow(2)
-    elif regularizer == "walsh":
+    elif regularizer == "warp":
         # to enforce a growing norm factor (towards infinity)
         norm_factor = weights[:, -1]
         loss = torch.exp(-norm_factor).mean()
-        # print(f"Walsh regularization loss: {loss.item()}")
+        # print(f"WARP regularization loss: {loss.item()}")
         return loss
     else:
         raise ValueError(f"Unknown regularizer: {regularizer}")
