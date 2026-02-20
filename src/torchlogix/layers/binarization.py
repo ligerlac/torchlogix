@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, List
 from abc import ABC, abstractmethod
 
 import torch
@@ -26,10 +26,21 @@ def setup_binarization(thresholds, binarization: str, **binarization_kwargs):
 
 class Binarization(torch.nn.Module, ABC):
     """Abstract base class for binarization modules."""
-    def __init__(self, thresholds: Tensor, feature_dim=-2, **kwargs):
+    def __init__(
+            self,
+            thresholds: Tensor | List,
+            feature_dim=-2,
+            **kwargs
+        ):
         super().__init__()
+        if isinstance(thresholds, list):
+            thresholds = torch.tensor(thresholds, dtype=torch.float32)
         self.register_buffer('thresholds', thresholds)
         self.feature_dim = feature_dim
+
+    def get_thresholds(self):
+        """Return thresholds. Subclasses can override for learnable thresholds."""
+        return self.thresholds
     
     @abstractmethod
     def forward(self, x: Tensor) -> Tensor:
@@ -60,14 +71,7 @@ class Binarization(torch.nn.Module, ABC):
         print(f"Uniform thresholds shape: {threshs.shape}")
         print(f"threshs =\n{threshs}")
         return threshs
-    
-    @staticmethod
-    def get_distributive_thresholds_old(data_set: Tensor, num_bits: int, feature_wise: bool) -> Tensor:
-        data = torch.sort(data_set.flatten())[0] if not feature_wise else torch.sort(data_set, dim=0)[0]
-        indicies = torch.tensor([int(data.shape[0]*i/(num_bits+1)) for i in range(1, num_bits+1)])
-        thresholds = data[indicies]
-        return torch.permute(thresholds, (*list(range(1, thresholds.ndim)), 0))
-    
+        
     @staticmethod
     def get_distributive_thresholds(
         data_set: Tensor,
@@ -195,10 +199,7 @@ class SoftBinarization(Binarization):
 class LearnableBinarization(Binarization):
     def __init__(
         self, 
-        thresholds: Tensor = None,
-        lowest_value: float = 0.0,  # set this to lowest value in dataset (e.g. 0 for images)
-        feature_wise=False, 
-        channel_wise=False,
+        thresholds: Tensor | List,
         feature_dim=-2,
         temperature_sampling=0.1,
         temperature_softplus=0.1,
@@ -207,15 +208,11 @@ class LearnableBinarization(Binarization):
         **kwargs
     ):
         self.forward_sampling = forward_sampling
-        assert not (channel_wise and feature_wise), "Cannot be both channel-wise and feature-wise."        
-        self.feature_wise = feature_wise
-        self.channel_wise = channel_wise
         super().__init__(thresholds, feature_dim)
         self.temperature_sampling = temperature_sampling
         self.temperature_softplus = temperature_softplus
-        # self._frozen = False  # switch to control hard/soft behavior
-        diffs = torch.diff(thresholds, 
-                           prepend=thresholds.new_zeros(*thresholds.shape[:-1], 1), dim=-1)
+        diffs = torch.diff(self.thresholds, 
+                           prepend=self.thresholds.new_zeros(*self.thresholds.shape[:-1], 1), dim=-1)
         self.raw_diffs = torch.nn.Parameter(diffs)
         self.raw_diffs.register_hook(self._clip_grad)
         self._max_grad_norm = max_grad_norm

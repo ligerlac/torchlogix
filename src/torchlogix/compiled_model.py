@@ -14,7 +14,8 @@ from .layers.conv import LogicConv2d, LogicConv3d
 from .layers.pool import OrPooling2d, OrPooling3d
 from .layers.dense import LogicDense
 from .layers.groupsum import GroupSum
-from .layers.thresholding import LearnableThermometerThresholding
+from .layers.binarization import Binarization
+
 
 ALL_OPERATIONS = [
     "zero", "and", "not_implies", "a", "not_implied_by", "b", "xor", "or",
@@ -78,20 +79,11 @@ class CompiledLogicNet(torch.nn.Module):
     def _parse_model(self, verbose: bool):
         """Parse the model structure, handling conv, pooling, and linear layers."""
 
-        # Detect if first layer is thresholding
-        if len(self.model) > 0 and isinstance(self.model[0], LearnableThermometerThresholding):
-            self.apply_thresholding = True
-
-            # Validate bitpacking constraint
-            if self.use_bitpacking:
-                raise ValueError(
-                    "Bitpacking (use_bitpacking=True) cannot be used with thresholding layers. "
-                    "The thresholding layer requires processing one sample at a time."
-                )
-
-            # Set constraints for thresholding mode
-            self.num_bits = 1
-            self.use_bitpacking = False
+        # Detect if first layer is thresholding (but not DummyBinarization)
+        if len(self.model) > 0 and isinstance(self.model[0], Binarization):
+            # Check if it's actually a real thresholding layer (not dummy)
+            if self.model[0].thresholds is not None:
+                self.apply_thresholding = True
 
         # Find GroupSum layer for num_classes
         for layer in self.model:
@@ -106,11 +98,13 @@ class CompiledLogicNet(torch.nn.Module):
 
         # Parse all layers and track execution order
         for layer in self.model:
-            if isinstance(layer, LearnableThermometerThresholding):
+            if isinstance(layer, Binarization):
                 if len(self.layer_order) > 0:
-                    raise ValueError("LearnableThermometerThresholding layer must appear first in layer order.")
-                thresholding_info = self._extract_thresholding_layer_info(layer)
-                self.thresholding_layer = thresholding_info  # there will only be one thresholding layer
+                    raise ValueError("Binarization layer must appear first in layer order.")
+                # Only extract thresholding info for real thresholding layers (not dummy)
+                if layer.thresholds is not None:
+                    thresholding_info = self._extract_thresholding_layer_info(layer)
+                    self.thresholding_layer = thresholding_info  # there will only be one thresholding layer
             elif isinstance(layer, (LogicConv2d, LogicConv3d)):
                 conv_info = self._extract_conv_layer_info(layer)
                 self.conv_layers.append(conv_info)
@@ -144,10 +138,11 @@ class CompiledLogicNet(torch.nn.Module):
         if not self.conv_layers and not self.linear_layers:
             raise ValueError("Model must contain at least one LogicConv2d, LogicConv3d, or LogicDense layer.")
 
-    def _extract_thresholding_layer_info(self, layer: LearnableThermometerThresholding) -> Dict[str, Any]:
+    def _extract_thresholding_layer_info(self, layer: Binarization) -> Dict[str, Any]:
         """Extract information from a thresholding layer for compilation."""
         return {
-            'num_thresholds': layer.num_thresholds,
+            # 'num_thresholds': layer.num_thresholds,
+            'num_thresholds': len(layer.thresholds),
             'thresholds': layer.get_thresholds(),
         }
 
@@ -877,14 +872,59 @@ class CompiledLogicNet(torch.nn.Module):
             math.log2(num_neurons_ll / self.num_classes + 1)
         )
 
-        return [
-            f"""
-void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
-    {BITS_TO_DTYPE[self.num_bits]} *inp_temp = malloc({input_size}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
-    {BITS_TO_DTYPE[self.num_bits]} *out_temp = malloc({num_neurons_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
-    {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
+        # Thresholding setup
+        if self.apply_thresholding:
+            thresholding_info = self.thresholding_layer
+            num_thresholds = thresholding_info["num_thresholds"]
+            thresholds = thresholding_info["thresholds"].tolist()
+            thresholds_str = ", ".join(str(int(x)) for x in thresholds)
+            thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+            inp_dtype = BITS_TO_DTYPE[32]
+            logic_net_inp_size = input_size * num_thresholds
+        else:
+            inp_dtype = "bool"
+            logic_net_inp_size = input_size
 
-    for(size_t i = 0; i < len; ++i) {{
+        code_start = f"""
+void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
+    {BITS_TO_DTYPE[self.num_bits]} *inp_temp = malloc({logic_net_inp_size}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
+    {BITS_TO_DTYPE[self.num_bits]} *out_temp = malloc({num_neurons_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
+    {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));"""
+
+        if self.apply_thresholding:
+            code_start += f"""
+    bool *bool_temp = malloc({logic_net_inp_size} * {self.num_bits} * sizeof(bool));
+    {thresholds_c_def}"""
+
+        code_start += f"""
+
+    for(size_t i = 0; i < len; ++i) {{"""
+
+        if self.apply_thresholding:
+            code_threshold = f"""
+
+        // Apply thresholding to convert inputs to boolean
+        for (size_t b = 0; b < {self.num_bits}; ++b) {{
+            for (size_t t = 0; t < {num_thresholds}; ++t) {{
+                for (size_t in_idx = 0; in_idx < {input_size}; ++in_idx) {{
+                    size_t out_idx = b * {logic_net_inp_size} + t * {input_size} + in_idx;
+                    size_t inp_idx = i * {input_size} * {self.num_bits} + b * {input_size} + in_idx;
+                    bool_temp[out_idx] = (inp[inp_idx] > thresholds[t]) ? 1 : 0;
+                }}
+            }}
+        }}
+
+        // Converting the bool array into a bitpacked array
+        for(size_t d = 0; d < {logic_net_inp_size}; ++d) {{
+            {BITS_TO_DTYPE[self.num_bits]} res = {BITS_TO_ZERO_LITERAL[self.num_bits]};
+            for(size_t b = 0; b < {self.num_bits}; ++b) {{
+                res <<= 1;
+                res += !!(bool_temp[b * {logic_net_inp_size} + d]);
+            }}
+            inp_temp[d] = res;
+        }}"""
+        else:
+            code_threshold = f"""
 
         // Converting the bool array into a bitpacked array
         for(size_t d = 0; d < {input_size}; ++d) {{
@@ -894,7 +934,10 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
                 res += !!(inp[i * {input_size} * {self.num_bits} + ({self.num_bits} - b - 1) * {input_size} + d]);
             }}
             inp_temp[d] = res;
-        }}
+        }}"""
+
+        return [
+            code_start + code_threshold + f"""
 
         // Applying the logic net
         logic_net(inp_temp, out_temp);
@@ -931,8 +974,10 @@ void apply_logic_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
     }}
     free(inp_temp);
     free(out_temp);
-    free(out_temp_o);
-}}
+    free(out_temp_o);"""
+            + (f"""
+    free(bool_temp);""" if self.apply_thresholding else "") + """
+}
 """
         ]
 

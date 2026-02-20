@@ -11,7 +11,7 @@
 `torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
 million images of MNIST per second on a single CPU core.
 
-**Note:** `torchlogix` is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), and extends it by new concepts such as learnable connections, higher-dimensional logic expressions, and learnable thermometer thresholding as described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)). It also implements convolutional logic layers as described in the Paper "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
+**Note:** `torchlogix` is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), and extends it by new concepts such as learnable connections, higher-dimensional logic blocks, and learnable thermometer thresholding as described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)). It also implements convolutional logic layers as described in "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 ## Installation
 ```shell
@@ -20,6 +20,24 @@ pip install "torchlogix[dev]"          # with dev tools
 ```
 The following software stacks have validated performance:
 `python3.12` / `python3.13`, `cuda12.4` / `cuda13.0`, `torch2.6` / `torch2.9`.
+
+## 🌱 Quickstart
+`torchlogix` provides learnable logic layers that closely follow the API of `torch.nn`. For example, a convolutional model for MNIST can be defined like so 
+```python
+import torch
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
+
+model = torch.nn.Sequential(
+    LogicConv2d(in_dim=28, num_kernels=64, receptive_field_size=5),
+    OrPooling(kernel_size=2, stride=2, padding=0),
+    LogicConv2d(in_dim=12, num_kernels=256, receptive_field_size=3),
+    torch.nn.Flatten(),
+    LogicLayer(256*10*10, 16_000),
+    LogicLayer(16_000, 16_000),
+    LogicLayer(16_000, 16_000),
+    GroupSum(k=10, tau=30)
+)
+```
 
 ## 📚 Documentation
 
