@@ -32,7 +32,8 @@ def load_trained_model(model_path: Path, config_path: Path, device: str):
         setattr(args, key, value)
 
     # Get model architecture
-    model, loss_fn, _ = get_model(args)
+    model = get_model(args)
+    loss_fn = torch.nn.CrossEntropyLoss()  # Assuming classification task
     model.to(device)
 
     # Load trained weights
@@ -105,7 +106,10 @@ def run_evaluation(args):
     train_loader, validation_loader, test_loader = load_dataset(train_config)
 
     # Create evaluation functions
-    eval_functions = create_eval_functions(loss_fn)
+    eval_functions = {
+        "loss": loss_fn,
+        "acc": lambda preds, y: (preds.argmax(-1) == y).to(torch.float32).mean(),
+    }
 
     results = {}
 

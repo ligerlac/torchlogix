@@ -108,7 +108,6 @@ class DlgnMnist(Dlgn):
     n_learnable_layers = 0
 
     def __init__(self, neurons_per_layer: int, tau: float, **llkw):
-        llkw["binarization"] = "uniform"
         super(DlgnMnist, self).__init__(
             in_dim=28*28,
             n_layers=5,
