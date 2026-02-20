@@ -461,7 +461,9 @@ class LightLUTParametrization(LUTParametrization):
     ) -> torch.Tensor:
         lut_entries = 1 << self.lut_rank
         if self.weight_init == "residual":
-            return torch.rand(num_neurons, lut_entries, device=device) + 3.0
+            weights = torch.randn(num_neurons, lut_entries, device=device)
+            weights[:, :lut_entries // 2] -= 3
+            weights[:, lut_entries // 2:] += 3
         elif self.weight_init == "random":
             return torch.rand(num_neurons, lut_entries, device=device)
         else:
