@@ -181,5 +181,5 @@ There are experiments on CIFAR-10 in the `experiments` directory. We will add mo
 
 # TODO
 - [] revert .gitignore
-- [] rework evaluate.py
+- [] rework evaluate.py and compile.py
 - [] Move all helper functions, except for run_training in utils.py?
