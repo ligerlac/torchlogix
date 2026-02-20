@@ -225,13 +225,6 @@ class LearnableBinarization(Binarization):
         if norm > self._max_grad_norm:
             grad = grad * (self._max_grad_norm / (norm + 1e-6))
         return grad
-
-    # def get_thresholds(self):
-    #     if self.training:
-    #         diffs_pos = (self.temperature_softplus + 1e-6) * F.softplus(self.raw_diffs / (self.temperature_softplus + 1e-6))
-    #         return torch.cumsum(diffs_pos, dim=-1)
-    #     else:
-    #         return torch.cumsum(self.raw_diffs, dim=-1)
             
     def get_thresholds(self):
         if self.training:
@@ -253,17 +246,6 @@ class LearnableBinarization(Binarization):
             thresholds = torch.cumsum(self.raw_diffs, dim=-1)
 
         return thresholds        
-            
-    # def freeze_thresholds(self):
-    #     """I dont get this function"""
-    #     with torch.no_grad():
-    #         thresholds = self.get_thresholds()  #.round()
-    #         diffs = torch.diff(thresholds, 
-    #                            prepend=thresholds.new_zeros(*thresholds.shape[:-1], 1))
-    #         self.raw_diffs.data = diffs
-    #         self.raw_diffs.detach_()
-    #     # self.raw_diffs.requires_grad = False
-    #     self._frozen = True
 
     def _sample_train(self, x: torch.Tensor, thresholds: torch.Tensor) -> torch.Tensor:
         """Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""

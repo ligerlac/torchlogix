@@ -101,17 +101,6 @@ class LogicDense(LogicBase):
             weight_repr += f" ({self.weight.device})"
         weight_repr += "]"
         return f"{self.in_dim}, {self.out_dim}\nweight: {weight_repr}\nparametrization: {self.parametrization.__class__.__name__}\nconnections: {self.connections.__class__.__name__}, {self.connections}"
-    
-    # def extra_repr(self):
-    #     """Returns a string representation for printing the module.
-
-    #     Returns:
-    #         A string summarizing the input dimension, output dimension, and
-    #         whether the module is currently in training or evaluation mode.
-    #     """
-    #     return "{}, {}, {}, {}".format(
-    #         self.in_dim, self.out_dim, "train" if self.training else "eval", self.weight.shape
-    #     )
 
     def _init_connections(self):
         """Constructs input–neuron connection indices."""

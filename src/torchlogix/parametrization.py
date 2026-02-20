@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 import math
 import torch
 import torch.nn.functional as F
-import numpy as np
 
 from .functional import (
     compute_all_logic_ops_vectorized,
@@ -20,8 +19,7 @@ from .functional import (
     weighted_light_basis_sum,
     softmax,
     sigmoid,
-    gumbel_sigmoid,
-    ID_TO_WALSH_COEFFICIENTS
+    gumbel_sigmoid
 )
 
 
@@ -323,13 +321,6 @@ class WalshLUTParametrization(LUTParametrization):
             identity = 1 - 2 * torch.cat([torch.zeros(lut_entries // 2), torch.ones(lut_entries - lut_entries // 2)]).to(dtype=torch.int32, device=device)
             transformed_identity = (1 / lut_entries) * walsh_hadamard_transform(identity, self.lut_rank, dtype=torch.int32, device=device)
             # transformation for comparibility with raw parametrization
-            """if self.lut_rank <= 4:
-                c_walsh = (lut_entries - 1) * math.log(2) - math.log(math.exp(self.residual_param) + 2**(lut_entries - 1) - 1)
-            else:
-                a = self.residual_param
-                k = lut_entries - 1
-                logB = k * math.log(2.0) + math.log1p(-2.0**(-k))
-                c_walsh = (lut_entries - 1) * math.log(2) - np.logaddexp(a, logB)"""
             c_walsh = self.temperature * (math.log(self.residual_probability) - math.log(1 - self.residual_probability))
             weights[:] = c_walsh * transformed_identity.to(torch.float)
             # add random noise proportional to temperature (breaks the tests but helps optimization by breaking symmetry between neurons)
