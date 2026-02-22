@@ -6,14 +6,17 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
-#SBATCH --array=0-2   # number of runs - 1
+#SBATCH --array=0-5   # number of runs - 1
 
 # Define argument sets
 ARGS=(
-  "-a ClgnCifar10Small -o results/clgn-cifar-10-small"
-  "-a ClgnCifar10Medium -o results/clgn-cifar-10-medium"
-  "-a ClgnCifar10Large -o results/clgn-cifar-10-large"
+  "-a ClgnCifar10Small -o results/clgn-cifar-10-small-hp"
+  "-a ClgnCifar10Medium -o results/clgn-cifar-10-medium-hp"
+  "-a ClgnCifar10Large -o results/clgn-cifar-10-large-hp"
+  "-a ClgnCifar10Small -wd 0.002 -o results/clgn-cifar-10-small-wd-hp"
+  "-a ClgnCifar10Medium -wd 0.002 -o results/clgn-cifar-10-medium-wd-hp"
+  "-a ClgnCifar10Large -wd 0.002 -o results/clgn-cifar-10-large-wd-hp"
 )
 
 # Run the command corresponding to this array index
-python train.py --dataset cifar-10 --device cuda --compile-model -lr 0.02 ${ARGS[$SLURM_ARRAY_TASK_ID]} 
+python train.py --dataset cifar-10 --device cuda --compile-model -lr 0.02 --half-precision ${ARGS[$SLURM_ARRAY_TASK_ID]} 
