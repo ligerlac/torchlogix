@@ -198,6 +198,8 @@ class ClgnCifar10(torch.nn.Sequential):
         if 'parametrization' in llkw:
             del llkw['parametrization']  # remove parametrization from llkw to avoid conflict
 
+        connections_kwargs = {"channel_group_size": 2}  # from the paper, we use grouped connections with channel group size 2 for conv layers
+
         layers = [binarization_module]
         layers.append(
             LogicConv2d(
@@ -209,6 +211,7 @@ class ClgnCifar10(torch.nn.Sequential):
                 padding=1,
                 parametrization=self._conv_parametrization,
                 lut_rank=self.conv_lut_rank,
+                connections_kwargs=connections_kwargs,
                 **llkw,
             )
         )
@@ -224,6 +227,7 @@ class ClgnCifar10(torch.nn.Sequential):
                 padding=1,
                 parametrization=self._conv_parametrization,
                 lut_rank=self.conv_lut_rank,
+                connections_kwargs=connections_kwargs,
                 **llkw,
             )
         )
@@ -239,6 +243,7 @@ class ClgnCifar10(torch.nn.Sequential):
                 padding=1,
                 parametrization=self._conv_parametrization,
                 lut_rank=self.conv_lut_rank,
+                connections_kwargs=connections_kwargs,
                 **llkw,
             )
         )

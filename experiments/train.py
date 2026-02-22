@@ -70,7 +70,7 @@ def get_parser():
     parser.add_argument("--half-precision", action="store_true", 
                         help="Use half-precision (bfloat16) training to reduce memory usage and speed up training")
     parser.add_argument("--compile-model", action="store_true", 
-                        help="Use TorchScript to compile the model for faster inference (only works for conv models)")
+                        help="Use toch.compile() to compile the model for faster training")
 
     parser.add_argument(
         "--output", "-o", action=CreateFolder, type=Path, default="results/training/",
@@ -79,6 +79,9 @@ def get_parser():
     parser.add_argument(
         "--verbose", type=int, default=0, choices=[0, 1],
         help="Verbosity during training, allowed only for lut_rank=2. 0 = silent, 1 = verbose"
+    )
+    parser.add_argument(
+        "--weight-decay", "-wd", type=float, default=None, help="Weight decay for optimizer"
     )
 
     # Connection parameters
@@ -273,7 +276,11 @@ def run_training(args, callbacks=None):
             print("Warning: binarization_learning_rate specified but the model does not use LearnableBinarization. Ignoring this parameter.")
     other_params = [p for p in model.parameters() if p not in set(binarization_params)]
     params_list += [{'params': other_params, 'lr': args.learning_rate}]
-    optimizer = torch.optim.Adam(params_list)
+
+    if args.weight_decay is not None:
+        optimizer = torch.optim.AdamW(params_list, weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.Adam(params_list)
 
     # Training tracking
     metrics = defaultdict(dict)

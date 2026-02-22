@@ -20,7 +20,7 @@
 `torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
 million images of MNIST per second on a single CPU core.
 
-**Note:** `torchlogix` is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), and extends it by new concepts such as learnable connections, higher-dimensional logic blocks, and learnable thermometer thresholding as described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)). It also implements convolutional logic layers as described in "Convolutional Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
+**Note:** `torchlogix` is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), and extends it by new concepts such as learnable connections, higher-dimensional logic blocks, and learnable thermometer thresholding as described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)). It also implements convolutional logic layers as described in "Convolutional Differentiable Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 ## Installation
 ```shell
@@ -69,11 +69,14 @@ The full training- and evaluation of the model above is demonstrated in the exam
 - **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
 - **[Concepts](docs/guides/concepts.md)** - Understand some of the design choices behind `torchlogix`
 
-## 🧪 Experiments
+## Experiments
 
-There are experiments on CIFAR-10 in the `experiments` directory. We will add more soon.
+Various experiments can be run using the script `experiments/train.py`. For example, the medium-sized convolutional model on CIFAR-10 from the paper  "Convolutional Differentiable Logic Gate Networks", which achieves roughly 70% accuracy, can be trained like so:
+```
+python train.py --dataset cifar-10 -a ClgnCifar10Medium --device cuda --compile-model
+```
 
-## 📜 License
+## License
 
 `torchlogix` is released under the MIT license. See [LICENSE](LICENSE) for additional details about it.
 
