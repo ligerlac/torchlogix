@@ -2,11 +2,20 @@
 ![torchlogix_logo](assets/logo.png)
 <!-- end-logo -->
 
-[![PyPI version](https://badge.fury.io/py/torchlogix.svg)](https://pypi.org/project/torchlogix/)
-[![Python 3.10‒3.13](https://img.shields.io/badge/python-3.10%E2%80%923.14-blue)](https://www.python.org)
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Build Test](https://github.com/ligerlac/torchlogix/actions/workflows/unit-test.yml/badge.svg?branch=main)](https://github.com/ligerlac/torchlogix/actions/workflows/unit-test.yml)
-[![Documentation](https://img.shields.io/badge/docs-online-success)](https://ligerlac.github.io/torchlogix/)
+<p align="center">
+  <a href="https://pypi.org/project/torchlogix/">
+    <img src="https://badge.fury.io/py/torchlogix.svg" alt="PyPI version">
+  </a>
+  <a href="https://github.com/ligerlac/torchlogix/actions/workflows/unit-test.yml">
+    <img src="https://github.com/ligerlac/torchlogix/actions/workflows/unit-test.yml/badge.svg?branch=main" alt="Build Status">
+  </a>
+  <a href="https://ligerlac.github.io/torchlogix/">
+    <img src="https://img.shields.io/badge/docs-online-success" alt="Documentation">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
+  </a>
+</p>
 
 `torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
 million images of MNIST per second on a single CPU core.
@@ -21,50 +30,36 @@ pip install "torchlogix[dev]"          # with dev tools
 The following software stacks have validated performance:
 `python3.12` / `python3.13`, `cuda12.4` / `cuda13.0`, `torch2.6` / `torch2.9`.
 
-## 🌱 Quickstart
-`torchlogix` provides learnable logic layers that closely follow the API of `torch.nn`. For example, a convolutional model for MNIST can be defined like so 
+## Quickstart
+`torchlogix` provides learnable logic layers with `torch.nn`-like API. For example, a convolutional model for MNIST can be defined like so:
 ```python
 import torch
-from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling2d, GroupSum, FixedBinarization
 
 model = torch.nn.Sequential(
-    LogicConv2d(in_dim=28, num_kernels=64, receptive_field_size=5),
-    OrPooling(kernel_size=2, stride=2, padding=0),
-    LogicConv2d(in_dim=12, num_kernels=256, receptive_field_size=3),
+    FixedBinarization(thresholds=[0.5]),  # binarize to a single bit
+    LogicConv2d(in_dim=28, channels=1, num_kernels=64, tree_depth=3, receptive_field_size=3),  # 
+    OrPooling2d(kernel_size=2, stride=2, padding=0),  # Reduce dimensionality with pooling operation
+    LogicConv2d(in_dim=12, channels=1, num_kernels=256, tree_depth=3, receptive_field_size=3),
     torch.nn.Flatten(),
-    LogicLayer(256*10*10, 16_000),
-    LogicLayer(16_000, 16_000),
-    LogicLayer(16_000, 16_000),
-    GroupSum(k=10, tau=30)
+    LogicDense(256*10*10, 8_000),
+    LogicDense(8_000, 8_000),
+    GroupSum(k=10, tau=30)  # classify into ten classes
 )
 ```
+This model receives a `(1,28,28)` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
+The model may be trained, e.g., with a `torch.nn.CrossEntropyLoss` similar to how other neural networks models are trained in PyTorch.
+Notably, the Adam optimizer (`torch.optim.Adam`) should be used for training and the recommended default learning rate is `0.01` instead of `0.001`.
+Finally, it is also important to note that the number of neurons in each layer is much higher for logic gate networks compared to
+conventional MLP neural networks because logic gate networks are very sparse.
 
-## 📚 Documentation
+## Documentation
 
 **Full documentation is available [here](https://ligerlac.github.io/torchlogix/)**, including a full **API Reference**. Some quick links:
 - **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions
 - **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
 - **[Concepts](docs/guides/concepts.md)** - Understand some of the design choices behind `torchlogix`
-## 🌱 Intro and Training
-
-This library provides a framework for both training and inference with logic gate networks.
-The following gives an example of a definition of a differentiable logic network model for the MNIST data set:
-
-```python
-import torch
-from torchlogix.layers import LogicDense, LogicConv2d, OrPooling, GroupSum, LearnableThermometerThresholding
-
-model = torch.nn.Sequential(
-    LogicConv2d(in_dim=28, num_kernels=64, receptive_field_size=5),
-    OrPooling(kernel_size=2, stride=2, padding=0),
-    LogicConv2d(in_dim=12, num_kernels=256, receptive_field_size=3),
-    torch.nn.Flatten(),
-    LogicLayer(256*10*10, 16_000),
-    LogicLayer(16_000, 16_000),
-    LogicLayer(16_000, 16_000),
-    GroupSum(k=10, tau=30)
-)
-```
+## Intro and Training
 
 This model receives a `(1,28,28)` dimensional input and returns `k=10` values corresponding to the 10 classes of MNIST.
 The model may be trained, e.g., with a `torch.nn.CrossEntropyLoss` similar to how other neural networks models are trained in PyTorch.

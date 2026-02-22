@@ -884,3 +884,59 @@ def test_compiled_model_with_thresholding():
     # Verify outputs match
     assert np.allclose(preds.numpy(), preds_compiled, atol=1e-5), \
         "Compiled model with thresholding predictions do not match original model"
+    
+
+def test_compiled_model_with_thresholding_float():
+    """Test model compilation and inference with FixedBinarization."""
+    # Create thresholding layer with frozen thresholds
+    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5]  # 5 thresholds
+    thresholding_layer = FixedBinarization(thresholds=thresholds, one_per="global", feature_dim=1)
+    
+    # Create a simple model: Thresholding -> Conv -> Flatten -> GroupSum
+    connections_kwargs = {"init_method": "random"}
+    model = torch.nn.Sequential(
+        thresholding_layer,
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=5,  # Must match number of thresholds
+            num_kernels=2,
+            tree_depth=1,
+            receptive_field_size=2,
+            connections_kwargs=connections_kwargs,
+            stride=1,
+            padding=0,
+        ),
+        torch.nn.Flatten(),
+        GroupSum(2, tau=2),  # 2 classes
+    )
+
+    model.train(False)  # Switch model to eval mode
+
+    # Test with float input (will be thresholded)
+    X = torch.rand(8, 1, 3, 3).float()  # 8 samples of shape (1, 3, 3)
+
+    # Get predictions from original model
+    preds = model(X)
+
+    # Compile the model (no need to specify apply_thresholding - auto-detected!)
+    compiled_model = CompiledLogicNet(
+        model=model,
+        input_shape=(3, 3),  # Input shape BEFORE thresholding
+        num_bits=1,  # Thresholding requires num_bits=1
+        cpu_compiler="gcc",
+        verbose=True,
+        use_bitpacking=True
+        # use_bitpacking=False
+    )
+    compiled_model.compile(save_lib_path="compiled_thresholding_model.so", verbose=False)
+
+    # Get predictions from compiled model
+    # Note: compiled model expects integer input (will be thresholded internally)
+    preds_compiled = compiled_model(X.numpy())
+    print(f"Original predictions:\n{preds}")
+    print(f"Compiled predictions:\n{preds_compiled}")
+
+    # Verify outputs match
+    assert np.allclose(preds.numpy(), preds_compiled, atol=1e-5), \
+        "Compiled model with thresholding predictions do not match original model"

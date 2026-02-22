@@ -45,6 +45,7 @@ class CompiledLogicNet(torch.nn.Module):
         cpu_compiler: str = "gcc",
         verbose: bool = False,
         use_bitpacking: bool = True,
+        apply_groupsum_scaling: bool = True,
     ):
         super().__init__()
         self.model = model
@@ -53,6 +54,7 @@ class CompiledLogicNet(torch.nn.Module):
         self.apply_thresholding = False  # Will be set during _parse_model
         self.use_bitpacking = use_bitpacking  # Store user's choice
         self.cpu_compiler = cpu_compiler
+        self.apply_groupsum_scaling = apply_groupsum_scaling
 
         assert cpu_compiler in ["clang", "gcc"], cpu_compiler
         assert num_bits in [1, 8, 16, 32, 64]
@@ -140,10 +142,14 @@ class CompiledLogicNet(torch.nn.Module):
 
     def _extract_thresholding_layer_info(self, layer: Binarization) -> Dict[str, Any]:
         """Extract information from a thresholding layer for compilation."""
+        thresholds = layer.get_thresholds()
+        # Detect if thresholds are float or int
+        is_float = thresholds.dtype.is_floating_point
         return {
             # 'num_thresholds': layer.num_thresholds,
             'num_thresholds': len(layer.thresholds),
             'thresholds': layer.get_thresholds(),
+            'is_float': is_float,
         }
 
     def _extract_conv_layer_info(self, layer: Union[LogicConv2d, LogicConv3d]) -> Dict[str, Any]:
@@ -877,16 +883,27 @@ class CompiledLogicNet(torch.nn.Module):
             thresholding_info = self.thresholding_layer
             num_thresholds = thresholding_info["num_thresholds"]
             thresholds = thresholding_info["thresholds"].tolist()
-            thresholds_str = ", ".join(str(int(x)) for x in thresholds)
-            thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
-            inp_dtype = BITS_TO_DTYPE[32]
+            is_float = thresholding_info["is_float"]
+
+            if is_float:
+                thresholds_str = ", ".join(str(float(x)) for x in thresholds)
+                thresholds_c_def = f"const float thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+                inp_dtype = "float"
+            else:
+                thresholds_str = ", ".join(str(int(x)) for x in thresholds)
+                thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+                inp_dtype = BITS_TO_DTYPE[32]
+
             logic_net_inp_size = input_size * num_thresholds
         else:
             inp_dtype = "bool"
             logic_net_inp_size = input_size
 
+        # Output type: float if scaling is applied, int otherwise
+        out_dtype = "float" if self.apply_groupsum_scaling else BITS_TO_DTYPE[32]
+
         code_start = f"""
-void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
+void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
     {BITS_TO_DTYPE[self.num_bits]} *inp_temp = malloc({logic_net_inp_size}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
     {BITS_TO_DTYPE[self.num_bits]} *out_temp = malloc({num_neurons_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));
     {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll}*sizeof({BITS_TO_DTYPE[self.num_bits]}));"""
@@ -968,7 +985,7 @@ void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t le
                     res <<= 1;
                     res += !!(out_temp_o[d] & bit_mask);
                 }}
-                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = (res + {self.beta}) / {self.tau};
+                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = {"(res + " + str(self.beta) + ") / " + str(self.tau) if self.apply_groupsum_scaling else "res"};
             }}
         }}
     }}
@@ -993,16 +1010,25 @@ void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t le
             thresholding_info = self.thresholding_layer
             num_thresholds = thresholding_info["num_thresholds"]
             thresholds = thresholding_info["thresholds"].tolist()
-            thresholds_str = ", ".join(str(int(x)) for x in thresholds)
-            thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
-        
-        inp_dtype = BITS_TO_DTYPE[32] if self.apply_thresholding else "bool"
+            is_float = thresholding_info["is_float"]
+
+            if is_float:
+                thresholds_str = ", ".join(str(float(x)) for x in thresholds)
+                thresholds_c_def = f"const float thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+                inp_dtype = "float"
+            else:
+                thresholds_str = ", ".join(str(int(x)) for x in thresholds)
+                thresholds_c_def = f"const int thresholds[{len(thresholds)}] = {{{thresholds_str}}};"
+                inp_dtype = BITS_TO_DTYPE[32]
+        else:
+            inp_dtype = "bool"
         out_len = self.num_classes
         logic_net_out_arg = "out_temp"
-        out_dtype = BITS_TO_DTYPE[32]
+        # Output type: float if scaling is applied, int otherwise
+        out_dtype = "float" if self.apply_groupsum_scaling else BITS_TO_DTYPE[32]
 
         code = [
-            f"""void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {BITS_TO_DTYPE[32]} out[{out_len}]) {{
+            f"""void apply_logic_net_one_event({inp_dtype} const inp[{input_size}], {out_dtype} out[{out_len}]) {{
     bool out_temp[{num_neurons_ll}];"""
         ]
 
@@ -1035,7 +1061,7 @@ void apply_logic_net({inp_dtype} const *inp, {BITS_TO_DTYPE[32]} *out, size_t le
             sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
         }}""")
 
-        if (self.beta!=0) or (self.tau!=1):
+        if self.apply_groupsum_scaling:
                 code.append(f"""
         out[c] = (sum + {self.beta}) / {self.tau};
     }}
@@ -1128,8 +1154,14 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
 
     def _setup_library_function(self, lib):
         """Setup the library function with appropriate signatures."""
-        inp_type = BITS_TO_C_DTYPE[32] if self.apply_thresholding else ctypes.c_bool
-        out_type = BITS_TO_C_DTYPE[32]
+        if self.apply_thresholding:
+            is_float = self.thresholding_layer["is_float"]
+            inp_type = ctypes.c_float if is_float else BITS_TO_C_DTYPE[32]
+        else:
+            inp_type = ctypes.c_bool
+
+        # Output type: float if scaling is applied, int otherwise
+        out_type = ctypes.c_float if self.apply_groupsum_scaling else BITS_TO_C_DTYPE[32]
 
         lib_fn = lib.apply_logic_net
         lib_fn.restype = None
@@ -1165,8 +1197,17 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
         if verbose:
             print("x.shape", x.shape)
 
-        out = np.zeros(x.shape[0] * self.num_classes, dtype=BITS_TO_NP_DTYPE[32])
+        # Output dtype: float32 if scaling is applied, int32 otherwise
+        out_dtype = np.float32 if self.apply_groupsum_scaling else BITS_TO_NP_DTYPE[32]
+        out = np.zeros(x.shape[0] * self.num_classes, dtype=out_dtype)
         x = x.reshape(-1)
+
+        # Ensure input has the correct dtype for the library function
+        if self.apply_thresholding:
+            is_float = self.thresholding_layer["is_float"]
+            x = x.astype(np.float32 if is_float else np.int32)
+        else:
+            x = x.astype(np.bool_)
 
         self.lib_fn(x, out, n_iter)
 
