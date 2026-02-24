@@ -90,7 +90,7 @@ class _LogicConvNd(LogicBase):
     def _init_weights(self):
         # Initialize tree weights using parametrization
         tree_weights = torch.nn.ParameterList()
-        for i in reversed(range(self.tree_depth + 1)):
+        for i in reversed(range(self.tree_depth)):
             # each tree level has lut_rank**i nodes per kernel
             level_weights = torch.nn.Parameter(torch.stack(
                 [
@@ -164,7 +164,7 @@ class _LogicConvNd(LogicBase):
             contraction='fc,bcsf->bcsf'
         )
         # Process remaining levels
-        for level in range(1, self.tree_depth + 1):
+        for level in range(1, self.tree_depth):
             x = self.connections(x, level)
             x = x.movedim(-2, 1)
             x = self.parametrization.forward(
@@ -188,7 +188,7 @@ class _LogicConvNd(LogicBase):
         """
         tree_ids = []
         tree_luts = []
-        for level in range(self.tree_depth + 1):
+        for level in range(self.tree_depth):
             level_ids = []
             level_luts = []
             for w in self.tree_weights[level]:
@@ -206,7 +206,7 @@ class _LogicConvNd(LogicBase):
            List[List[torch.Tensor]]: Nested list of Boolean tensors (LUTs)
         """
         tree_luts = []
-        for level in range(self.tree_depth + 1):
+        for level in range(self.tree_depth):
             level_luts = []
             for w in self.tree_weights[level]:
                 luts = self.parametrization.get_luts(w)

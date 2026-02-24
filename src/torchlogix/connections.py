@@ -371,7 +371,8 @@ class FixedConvConnections(Connections):
         """
         c = self.channels
         g = self.channel_group_size
-        sample_size = self.lut_rank ** self.tree_depth
+        sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs! 
+
         device = self.device
 
         size = (self.num_kernels, self.lut_rank, sample_size)
@@ -403,7 +404,8 @@ class FixedConvConnections(Connections):
         # shape: (num_kernels, lut_rank, sample_size, dim)
         indices = torch.stack((*dim_indices, c_indices), dim=-1)
         return indices.transpose(0, 1)
-    
+
+
     def _get_random_unique_receptive_field_tensor(self):
         """Generate random unique index tensor within the receptive field for each kernel.
         - No self-connections inside a tuple (all positions distinct).
@@ -417,7 +419,7 @@ class FixedConvConnections(Connections):
         """
         c = self.channels
         g = self.channel_group_size
-        sample_size = self.lut_rank ** self.tree_depth
+        sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs!
         device = self.device
 
         if g is None:
@@ -534,7 +536,7 @@ class FixedConvConnections(Connections):
         indices = [
             self._apply_sliding_window_tensor(tensor)
         ]
-        for level in range(self.tree_depth):
+        for level in range(1, self.tree_depth):
             size = self.lut_rank ** (self.tree_depth - level)
             base = torch.arange(size, device=self.device).view(-1, self.lut_rank).transpose(0, 1)
             indices.append(base)

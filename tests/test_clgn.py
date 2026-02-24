@@ -69,7 +69,7 @@ class TestIndeces:
         """Test the shape of the first tree level indices.
 
         The first tree level defines which entries within the receptive field are
-        considered. It should be of shape (num_kernels, num_positions, 2**tree_depth, 3)
+        considered. It should be of shape (num_kernels, num_positions, 2**(tree_depth-1), 3)
         [3 because of (w, h, c) notation].
         """
         vertical_positions = (
@@ -89,7 +89,7 @@ class TestIndeces:
         assert indices.shape == (
             layer.num_kernels,
             num_positions,
-            2**layer.tree_depth,
+            2**(layer.tree_depth-1),
             3,
         )
 
@@ -99,11 +99,11 @@ class TestIndeces:
         """Test the shape of other tree level indices.
 
         Since the convolution is implemented as a binary tree, all following levels
-        should have 2**i gates, where i is the level (in reverse order).
+        should have 2**(i-1) gates, where i is the level (in reverse order).
         """
         for level in range(1, layer.tree_depth):
             indices = layer.connections.indices[level][side]
-            expected_gates = 2 ** (layer.tree_depth - level)
+            expected_gates = 2 ** (layer.tree_depth - level - 1)
             assert indices.shape == (expected_gates,)
 
 
@@ -182,7 +182,7 @@ def test_unique_connections_warp():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=0,
+        tree_depth=1,
         receptive_field_size=5,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -202,7 +202,7 @@ def test_lut_rank_warp():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=0,
+        tree_depth=1,
         receptive_field_size=3,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -224,7 +224,7 @@ def test_regularizer_warp():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=0,
+        tree_depth=1,
         receptive_field_size=3,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -256,7 +256,7 @@ def test_weight_rescale_warp():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=0,
+        tree_depth=1,
         receptive_field_size=3,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -290,7 +290,7 @@ def test_and_model():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -353,7 +353,7 @@ def test_get_luts_and_ids():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -398,7 +398,7 @@ def test_get_luts_and_ids_and_warp():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -442,7 +442,7 @@ def test_and_model_warp():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -504,7 +504,7 @@ def test_binary_model():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -555,7 +555,7 @@ def test_conv_model():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -615,7 +615,7 @@ def test_conv_model_rect():
         device="cpu",
         channels=1,
         num_kernels=1,
-        tree_depth=1,
+        tree_depth=2,
         receptive_field_size=2,
         connections_kwargs=connections_kwargs,
         stride=1,
@@ -681,7 +681,7 @@ def test_compiled_model():
             device="cpu",
             channels=1,
             num_kernels=1,
-            tree_depth=1,
+            tree_depth=2,
             receptive_field_size=2,
             connections_kwargs=connections_kwargs,
             stride=1,
@@ -722,7 +722,7 @@ def test_compiled_model_rect():
             device="cpu",
             channels=1,
             num_kernels=1,
-            tree_depth=1,
+            tree_depth=2,
             receptive_field_size=2,
             connections_kwargs=connections_kwargs,
             stride=1,
@@ -799,7 +799,7 @@ def test_compiled_pooling_model():
             device="cpu",
             channels=1,
             num_kernels=1,
-            tree_depth=1,
+            tree_depth=2,
             receptive_field_size=2,
             connections_kwargs=connections_kwargs,
             stride=1,
@@ -844,7 +844,7 @@ def test_compiled_model_with_thresholding():
             device="cpu",
             channels=5,  # Must match number of thresholds
             num_kernels=2,
-            tree_depth=1,
+            tree_depth=2,
             receptive_field_size=2,
             connections_kwargs=connections_kwargs,
             stride=1,
@@ -901,7 +901,7 @@ def test_compiled_model_with_thresholding_float():
             device="cpu",
             channels=5,  # Must match number of thresholds
             num_kernels=2,
-            tree_depth=1,
+            tree_depth=2,
             receptive_field_size=2,
             connections_kwargs=connections_kwargs,
             stride=1,

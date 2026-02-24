@@ -382,7 +382,7 @@ class CompiledLogicNet(torch.nn.Module):
                 right_indices = level_0_indices[1][kernel_idx, pos_idx]
 
                 # Generate variables for the first level
-                for gate_idx in range(2**conv_info['tree_depth']):
+                for gate_idx in range(2**(conv_info['tree_depth']-1)):
                     if conv_dim == 2:
                         left_h, left_w, left_c = left_indices[gate_idx]
                         right_h, right_w, right_c = right_indices[gate_idx]
@@ -445,7 +445,7 @@ class CompiledLogicNet(torch.nn.Module):
                     )
 
                 # Process remaining tree levels
-                for level in range(1, conv_info['tree_depth'] + 1):
+                for level in range(1, conv_info['tree_depth']):
                     level_indices = indices[level]
                     left_gate_indices = level_indices[0]
                     right_gate_indices = level_indices[1]
@@ -460,7 +460,7 @@ class CompiledLogicNet(torch.nn.Module):
                         left_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{left_idx}"
                         right_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{right_idx}"
 
-                        if level == conv_info['tree_depth']:
+                        if level == conv_info['tree_depth'] - 1:
                             if conv_dim == 2:
                                 output_idx = (kernel_idx * h_out * w_out + pos_idx)
                             else:

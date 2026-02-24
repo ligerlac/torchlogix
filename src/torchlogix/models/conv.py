@@ -2,7 +2,69 @@ import torch
 import torch.nn as nn
 from ..layers import OrPooling2d, GroupSum, LogicConv2d, LogicDense
 from ..layers.binarization import setup_binarization
-from ..modules.resblock import ResidualLogicBlock, ResidualLogicBlockLiv
+
+
+class CNN(torch.nn.Module):
+    """An implementation of a logic gate convolutional neural network."""
+
+    def __init__(self, class_count, tau, parametrization="raw", **llkw):
+        super(CNN, self).__init__()
+        logic_layers = []
+        # specifically written for mnist
+        k_num = 16
+        logic_layers.append(
+            LogicConv2d(
+                in_dim=28,
+                num_kernels=k_num,
+                channels=1,
+                **llkw,
+                tree_depth=3,
+                receptive_field_size=5,
+                parametrization=parametrization,
+                padding=0,
+            )
+        )
+        logic_layers.append(OrPooling2d(kernel_size=2, stride=2, padding=0))
+
+        logic_layers.append(
+            LogicConv2d(
+                in_dim=12,
+                channels=k_num,
+                num_kernels=3 * k_num,
+                **llkw,
+                tree_depth=3,
+                receptive_field_size=3,
+                padding=0,
+                parametrization=parametrization,
+            )
+        )
+        logic_layers.append(OrPooling2d(kernel_size=2, stride=2, padding=1))
+
+        logic_layers.append(
+            LogicConv2d(
+                in_dim=6,
+                channels=3 * k_num,
+                num_kernels=9 * k_num,
+                **llkw,
+                tree_depth=3,
+                receptive_field_size=3,
+                padding=0,
+                parametrization=parametrization,
+            )
+        )
+        logic_layers.append(OrPooling2d(kernel_size=2, stride=2, padding=1))
+
+        logic_layers.append(torch.nn.Flatten())
+
+        logic_layers.append(LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, parametrization=parametrization, **llkw))
+        logic_layers.append(LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, parametrization=parametrization, **llkw))
+        logic_layers.append(LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, parametrization=parametrization, **llkw))
+
+        self.model = torch.nn.Sequential(*logic_layers, GroupSum(class_count, tau))
+
+    def forward(self, x):
+        """Forward pass of the logic gate convolutional neural network."""
+        return self.model(x)
 
 
 class ClgnMnist(torch.nn.Sequential):
@@ -102,6 +164,7 @@ class ClgnCifar10(torch.nn.Sequential):
     n_input_bits = None
     k_num = None
     tau = None
+    group_size = None
 
     def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, connections_kwargs: dict, **llkw):
         assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."
@@ -110,11 +173,8 @@ class ClgnCifar10(torch.nn.Sequential):
         n_bits = thresholds.shape[-1]
         binarization_module = setup_binarization(thresholds, binarization, **binarization_kwargs)
 
-        # if "coonections_kwargs" in llkw:
-        #     llkw["connections_kwargs"] = 
-
         connections_kwargs = dict(connections_kwargs)  # make a copy to avoid modifying the original
-        connections_kwargs["channel_group_size"] = 2  # from the paper, we use grouped connections with channel group size 2 for conv layers
+        connections_kwargs["channel_group_size"] = self.group_size  # from the paper, we use grouped connections with channel group size 2 for conv layers
 
         print(f"connctions_kwargs for {self.__class__.__name__}: {connections_kwargs}")
 
@@ -169,6 +229,7 @@ class ClgnCifar10(torch.nn.Sequential):
                 tree_depth=3,
                 receptive_field_size=3,
                 padding=1,
+                connections_kwargs=connections_kwargs,
                 **llkw,
             )
         )
@@ -183,31 +244,66 @@ class ClgnCifar10(torch.nn.Sequential):
         super(ClgnCifar10, self).__init__(*layers, GroupSum(k=10, tau=self.tau))
 
 
-class ClgnCifar10Small(ClgnCifar10):
+
+class ClgnCifar10SmallGNone(ClgnCifar10):
     n_input_bits = 2
     k_num = 32
     tau = 20
+    group_size = None
 
 
-class ClgnCifar10Medium(ClgnCifar10):
+class ClgnCifar10MediumGNone(ClgnCifar10):
     n_input_bits = 2
     k_num = 256
     tau = 40
+    group_size = None
 
 
-class ClgnCifar10Large(ClgnCifar10):
+class ClgnCifar10LargeGNone(ClgnCifar10):
     n_input_bits = 5
     k_num = 512
     tau = 280
+    group_size = None
 
 
-class ClgnCifar10Large2(ClgnCifar10):
+class ClgnCifar10SmallG2(ClgnCifar10):
+    n_input_bits = 2
+    k_num = 32
+    tau = 20
+    group_size = 2
+
+
+class ClgnCifar10MediumG2(ClgnCifar10):
+    n_input_bits = 2
+    k_num = 256
+    tau = 40
+    group_size = 2
+
+
+class ClgnCifar10LargeG2(ClgnCifar10):
     n_input_bits = 5
-    k_num = 1024
-    tau = 340
+    k_num = 512
+    tau = 280
+    group_size = 2
 
 
-class ClgnCifar10Large4(ClgnCifar10):
+class ClgnCifar10SmallG1(ClgnCifar10):
+    n_input_bits = 2
+    k_num = 32
+    tau = 20
+    group_size = 1
+
+
+class ClgnCifar10MediumG1(ClgnCifar10):
+    n_input_bits = 2
+    k_num = 256
+    tau = 40
+    group_size = 1
+
+
+class ClgnCifar10LargeG1(ClgnCifar10):
     n_input_bits = 5
-    k_num = 2560
-    tau = 450
+    k_num = 512
+    tau = 280
+    group_size = 1
+
