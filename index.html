@@ -49,7 +49,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="guides/installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/logic_gates.html">Logic Gates in TorchLogix</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -57,10 +57,6 @@
 <li class="toctree-l1"><a class="reference internal" href="api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/functional.html">Functional Module</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Development</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="guides/contributing.html">Contributing to TorchLogix</a></li>
 </ul>
 
         </div>
@@ -89,44 +85,18 @@
              
   <section id="torchlogix-documentation">
 <h1>TorchLogix Documentation<a class="headerlink" href="#torchlogix-documentation" title="Link to this heading"></a></h1>
-<p><strong>TorchLogix</strong> is a PyTorch library for differentiable logic gate neural networks. It extends the original DiffLogic work with enhanced features, improved usability, and comprehensive documentation.</p>
+<p><strong>TorchLogix</strong> is a PyTorch-based library for training and inference of <strong>logic neural networks</strong>.
+These solve machine learning tasks by learning combinations of boolean logic expressions.
+As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods.
+The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
+million images of MNIST per second on a single CPU core.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>TorchLogix builds upon the foundational work of <a class="reference external" href="https://github.com/Felix-Petersen/difflogic">DiffLogic</a> by Felix Petersen et al.
-This library provides extensions and improvements while maintaining compatibility with the original concepts.</p>
+<p>TorchLogix is based on the <cite>difflogic</cite> package ([<a class="reference external" href="https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/">https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/</a>)),
+and extends it by new concepts such as compact parametrizations, higher-dimensional logic blocks, learnable connections and binarization as
+described in “WARP Logic Neural Networks” (Paper &#64; [ArXiv](<a class="reference external" href="https://arxiv.org/abs/2602.03527">https://arxiv.org/abs/2602.03527</a>)).
+It also implements convolutions as described in “Convolutional Differentiable Logic Gate Networks (Paper &#64; [ArXiv](<a class="reference external" href="https://arxiv.org/pdf/2411.04732">https://arxiv.org/pdf/2411.04732</a>)).</p>
 </div>
-<section id="key-features">
-<h2>Key Features<a class="headerlink" href="#key-features" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p><strong>Differentiable Logic Gates</strong>: Implement neural networks using 16 different binary logical operations</p></li>
-<li><p><strong>Convolutional Support</strong>: 2D and 3D logic convolutional layers with flexible receptive fields</p></li>
-<li><p><strong>Model Compilation</strong>: Convert trained logic networks to optimized implementations</p></li>
-<li><p><strong>GPU Support</strong>: CUDA-accelerated training and inference for high-performance computing</p></li>
-<li><p><strong>Easy Integration</strong>: New layers mostly follow PyTorch conventions</p></li>
-</ul>
-</section>
-<section id="quick-start">
-<h2>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span><span class="p">,</span> <span class="n">LogicConv2d</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">CNN</span>
-
-<span class="c1"># Create a simple logic dense layer</span>
-<span class="n">layer</span> <span class="o">=</span> <span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">784</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-
-<span class="c1"># Create a logic convolutional layer</span>
-<span class="n">conv</span> <span class="o">=</span> <span class="n">LogicConv2d</span><span class="p">(</span>
-    <span class="n">in_dim</span><span class="o">=</span><span class="p">(</span><span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">),</span>
-    <span class="n">num_kernels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-    <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">5</span>
-<span class="p">)</span>
-
-<span class="c1"># Use pre-built models</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">CNN</span><span class="p">(</span><span class="n">class_count</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
 <section id="documentation-contents">
 <h2>Documentation Contents<a class="headerlink" href="#documentation-contents" title="Link to this heading"></a></h2>
 <div class="toctree-wrapper compound">
@@ -146,14 +116,16 @@ This library provides extensions and improvements while maintaining compatibilit
 <li class="toctree-l2"><a class="reference internal" href="guides/quickstart.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="guides/logic_gates.html">Logic Gates in TorchLogix</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#overview">Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#the-16-boolean-operations">The 16 Boolean Operations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#differentiable-implementation">Differentiable Implementation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#binary-tree-structure">Binary Tree Structure</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#learning-process">Learning Process</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#practical-considerations">Practical Considerations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/logic_gates.html#examples">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#design-philosophy">Design Philosophy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#pytorch-api-compatibility">PyTorch API Compatibility</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#separation-of-concerns">Separation of Concerns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#layer-specific-concepts">Layer-Specific Concepts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#supporting-components">Supporting Components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#advanced-topics">Advanced Topics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#deployment-from-training-to-inference">Deployment: From Training to Inference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#common-patterns">Common Patterns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/concepts.html#summary">Summary</a></li>
 </ul>
 </li>
 </ul>
@@ -185,12 +157,6 @@ This library provides extensions and improvements while maintaining compatibilit
 <li class="toctree-l2"><a class="reference internal" href="api/functional.html#function-details">Function Details</a></li>
 </ul>
 </li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Development</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="guides/contributing.html">Contributing to TorchLogix</a></li>
 </ul>
 </div>
 </section>

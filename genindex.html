@@ -47,7 +47,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="guides/installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/logic_gates.html">Logic Gates in TorchLogix</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -55,10 +55,6 @@
 <li class="toctree-l1"><a class="reference internal" href="api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/functional.html">Functional Module</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Development</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="guides/contributing.html">Contributing to TorchLogix</a></li>
 </ul>
 
         </div>
@@ -97,8 +93,10 @@
  | <a href="#I"><strong>I</strong></a>
  | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
+ | <a href="#O"><strong>O</strong></a>
  | <a href="#P"><strong>P</strong></a>
  | <a href="#R"><strong>R</strong></a>
+ | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
  
 </div>
@@ -110,13 +108,25 @@
       <ul>
         <li><a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.__init__">(torchlogix.functional.GradFactor method)</a>
 </li>
+        <li><a href="api/layers.html#torchlogix.layers.Binarization.__init__">(torchlogix.layers.Binarization method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.FixedBinarization.__init__">(torchlogix.layers.FixedBinarization method)</a>
+</li>
         <li><a href="api/generated/torchlogix.layers.GroupSum.html#id0">(torchlogix.layers.GroupSum method)</a>, <a href="api/generated/torchlogix.layers.GroupSum.html#torchlogix.layers.GroupSum.__init__">[1]</a>, <a href="api/layers.html#torchlogix.layers.GroupSum.__init__">[2]</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.LearnableBinarization.__init__">(torchlogix.layers.LearnableBinarization method)</a>
 </li>
         <li><a href="api/generated/torchlogix.layers.LogicConv2d.html#id0">(torchlogix.layers.LogicConv2d method)</a>, <a href="api/generated/torchlogix.layers.LogicConv2d.html#torchlogix.layers.LogicConv2d.__init__">[1]</a>, <a href="api/layers.html#torchlogix.layers.LogicConv2d.__init__">[2]</a>
 </li>
         <li><a href="api/generated/torchlogix.layers.LogicConv3d.html#id0">(torchlogix.layers.LogicConv3d method)</a>, <a href="api/generated/torchlogix.layers.LogicConv3d.html#torchlogix.layers.LogicConv3d.__init__">[1]</a>, <a href="api/layers.html#torchlogix.layers.LogicConv3d.__init__">[2]</a>
 </li>
         <li><a href="api/generated/torchlogix.layers.LogicDense.html#id0">(torchlogix.layers.LogicDense method)</a>, <a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense.__init__">[1]</a>, <a href="api/layers.html#torchlogix.layers.LogicDense.__init__">[2]</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.OrPooling2d.__init__">(torchlogix.layers.OrPooling2d method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.OrPooling3d.__init__">(torchlogix.layers.OrPooling3d method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.SoftBinarization.__init__">(torchlogix.layers.SoftBinarization method)</a>
 </li>
         <li><a href="api/generated/torchlogix.models.CNN.html#id0">(torchlogix.models.CNN method)</a>, <a href="api/generated/torchlogix.models.CNN.html#torchlogix.models.CNN.__init__">[1]</a>, <a href="api/models.html#torchlogix.models.CNN.__init__">[2]</a>
 </li>
@@ -134,6 +144,8 @@
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/functional.html#torchlogix.functional.bin_op">bin_op() (in module torchlogix.functional)</a>, <a href="api/generated/torchlogix.functional.bin_op.html#torchlogix.functional.bin_op">[1]</a>
+</li>
+      <li><a href="api/layers.html#torchlogix.layers.Binarization">Binarization (class in torchlogix.layers)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -169,6 +181,8 @@
 <h2 id="F">F</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/layers.html#torchlogix.layers.FixedBinarization">FixedBinarization (class in torchlogix.layers)</a>
+</li>
       <li><a href="api/torchlogix.html#torchlogix.PackBitsTensor.flatten">flatten() (torchlogix.PackBitsTensor method)</a>
 </li>
       <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.forward">forward() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.forward">[1]</a>
@@ -176,9 +190,21 @@
       <ul>
         <li><a href="api/functional.html#torchlogix.functional.GradFactor.forward">(torchlogix.functional.GradFactor static method)</a>, <a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.forward">[1]</a>
 </li>
+        <li><a href="api/layers.html#torchlogix.layers.Binarization.forward">(torchlogix.layers.Binarization method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.FixedBinarization.forward">(torchlogix.layers.FixedBinarization method)</a>
+</li>
         <li><a href="api/generated/torchlogix.layers.GroupSum.html#torchlogix.layers.GroupSum.forward">(torchlogix.layers.GroupSum method)</a>, <a href="api/layers.html#torchlogix.layers.GroupSum.forward">[1]</a>
 </li>
+        <li><a href="api/layers.html#torchlogix.layers.LearnableBinarization.forward">(torchlogix.layers.LearnableBinarization method)</a>
+</li>
         <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense.forward">(torchlogix.layers.LogicDense method)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense.forward">[1]</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.OrPooling2d.forward">(torchlogix.layers.OrPooling2d method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.OrPooling3d.forward">(torchlogix.layers.OrPooling3d method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.SoftBinarization.forward">(torchlogix.layers.SoftBinarization method)</a>
 </li>
         <li><a href="api/generated/torchlogix.models.CNN.html#torchlogix.models.CNN.forward">(torchlogix.models.CNN method)</a>, <a href="api/models.html#torchlogix.models.CNN.forward">[1]</a>
 </li>
@@ -191,7 +217,11 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.get_c_code">get_c_code() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.get_c_code">[1]</a>
 </li>
+      <li><a href="api/layers.html#torchlogix.layers.Binarization.get_distributive_thresholds">get_distributive_thresholds() (torchlogix.layers.Binarization static method)</a>
+</li>
       <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.get_gate_code">get_gate_code() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.get_gate_code">[1]</a>
+</li>
+      <li><a href="api/layers.html#torchlogix.layers.Binarization.get_initial_thresholds">get_initial_thresholds() (torchlogix.layers.Binarization static method)</a>
 </li>
       <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense.get_luts">get_luts() (torchlogix.layers.LogicDense method)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense.get_luts">[1]</a>
 </li>
@@ -200,6 +230,14 @@
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense.get_regularization_loss">get_regularization_loss() (torchlogix.layers.LogicDense method)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense.get_regularization_loss">[1]</a>
+</li>
+      <li><a href="api/layers.html#torchlogix.layers.Binarization.get_thresholds">get_thresholds() (torchlogix.layers.Binarization method)</a>
+
+      <ul>
+        <li><a href="api/layers.html#torchlogix.layers.LearnableBinarization.get_thresholds">(torchlogix.layers.LearnableBinarization method)</a>
+</li>
+      </ul></li>
+      <li><a href="api/layers.html#torchlogix.layers.Binarization.get_uniform_thresholds">get_uniform_thresholds() (torchlogix.layers.Binarization static method)</a>
 </li>
       <li><a href="api/functional.html#torchlogix.functional.GradFactor">GradFactor (class in torchlogix.functional)</a>, <a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor">[1]</a>
 </li>
@@ -221,12 +259,14 @@
 <h2 id="L">L</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.load">load() (torchlogix.CompiledLogicNet static method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.load">[1]</a>
+      <li><a href="api/layers.html#torchlogix.layers.LearnableBinarization">LearnableBinarization (class in torchlogix.layers)</a>
 </li>
-      <li><a href="api/generated/torchlogix.layers.LogicConv2d.html#torchlogix.layers.LogicConv2d">LogicConv2d (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicConv2d">[1]</a>
+      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.load">load() (torchlogix.CompiledLogicNet static method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.load">[1]</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/torchlogix.layers.LogicConv2d.html#torchlogix.layers.LogicConv2d">LogicConv2d (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicConv2d">[1]</a>
+</li>
       <li><a href="api/generated/torchlogix.layers.LogicConv3d.html#torchlogix.layers.LogicConv3d">LogicConv3d (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicConv3d">[1]</a>
 </li>
       <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense">LogicDense (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense">[1]</a>
@@ -247,6 +287,18 @@
   </ul></td>
 </tr></table>
 
+<h2 id="O">O</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/layers.html#torchlogix.layers.OrPooling2d">OrPooling2d (class in torchlogix.layers)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/layers.html#torchlogix.layers.OrPooling3d">OrPooling3d (class in torchlogix.layers)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
@@ -259,6 +311,14 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense.rescale_weights">rescale_weights() (torchlogix.layers.LogicDense method)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense.rescale_weights">[1]</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="S">S</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/layers.html#torchlogix.layers.SoftBinarization">SoftBinarization (class in torchlogix.layers)</a>
 </li>
   </ul></td>
 </tr></table>

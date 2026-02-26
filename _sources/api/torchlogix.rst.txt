@@ -3,7 +3,7 @@ TorchLogix Package
 
 .. currentmodule:: torchlogix
 
-The main TorchLogix package provides the core functionality for differentiable logic gate neural networks.
+The main TorchLogix package provides the core functionality for differentiable logic neural networks.
 
 Main Classes
 ------------

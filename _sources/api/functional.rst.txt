@@ -3,7 +3,7 @@ Functional Module
 
 .. currentmodule:: torchlogix.functional
 
-The functional module contains the core mathematical operations and utility functions for logic gate computations.
+The functional module contains the core mathematical operations and utility functions for logic neural computations.
 
 Logic Operations
 ----------------

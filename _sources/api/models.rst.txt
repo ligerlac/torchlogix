@@ -3,7 +3,7 @@ Models Module
 
 .. currentmodule:: torchlogix.models
 
-The models module provides pre-built neural network architectures using logic gate layers.
+The models module provides pre-built neural network architectures using logic layers.
 
 Pre-built Models
 ----------------

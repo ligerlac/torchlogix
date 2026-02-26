@@ -22,7 +22,9 @@
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" /> 
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="TorchLogix Package" href="../api/torchlogix.html" />
+    <link rel="prev" title="Quick Start Guide" href="quickstart.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -45,10 +47,65 @@
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="logic_gates.html">Logic Gates in TorchLogix</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Core Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#design-philosophy">Design Philosophy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pytorch-api-compatibility">PyTorch API Compatibility</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#standard-pytorch-conventions">Standard PyTorch Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#separation-of-concerns">Separation of Concerns</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#connections-input-routing">1. Connections: Input Routing</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#types-of-connections">Types of Connections</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dense-vs-convolutional-structure">Dense vs Convolutional Structure</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#parametrization-representing-boolean-functions">2. Parametrization: Representing Boolean Functions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#raw-parametrization-parametrization-raw">Raw Parametrization (<code class="docutils literal notranslate"><span class="pre">parametrization=&quot;raw&quot;</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#warp-parametrization-parametrization-warp">WARP Parametrization (<code class="docutils literal notranslate"><span class="pre">parametrization=&quot;warp&quot;</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#light-parametrization-parametrization-light">Light Parametrization (<code class="docutils literal notranslate"><span class="pre">parametrization=&quot;light&quot;</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lut-rank-higher-order-logic">LUT Rank: Higher-Order Logic</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#weight-initialization">Weight Initialization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#forward-sampling-modes">Forward Sampling Modes</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#layer-specific-concepts">Layer-Specific Concepts</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#logicdense-fully-connected-layers">LogicDense: Fully-Connected Layers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#logicconv2d-3d-convolutional-layers">LogicConv2d/3d: Convolutional Layers</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#binary-tree-structure">Binary Tree Structure</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#channel-grouping">Channel Grouping</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#supporting-components">Supporting Components</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#groupsum-classification-head">GroupSum: Classification Head</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#binarization-layers">Binarization Layers</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-topics">Advanced Topics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#gradient-scaling-for-deep-networks">Gradient Scaling for Deep Networks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#extracting-discrete-boolean-functions">Extracting Discrete Boolean Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#deployment-from-training-to-inference">Deployment: From Training to Inference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#standard-pytorch-training-validation">1. Standard PyTorch (Training &amp; Validation)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#packbitstensor-gpu-batch-inference">2. PackBitsTensor (GPU Batch Inference)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#compiledlogicnet-cpu-production-inference">3. CompiledLogicNet (CPU Production Inference)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#common-patterns">Common Patterns</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#building-a-classifier">Building a Classifier</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#using-pre-configured-models">Using Pre-configured Models</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#summary">Summary</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -56,10 +113,6 @@
 <li class="toctree-l1"><a class="reference internal" href="../api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/functional.html">Functional Module</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Development</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to TorchLogix</a></li>
 </ul>
 
         </div>
@@ -600,7 +653,10 @@ Output: (batch, out_dim)
 
            </div>
           </div>
-          <footer>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quick Start Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api/torchlogix.html" class="btn btn-neutral float-right" title="TorchLogix Package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
 
   <hr/>
 

@@ -50,7 +50,7 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../guides/installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/quickstart.html">Quick Start Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../guides/logic_gates.html">Logic Gates in TorchLogix</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/concepts.html">Core Concepts</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
@@ -63,6 +63,16 @@
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.LogicConv3d"><code class="docutils literal notranslate"><span class="pre">LogicConv3d</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LogicConv3d.__init__"><code class="docutils literal notranslate"><span class="pre">LogicConv3d.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.OrPooling2d"><code class="docutils literal notranslate"><span class="pre">OrPooling2d</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling2d.__init__"><code class="docutils literal notranslate"><span class="pre">OrPooling2d.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling2d.forward"><code class="docutils literal notranslate"><span class="pre">OrPooling2d.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.OrPooling3d"><code class="docutils literal notranslate"><span class="pre">OrPooling3d</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling3d.__init__"><code class="docutils literal notranslate"><span class="pre">OrPooling3d.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling3d.forward"><code class="docutils literal notranslate"><span class="pre">OrPooling3d.forward()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -87,16 +97,37 @@
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.GroupSum.extra_repr"><code class="docutils literal notranslate"><span class="pre">GroupSum.extra_repr()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.Binarization"><code class="docutils literal notranslate"><span class="pre">Binarization</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.Binarization.__init__"><code class="docutils literal notranslate"><span class="pre">Binarization.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.Binarization.get_thresholds"><code class="docutils literal notranslate"><span class="pre">Binarization.get_thresholds()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.Binarization.forward"><code class="docutils literal notranslate"><span class="pre">Binarization.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.Binarization.get_uniform_thresholds"><code class="docutils literal notranslate"><span class="pre">Binarization.get_uniform_thresholds()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.Binarization.get_distributive_thresholds"><code class="docutils literal notranslate"><span class="pre">Binarization.get_distributive_thresholds()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.Binarization.get_initial_thresholds"><code class="docutils literal notranslate"><span class="pre">Binarization.get_initial_thresholds()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.FixedBinarization"><code class="docutils literal notranslate"><span class="pre">FixedBinarization</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.FixedBinarization.__init__"><code class="docutils literal notranslate"><span class="pre">FixedBinarization.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.FixedBinarization.forward"><code class="docutils literal notranslate"><span class="pre">FixedBinarization.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.SoftBinarization"><code class="docutils literal notranslate"><span class="pre">SoftBinarization</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.SoftBinarization.__init__"><code class="docutils literal notranslate"><span class="pre">SoftBinarization.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.SoftBinarization.forward"><code class="docutils literal notranslate"><span class="pre">SoftBinarization.forward()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.LearnableBinarization"><code class="docutils literal notranslate"><span class="pre">LearnableBinarization</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LearnableBinarization.__init__"><code class="docutils literal notranslate"><span class="pre">LearnableBinarization.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LearnableBinarization.get_thresholds"><code class="docutils literal notranslate"><span class="pre">LearnableBinarization.get_thresholds()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LearnableBinarization.forward"><code class="docutils literal notranslate"><span class="pre">LearnableBinarization.forward()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="functional.html">Functional Module</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Development</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../guides/contributing.html">Contributing to TorchLogix</a></li>
 </ul>
 
         </div>
@@ -126,7 +157,7 @@
              
   <section id="layers-module">
 <h1>Layers Module<a class="headerlink" href="#layers-module" title="Link to this heading"></a></h1>
-<p>The layers module contains the core neural network layers for building logic gate networks.</p>
+<p>The layers module contains the core layers for building logic neural networks.</p>
 <section id="convolutional-layers">
 <h2>Convolutional Layers<a class="headerlink" href="#convolutional-layers" title="Link to this heading"></a></h2>
 <dl class="py class">
@@ -161,6 +192,52 @@ field, per kernel and per spatial location.</p>
 <dt class="sig sig-object py" id="torchlogix.layers.LogicConv3d.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_kernels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tree_depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">receptive_field_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lut_rank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fixed'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/conv.html#LogicConv3d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicConv3d.__init__" title="Link to this definition"></a></dt>
 <dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">OrPooling2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
+<p>Logic gate based pooling layer.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d.forward" title="Link to this definition"></a></dt>
+<dd><p>Pool the max value in the kernel.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling3d">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">OrPooling3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
+<p>Logic gate based pooling layer.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling3d.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling3d.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d.forward" title="Link to this definition"></a></dt>
+<dd><p>Define the computation performed at every call.</p>
+<p>Should be overridden by all subclasses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Although the recipe for forward pass needs to be defined within
+this function, one should call the <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code> instance afterwards
+instead of this since the former takes care of running the
+registered hooks while the latter silently ignores them.</p>
+</div>
 </dd></dl>
 
 </dd></dl>
@@ -345,6 +422,147 @@ registered hooks while the latter silently ignores them.</p>
 <p>To print customized extra information, you should re-implement
 this method in your own modules. Both single-line and multi-line
 strings are acceptable.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">Binarization</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<p>Abstract base class for binarization modules.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization.get_thresholds">
+<span class="sig-name descname"><span class="pre">get_thresholds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization.get_thresholds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization.get_thresholds" title="Link to this definition"></a></dt>
+<dd><p>Return thresholds. Subclasses can override for learnable thresholds.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization.forward">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization.forward" title="Link to this definition"></a></dt>
+<dd><p>Subclasses must implement forward.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization.get_uniform_thresholds">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_uniform_thresholds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_set</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_per</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization.get_uniform_thresholds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization.get_uniform_thresholds" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization.get_distributive_thresholds">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_distributive_thresholds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_set</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_per</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization.get_distributive_thresholds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization.get_distributive_thresholds" title="Link to this definition"></a></dt>
+<dd><p>Compute distributive (quantile-based) thresholds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>one_per:</dt><dd><ul class="simple">
+<li><p>“global”:   one set of thresholds for entire tensor</p></li>
+<li><p>“feature”:  per-feature thresholds (last dimension)</p></li>
+<li><p>“channel”:  per-channel thresholds (dim=1, conv tensors)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.Binarization.get_initial_thresholds">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_initial_thresholds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_set</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">one_per</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'uniform'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#Binarization.get_initial_thresholds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.Binarization.get_initial_thresholds" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.layers.FixedBinarization">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">FixedBinarization</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#FixedBinarization"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.FixedBinarization" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#torchlogix.layers.Binarization" title="torchlogix.layers.binarization.Binarization"><code class="xref py py-class docutils literal notranslate"><span class="pre">Binarization</span></code></a></p>
+<p>Binarization with fixed (non-learnable) thresholds.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.FixedBinarization.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#FixedBinarization.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.FixedBinarization.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.FixedBinarization.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#FixedBinarization.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.FixedBinarization.forward" title="Link to this definition"></a></dt>
+<dd><p>Subclasses must implement forward.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.layers.SoftBinarization">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">SoftBinarization</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#SoftBinarization"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.SoftBinarization" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#torchlogix.layers.Binarization" title="torchlogix.layers.binarization.Binarization"><code class="xref py py-class docutils literal notranslate"><span class="pre">Binarization</span></code></a></p>
+<p>Soft binarization with fixed thresholds using sigmoid.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.SoftBinarization.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#SoftBinarization.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.SoftBinarization.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.SoftBinarization.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#SoftBinarization.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.SoftBinarization.forward" title="Link to this definition"></a></dt>
+<dd><p>Subclasses must implement forward.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.layers.LearnableBinarization">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">LearnableBinarization</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature_softplus</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forward_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'soft'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_grad_norm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#LearnableBinarization"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LearnableBinarization" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#torchlogix.layers.Binarization" title="torchlogix.layers.binarization.Binarization"><code class="xref py py-class docutils literal notranslate"><span class="pre">Binarization</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LearnableBinarization.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thresholds</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">feature_dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature_softplus</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forward_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'soft'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_grad_norm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#LearnableBinarization.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LearnableBinarization.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LearnableBinarization.get_thresholds">
+<span class="sig-name descname"><span class="pre">get_thresholds</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#LearnableBinarization.get_thresholds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LearnableBinarization.get_thresholds" title="Link to this definition"></a></dt>
+<dd><p>Return thresholds. Subclasses can override for learnable thresholds.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LearnableBinarization.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/binarization.html#LearnableBinarization.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LearnableBinarization.forward" title="Link to this definition"></a></dt>
+<dd><p>Subclasses must implement forward.</p>
 </dd></dl>
 
 </dd></dl>
