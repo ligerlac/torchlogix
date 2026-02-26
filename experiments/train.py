@@ -37,7 +37,7 @@ def get_parser():
     )
 
     # Training parameters
-    parser.add_argument("--seed", "-s", type=int, default=42, help="Random seed")
+    parser.add_argument("--seed", "-s", type=int, default=None, help="Random seed")
     parser.add_argument("--batch-size", "-bs", type=int, default=128, help="Batch size")
     parser.add_argument(
         "--num-iterations", "-ni", type=int, default=100_000, help="Number of training iterations"
@@ -47,7 +47,7 @@ def get_parser():
         help="Evaluation frequency. Evaluation is deactivated if set to 0."
     )
     parser.add_argument(
-        "--valid-set-size", "-vss", type=float, default=0.2,
+        "--valid-set-size", "-vss", type=float, default=0.1,
         help="Fraction of train set for validation"
     )
 
@@ -86,12 +86,17 @@ def get_parser():
 
     # Connection parameters
     parser.add_argument(
-        "--connections-init-method", type=str, choices=["random", "random-unique"],
+        "--connections", type=str, choices=["fixed", "learnable"],
+        default="fixed", help="Connection strategy"
+    )
+    parser.add_argument(
+        # "--connections-init-method", type=str, choices=["random", "random-unique", "random2"],
+        "--connections-init-method", type=str, choices=["random", "no_self", "no_duplicates"],
         default="random", help="Connection initilization strategy"
     )
     parser.add_argument(
-        "--connections", type=str, choices=["fixed", "learnable"],
-        default="fixed", help="Connection strategy"
+        "--connections-channel-balance", type=str, choices=[None, "per_lut", "per_tuple"],
+        default=None, help="Connection channel balance strategy. Only applicable for conv models with group size > 1."
     )
     parser.add_argument(
         "--connections-temperature", type=float, default=0.001,
@@ -112,7 +117,7 @@ def get_parser():
         help="Parametrization to use"
     )
     parser.add_argument(
-        "--parametrization-temperature", type=float, default=0.1,
+        "--parametrization-temperature", type=float, default=1.0,
         help="Temperature for sigmoid/softmax in parametrization"
     )
     parser.add_argument(
@@ -147,7 +152,7 @@ def get_parser():
         help="Binarization thresholds global, per channel, or per feature"
     )
     parser.add_argument(
-        "--binarization-temperature", type=float, default=0.01,
+        "--binarization-temperature", type=float, default=0.001,
         help="Temperature for sampling in learnable binarization"
     )
     parser.add_argument(
@@ -155,7 +160,7 @@ def get_parser():
         help="Temperature for softplus in learnable binarization"
     )
     parser.add_argument(
-        "--binarization-learning-rate", type=float, default=None,
+        "--binarization-learning-rate", type=float, default=0.01,
         help="Learning rate for binarization (as fraction of main learning rate). If None, uses main learning rate."
     )
     parser.add_argument(
@@ -254,8 +259,12 @@ def run_training(args, callbacks=None):
     print(f"model.parameters(): {[p.shape for p in model.parameters()]}")
 
     if args.compile_model:
-        print("compiling...")
-        model.compile(dynamic=True)  # speedup w/ JIT compilation
+        print("JIT compilation has been chosen.")
+        print("The first iteration will be slower due to compilation overhead.")
+        torch._dynamo.config.cache_size_limit = 64
+        # Most aggressive optimization. May lead to long compilation times and OOM errors for large models.
+        # Adjust settings if you encounter issues. E.g. dynamic=True can help
+        model.compile(fullgraph=True, mode="max-autotune")
 
     # Loss function for classification tasks like MNIST and CIFAR-10
     loss_fn = torch.nn.CrossEntropyLoss()
@@ -278,6 +287,27 @@ def run_training(args, callbacks=None):
     params_list += [{'params': other_params, 'lr': args.learning_rate}]
 
     if args.weight_decay is not None:
+        # weight decay should not be applied to learnable binarization parameters
+        # Would be nicer to implement this in the binarization layer itself (not sure if possible)
+        decay_params = []
+        no_decay_params = []
+        for name, param in model.named_parameters():
+            print(f"Parameter: {name}, requires_grad: {param.requires_grad}, shape: {param.shape}")
+
+            if not param.requires_grad:
+                continue
+
+            if "raw_diffs" in name:
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": decay_params, "weight_decay": args.weight_decay},
+                {"params": no_decay_params, "weight_decay": 0.0},
+            ]
+        )
         optimizer = torch.optim.AdamW(params_list, weight_decay=args.weight_decay)
     else:
         optimizer = torch.optim.Adam(params_list)

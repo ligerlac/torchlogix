@@ -1,5 +1,6 @@
 from typing import Union
 from abc import ABC, abstractmethod
+import itertools
 
 import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
@@ -7,6 +8,67 @@ from torch.nn.modules.utils import _pair, _triple
 
 from .functional import softmax, take_tuples, get_combination_indices
 
+
+def _sample_positions(
+    all_positions,
+    sample_size,
+    lut_rank,
+    tuple_mode,
+    device,
+):
+    num_positions = all_positions.shape[0]
+
+    if tuple_mode == "random":
+
+        idx = torch.randint(
+            0, num_positions,
+            (sample_size, lut_rank),
+            device=device,
+        )
+        return all_positions[idx]
+
+    elif tuple_mode == "no_self":
+
+        if num_positions < lut_rank:
+            raise ValueError("Not enough positions.")
+
+        tuples = []
+        for _ in range(sample_size):
+            perm = torch.randperm(
+                num_positions,
+                device=device
+            )[:lut_rank]
+            tuples.append(all_positions[perm])
+
+        return torch.stack(tuples, dim=0)
+
+    elif tuple_mode == "no_duplicates":
+
+        all_indices = list(
+            itertools.combinations(
+                range(num_positions),
+                lut_rank,
+            )
+        )
+
+        if len(all_indices) < sample_size:
+            raise ValueError(
+                "Not enough unique combinations."
+            )
+
+        chosen = torch.randperm(
+            len(all_indices),
+            device=device
+        )[:sample_size]
+
+        selected = [
+            torch.tensor(all_indices[i], device=device)
+            for i in chosen
+        ]
+
+        idx = torch.stack(selected, dim=0)
+        return all_positions[idx]
+    
 
 def setup_connections(
     connections: str,
@@ -314,8 +376,9 @@ class FixedConvConnections(Connections):
             conv_dimension: int = 2,
             lut_rank=2, 
             device=None,
-            init_method="random",
+            init_method="random",  # | "no_self" | "no_duplicates"
             channel_group_size: int = None,
+            channel_balance: str = None,  # None | "per_lut" | "per_tuple"
             **kwargs
         ):
         super().__init__(
@@ -348,130 +411,396 @@ class FixedConvConnections(Connections):
             assert channels > channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"
             )
+        self.channel_balance = channel_balance
         self.indices = self._init_connections()
         
     def _init_connections(self):
-        # Setup connections
-        if self.init_method == "random":
-            kernels = self._get_random_receptive_field_tensor()
-        elif self.init_method == "random-unique":
-            kernels = self._get_random_unique_receptive_field_tensor()
-        else:
-            raise ValueError(f"Unknown connections type: {self.init_method}")
+        kernels = self._get_receptive_field_tensor(
+            channel_balance=self.channel_balance,
+            tuple_mode=self.init_method,
+        )
+        # # Setup connections
+        # if self.init_method == "random":
+        #     kernels = self._get_random_receptive_field_tensor()
+        # elif self.init_method == "random-unique":
+        #     kernels = self._get_random_unique_receptive_field_tensor()
+        # else:
+        #     raise ValueError(f"Unknown connections type: {self.init_method}")
         # Build tree indices
         return self._get_indices_from_kernel_tensor(kernels)
-    
-    def _get_random_receptive_field_tensor(self):
-        """Generate random index tensor within the receptive field for each kernel.
-        May contain self connections and duplicate connections.
+
+
+    def _get_receptive_field_tensor(
+        self,
+        tuple_mode: str = "random", # "random" | "no_self" | "no_duplicates"
+        channel_balance: str = None,        # None | "per_lut" | "per_tuple"
+    ):
+        """
+        Fully configurable RF sampler.
 
         Returns:
-            indices: (lut_rank, num_kernels, sample_size, 3)
-                    where the last dim is (h, w, c)
+            coords: (lut_rank, num_kernels, sample_size, 3)
         """
+
+        print(f"get_receptive_field_tensor with channel_balance={channel_balance} and tuple_mode={tuple_mode}")
+
         c = self.channels
         g = self.channel_group_size
-        sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs! 
-
         device = self.device
 
-        size = (self.num_kernels, self.lut_rank, sample_size)
-        dim_indices = [torch.randint(0, dim, size, device=device) 
-                       for dim in self.receptive_field_size]
+        sample_size = self.lut_rank ** (self.tree_depth - 1)
+        total_inputs = self.lut_rank * sample_size
 
-        if g is None:
-            c_indices = torch.randint(0, c, size, device=device)
-        
-        elif g > 0:
-            # possible overlapping group starts
-            starts = torch.arange(0, c - g + 1, device=device)
-            num_groups = starts.numel()
+        if g is None and channel_balance is not None:
+            raise ValueError("Balanced modes require channel_group_size != None")
 
-            # one group per kernel, evenly assigned
-            group_start = starts[
-                torch.arange(self.num_kernels, device=device) % num_groups
-            ].view(self.num_kernels, 1, 1)
+        if channel_balance not in [None, "per_lut", "per_tuple"]:
+            raise ValueError(f"Unknown channel_balance: {channel_balance}")
 
-            # offsets inside group
-            offset = torch.randint(0, g, size, device=device)
-            c_indices = group_start + offset
+        if tuple_mode not in ["random", "no_self", "no_duplicates"]:
+            raise ValueError(f"Unknown tuple_mode: {tuple_mode}")
 
-        else:
-            raise ValueError(
-                f"Unknown channel_group_size: {g}"
-            )
+        # ---------------------------
+        # Precompute spatial grid
+        # ---------------------------
+        rf_axes = [
+            torch.arange(0, dim, device=device)
+            for dim in self.receptive_field_size
+        ]
 
-        # shape: (num_kernels, lut_rank, sample_size, dim)
-        indices = torch.stack((*dim_indices, c_indices), dim=-1)
-        return indices.transpose(0, 1)
+        spatial_grid = torch.meshgrid(*rf_axes, indexing="ij")
+        spatial_positions = torch.stack(
+            [g.flatten() for g in spatial_grid], dim=1
+        )
+        num_spatial = spatial_positions.shape[0]
 
-
-    def _get_random_unique_receptive_field_tensor(self):
-        """Generate random unique index tensor within the receptive field for each kernel.
-        - No self-connections inside a tuple (all positions distinct).
-        - No duplicate tuples within each kernel (unordered combinations).
-        - Channel connectivity constraints respected
-
-        Returns:
-            coords: tensor of shape (lut_rank, num_kernels, sample_size, 3)
-                    coords[t, k, s] is the (h, w, c) of the t-th element of the s-th tuple
-                    for kernel k.
-        """
-        c = self.channels
-        g = self.channel_group_size
-        sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs!
-        device = self.device
-
+        # ---------------------------
+        # Channel group setup
+        # ---------------------------
         if g is None:
             starts = None
-        elif g > 0:
+        else:
             starts = torch.arange(0, c - g + 1, device=device)
             num_groups = starts.numel()
-        else:
-            raise ValueError(
-                f"Unknown channel_group_size: {g}"
-            )
 
-        # All RF positions as (h, w, c)
-        rf_axes = [torch.arange(0, dim, device=device) for dim in self.receptive_field_size]
         coords_per_kernel = []
 
         for k in range(self.num_kernels):
-            # Determine allowed channel set for this kernel
+
+            # Determine channel set for kernel
             if g is None:
                 c_rf = torch.arange(0, c, device=device)
             else:
                 start = starts[k % num_groups]
                 c_rf = start + torch.arange(g, device=device)
 
-            # Determine allowed RF positions
-            grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
-            all_positions = torch.stack([g.flatten() for g in grid], dim=1)
-            num_positions = all_positions.shape[0]
+            # -------------------------------------------------------
+            # CHANNEL BALANCE STRATEGY
+            # -------------------------------------------------------
 
-            if num_positions < self.lut_rank:
-                raise ValueError(
-                    "Not enough unique receptive-field positions to "
-                    f"sample lut_rank={self.lut_rank} without replacement."
+            if channel_balance is None:
+
+                # full position space
+                grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
+                all_positions = torch.stack(
+                    [g.flatten() for g in grid], dim=1
                 )
-            
-            # sample unordered unique tuples
-            comb_indices = get_combination_indices(
-                n=num_positions,
-                k=self.lut_rank,
-                sample_size=sample_size,
-                num_sets=1,
-                device=self.device
-            ).squeeze(0)
 
-            coords_k = all_positions[comb_indices] # (sample_size, lut_rank, 3)
+                coords_k = _sample_positions(
+                    all_positions,
+                    sample_size,
+                    self.lut_rank,
+                    tuple_mode,
+                    device,
+                )
+
+            elif channel_balance == "per_lut":
+
+                if total_inputs % g != 0:
+                    raise ValueError(
+                        f"Cannot evenly distribute {total_inputs} "
+                        f"across {g} channels."
+                    )
+
+                inputs_per_channel = total_inputs // g
+                channel_chunks = []
+
+                for channel in c_rf:
+
+                    if tuple_mode == "allow_duplicates":
+                        idx = torch.randint(
+                            0, num_spatial,
+                            (inputs_per_channel,),
+                            device=device,
+                        )
+                    else:
+                        if num_spatial < inputs_per_channel:
+                            raise ValueError(
+                                "Not enough spatial positions for "
+                                "balanced per_lut sampling."
+                            )
+                        idx = torch.randperm(
+                            num_spatial,
+                            device=device
+                        )[:inputs_per_channel]
+
+                    chosen = spatial_positions[idx]
+
+                    ch_col = torch.full(
+                        (inputs_per_channel, 1),
+                        channel,
+                        device=device,
+                    )
+
+                    channel_chunks.append(
+                        torch.cat([chosen, ch_col], dim=1)
+                    )
+
+                coords_k = torch.cat(channel_chunks, dim=0)
+
+                # shuffle across LUT
+                perm = torch.randperm(total_inputs, device=device)
+                coords_k = coords_k[perm]
+
+                coords_k = coords_k.view(sample_size, self.lut_rank, 3)
+
+            elif channel_balance == "per_tuple":
+
+                if self.lut_rank % g != 0:
+                    raise ValueError(
+                        f"lut_rank={self.lut_rank} must be divisible "
+                        f"by channel_group_size={g} "
+                        "for per_tuple balancing."
+                    )
+
+                per_channel = self.lut_rank // g
+
+                tuples = []
+
+                for _ in range(sample_size):
+
+                    elems = []
+
+                    for channel in c_rf:
+
+                        if tuple_mode == "allow_duplicates":
+                            idx = torch.randint(
+                                0, num_spatial,
+                                (per_channel,),
+                                device=device,
+                            )
+                        else:
+                            if num_spatial < per_channel:
+                                raise ValueError(
+                                    "Not enough spatial positions."
+                                )
+                            idx = torch.randperm(
+                                num_spatial,
+                                device=device
+                            )[:per_channel]
+
+                        chosen = spatial_positions[idx]
+
+                        ch_col = torch.full(
+                            (per_channel, 1),
+                            channel,
+                            device=device,
+                        )
+
+                        elems.append(
+                            torch.cat([chosen, ch_col], dim=1)
+                        )
+
+                    tuple_coords = torch.cat(elems, dim=0)
+
+                    # shuffle inside tuple
+                    perm = torch.randperm(self.lut_rank, device=device)
+                    tuple_coords = tuple_coords[perm]
+
+                    tuples.append(tuple_coords)
+
+                coords_k = torch.stack(tuples, dim=0)
+
             coords_per_kernel.append(coords_k)
 
-        # Stack -> (lut_rank, num_kernels, sample_size, 3)
         coords = torch.stack(coords_per_kernel, dim=0)
         coords = coords.permute(2, 0, 1, 3)
 
-        return coords
+        return coords        
+    
+    # def _get_random_receptive_field_tensor(self):
+    #     """Generate random index tensor within the receptive field for each kernel.
+    #     May contain self connections and duplicate connections.
+
+    #     Returns:
+    #         indices: (lut_rank, num_kernels, sample_size, 3)
+    #                 where the last dim is (h, w, c)
+    #     """
+    #     c = self.channels
+    #     g = self.channel_group_size
+    #     sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs! 
+
+    #     device = self.device
+
+    #     size = (self.num_kernels, self.lut_rank, sample_size)
+    #     dim_indices = [torch.randint(0, dim, size, device=device) 
+    #                    for dim in self.receptive_field_size]
+
+    #     if g is None:
+    #         c_indices = torch.randint(0, c, size, device=device)
+        
+    #     elif g > 0:
+    #         # possible overlapping group starts
+    #         starts = torch.arange(0, c - g + 1, device=device)
+    #         num_groups = starts.numel()
+
+    #         # one group per kernel, evenly assigned
+    #         group_start = starts[
+    #             torch.arange(self.num_kernels, device=device) % num_groups
+    #         ].view(self.num_kernels, 1, 1)
+
+    #         # offsets inside group
+    #         offset = torch.randint(0, g, size, device=device)
+    #         c_indices = group_start + offset
+
+    #     else:
+    #         raise ValueError(
+    #             f"Unknown channel_group_size: {g}"
+    #         )
+
+    #     # shape: (num_kernels, lut_rank, sample_size, dim)
+    #     indices = torch.stack((*dim_indices, c_indices), dim=-1)
+    #     return indices.transpose(0, 1)
+
+    
+    # def _get_random_no_self_receptive_field_tensor(self):
+    #     """Generate random index tensor within the receptive field for each kernel.
+    #     - No self-connections inside a tuple (all positions distinct).
+    #     - May contain duplicate tuples across kernels.
+    #     - Channel connectivity constraints respected
+
+    #     Returns:
+    #         coords: tensor of shape (lut_rank, num_kernels, sample_size, 3)
+    #                 coords[t, k, s] is the (h, w, c) of the t-th element of the s-th tuple
+    #                 for kernel k.
+    #     """
+    #     # This is a simpler version of _get_random_unique_receptive_field_tensor that allows duplicates across kernels
+    #     c = self.channels
+    #     g = self.channel_group_size
+    #     sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs!
+    #     device = self.device
+
+    #     if g is None:
+    #         starts = None
+    #     elif g > 0:
+    #         starts = torch.arange(0, c - g + 1, device=device)
+    #         num_groups = starts.numel()
+    #     else:
+    #         raise ValueError(
+    #             f"Unknown channel_group_size: {g}"
+    #         )
+
+    #     # All RF positions as (h, w, c)
+    #     rf_axes = [torch.arange(0, dim, device=device) for dim in self.receptive_field_size]
+    #     coords_per_kernel = []
+
+    #     for k in range(self.num_kernels):
+    #         # Determine allowed channel set for this kernel
+    #         if g is None:
+    #             c_rf = torch.arange(0, c, device=device)
+    #         else:
+    #             start = starts[k % num_groups]
+    #             c_rf = start + torch.arange(g, device=device)
+
+    #         # Determine allowed RF positions
+    #         grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
+    #         all_positions = torch.stack([g.flatten() for g in grid], dim=1)
+
+    #         if all_positions.shape[0] < self.lut_rank:
+    #             raise ValueError(
+    #                 "Not enough unique receptive-field positions to "
+    #                 f"sample lut_rank={self.lut_rank} without replacement."
+    #             )
+            
+    #         # sample with replacement
+    #         indices = torch.randint(0, all_positions.shape[0], 
+    #                                 (sample_size, self.lut_rank), device=device)
+    #         coords_k = all_positions[indices] # (sample_size, lut_rank, 3)
+    #         coords_per_kernel.append(coords_k)
+
+    #     # Stack -> (lut_rank, num_kernels, sample_size, 3)
+    #     coords = torch.stack(coords_per_kernel, dim=0)
+    #     coords = coords.permute(2, 0, 1, 3)
+
+    #     return coords
+
+
+    # def _get_random_unique_receptive_field_tensor(self):
+    #     """Generate random unique index tensor within the receptive field for each kernel.
+    #     - No self-connections inside a tuple (all positions distinct).
+    #     - No duplicate tuples within each kernel (unordered combinations).
+    #     - Channel connectivity constraints respected
+
+    #     Returns:
+    #         coords: tensor of shape (lut_rank, num_kernels, sample_size, 3)
+    #                 coords[t, k, s] is the (h, w, c) of the t-th element of the s-th tuple
+    #                 for kernel k.
+    #     """
+    #     c = self.channels
+    #     g = self.channel_group_size
+    #     sample_size = self.lut_rank ** (self.tree_depth - 1)  # number of gates, not inputs!
+    #     device = self.device
+
+    #     if g is None:
+    #         starts = None
+    #     elif g > 0:
+    #         starts = torch.arange(0, c - g + 1, device=device)
+    #         num_groups = starts.numel()
+    #     else:
+    #         raise ValueError(
+    #             f"Unknown channel_group_size: {g}"
+    #         )
+
+    #     # All RF positions as (h, w, c)
+    #     rf_axes = [torch.arange(0, dim, device=device) for dim in self.receptive_field_size]
+    #     coords_per_kernel = []
+
+    #     for k in range(self.num_kernels):
+    #         # Determine allowed channel set for this kernel
+    #         if g is None:
+    #             c_rf = torch.arange(0, c, device=device)
+    #         else:
+    #             start = starts[k % num_groups]
+    #             c_rf = start + torch.arange(g, device=device)
+
+    #         # Determine allowed RF positions
+    #         grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
+    #         all_positions = torch.stack([g.flatten() for g in grid], dim=1)
+    #         num_positions = all_positions.shape[0]
+
+    #         if num_positions < self.lut_rank:
+    #             raise ValueError(
+    #                 "Not enough unique receptive-field positions to "
+    #                 f"sample lut_rank={self.lut_rank} without replacement."
+    #             )
+            
+    #         # sample unordered unique tuples
+    #         comb_indices = get_combination_indices(
+    #             n=num_positions,
+    #             k=self.lut_rank,
+    #             sample_size=sample_size,
+    #             num_sets=1,
+    #             device=self.device
+    #         ).squeeze(0)
+
+    #         coords_k = all_positions[comb_indices] # (sample_size, lut_rank, 3)
+    #         coords_per_kernel.append(coords_k)
+
+    #     # Stack -> (lut_rank, num_kernels, sample_size, 3)
+    #     coords = torch.stack(coords_per_kernel, dim=0)
+    #     coords = coords.permute(2, 0, 1, 3)
+
+    #     return coords
 
     def _apply_sliding_window_tensor(self, tensor):
         """Apply sliding window offsets to receptive field tensor.

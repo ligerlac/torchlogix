@@ -130,6 +130,7 @@ class ClgnMnist(torch.nn.Sequential):
 
         super(ClgnMnist, self).__init__(*layers, GroupSum(k=10, tau=tau))
 
+
 class ClgnMnistTiny(ClgnMnist):
     def __init__(self, **llkw):
         tau = llkw.get("tau", 1.0)
@@ -165,6 +166,7 @@ class ClgnCifar10(torch.nn.Sequential):
     k_num = None
     tau = None
     group_size = None
+    group_size_input = None
 
     def __init__(self, thresholds: torch.Tensor, binarization: str, binarization_kwargs: dict, connections_kwargs: dict, **llkw):
         assert thresholds.shape[-1] == self.n_input_bits, f"{self.__class__.__name__} model requires {self.n_input_bits}-bit thresholds."
@@ -176,6 +178,8 @@ class ClgnCifar10(torch.nn.Sequential):
         connections_kwargs = dict(connections_kwargs)  # make a copy to avoid modifying the original
         connections_kwargs["channel_group_size"] = self.group_size  # from the paper, we use grouped connections with channel group size 2 for conv layers
 
+        group_size_input = self.group_size_input if self.group_size_input is not None else self.group_size
+        
         print(f"connctions_kwargs for {self.__class__.__name__}: {connections_kwargs}")
 
         layers = [binarization_module]
@@ -187,7 +191,7 @@ class ClgnCifar10(torch.nn.Sequential):
                 tree_depth=3,
                 receptive_field_size=3,
                 padding=1,
-                connections_kwargs=connections_kwargs,
+                connections_kwargs=connections_kwargs | {"channel_group_size": group_size_input},
                 **llkw,
             )
         )
@@ -307,3 +311,18 @@ class ClgnCifar10LargeG1(ClgnCifar10):
     tau = 280
     group_size = 1
 
+
+class ClgnCifar10SmallGmixedA(ClgnCifar10):
+    n_input_bits = 2
+    k_num = 32
+    tau = 20
+    group_size = 2
+    group_size_input = 1
+
+
+class ClgnCifar10MediumGmixedA(ClgnCifar10):
+    n_input_bits = 2
+    k_num = 256
+    tau = 40
+    group_size = 2
+    group_size_input = 1

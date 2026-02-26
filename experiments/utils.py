@@ -33,11 +33,16 @@ def load_dataset(args):
             f"{data_path}/data-cifar", train=False, transform=transform
         )
     
-    train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
-    valid_set_size = len(train_set) - train_set_size
-    train_set, validation_set = torch.utils.data.random_split(
-        train_set, [train_set_size, valid_set_size]
-    )
+    if args.valid_set_size > 0:
+        train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
+        valid_set_size = len(train_set) - train_set_size
+        train_set, validation_set = torch.utils.data.random_split(
+            train_set, [train_set_size, valid_set_size]
+        )
+    else:
+        print(f"Training on entire training set. Using test set as validation set.")
+        validation_set = test_set
+
 
     train_loader = torch.utils.data.DataLoader(
             train_set,
@@ -83,6 +88,7 @@ def get_model(thresholds, args):
         "connections": args.connections,
         "connections_kwargs": {
             "init_method": args.connections_init_method,
+            "channel_balance": args.connections_channel_balance,
             "temperature": args.connections_temperature,
             "gumbel": args.connections_gumbel
             },
