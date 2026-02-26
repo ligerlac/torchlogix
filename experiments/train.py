@@ -251,8 +251,6 @@ def run_training(args, callbacks=None):
     model.to(args.device)
     print(model)
 
-    print(f"model.parameters(): {[p.shape for p in model.parameters()]}")
-
     if args.compile_model:
         print("JIT compilation has been chosen.")
         print("The first iteration will be slower due to compilation overhead.")
@@ -287,7 +285,6 @@ def run_training(args, callbacks=None):
         decay_params = []
         no_decay_params = []
         for name, param in model.named_parameters():
-            print(f"Parameter: {name}, requires_grad: {param.requires_grad}, shape: {param.shape}")
 
             if not param.requires_grad:
                 continue
