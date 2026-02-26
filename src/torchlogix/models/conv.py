@@ -249,70 +249,28 @@ class ClgnCifar10(torch.nn.Sequential):
 
 
 
-class ClgnCifar10SmallGNone(ClgnCifar10):
-    n_input_bits = 2
-    k_num = 32
-    tau = 20
-    group_size = None
-
-
-class ClgnCifar10MediumGNone(ClgnCifar10):
-    n_input_bits = 2
-    k_num = 256
-    tau = 40
-    group_size = None
-
-
-class ClgnCifar10LargeGNone(ClgnCifar10):
-    n_input_bits = 5
-    k_num = 512
-    tau = 280
-    group_size = None
-
-
-class ClgnCifar10SmallG2(ClgnCifar10):
+class ClgnCifar10Small(ClgnCifar10):
     n_input_bits = 2
     k_num = 32
     tau = 20
     group_size = 2
 
 
-class ClgnCifar10MediumG2(ClgnCifar10):
+class ClgnCifar10Medium(ClgnCifar10):
     n_input_bits = 2
     k_num = 256
     tau = 40
     group_size = 2
 
 
-class ClgnCifar10LargeG2(ClgnCifar10):
+class ClgnCifar10Large(ClgnCifar10):
     n_input_bits = 5
     k_num = 512
     tau = 280
     group_size = 2
 
 
-class ClgnCifar10SmallG1(ClgnCifar10):
-    n_input_bits = 2
-    k_num = 32
-    tau = 20
-    group_size = 1
-
-
-class ClgnCifar10MediumG1(ClgnCifar10):
-    n_input_bits = 2
-    k_num = 256
-    tau = 40
-    group_size = 1
-
-
-class ClgnCifar10LargeG1(ClgnCifar10):
-    n_input_bits = 5
-    k_num = 512
-    tau = 280
-    group_size = 1
-
-
-class ClgnCifar10SmallGmixedA(ClgnCifar10):
+class ClgnCifar10Small2(ClgnCifar10):
     n_input_bits = 2
     k_num = 32
     tau = 20
@@ -320,7 +278,7 @@ class ClgnCifar10SmallGmixedA(ClgnCifar10):
     group_size_input = 1
 
 
-class ClgnCifar10MediumGmixedA(ClgnCifar10):
+class ClgnCifar10Medium2(ClgnCifar10):
     n_input_bits = 2
     k_num = 256
     tau = 40

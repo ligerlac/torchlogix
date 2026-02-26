@@ -91,7 +91,7 @@ def get_parser():
     )
     parser.add_argument(
         "--connections-init-method", type=str, choices=["random", "random-unique"],
-        default="random", help="Connection initilization strategy"
+        default="random", help="Connection initialization strategy"
     )
     parser.add_argument(
         "--connections-temperature", type=float, default=0.001,
@@ -155,7 +155,7 @@ def get_parser():
         help="Temperature for softplus in learnable binarization"
     )
     parser.add_argument(
-        "--binarization-learning-rate", type=float, default=0.01,
+        "--binarization-learning-rate", type=float, default=None,
         help="Learning rate for binarization (as fraction of main learning rate). If None, uses main learning rate."
     )
     parser.add_argument(
