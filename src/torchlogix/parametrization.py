@@ -1,6 +1,6 @@
-"""LUT parametrization strategies for logic gate networks.
+"""LUT parametrization strategies for logic neural networks.
 This module provides different ways to parametrize Look-Up Tables (LUTs)
-in logic gate networks, using either raw truth table logits,
+in logic neural networks, using either raw truth table logits,
 Walsh-Hadamard basis coefficients, or the indicator-polynomial ('light') basis.
 """
 

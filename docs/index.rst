@@ -1,43 +1,17 @@
 TorchLogix Documentation
 ========================
 
-**TorchLogix** is a PyTorch library for differentiable logic gate neural networks. It extends the original DiffLogic work with enhanced features, improved usability, and comprehensive documentation.
+**TorchLogix** is a PyTorch-based library for training and inference of **logic neural networks**.
+These solve machine learning tasks by learning combinations of boolean logic expressions.
+As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods.
+The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
+million images of MNIST per second on a single CPU core.
 
 .. note::
-   TorchLogix builds upon the foundational work of `DiffLogic <https://github.com/Felix-Petersen/difflogic>`_ by Felix Petersen et al.
-   This library provides extensions and improvements while maintaining compatibility with the original concepts.
-
-Key Features
-------------
-
-* **Differentiable Logic Gates**: Implement neural networks using 16 different binary logical operations
-* **Convolutional Support**: 2D and 3D logic convolutional layers with flexible receptive fields
-* **Model Compilation**: Convert trained logic networks to optimized implementations
-* **GPU Support**: CUDA-accelerated training and inference for high-performance computing
-* **Easy Integration**: New layers mostly follow PyTorch conventions
-
-Quick Start
------------
-
-.. code-block:: python
-
-   import torch
-   from torchlogix.layers import LogicDense, LogicConv2d
-   from torchlogix.models import CNN
-
-   # Create a simple logic dense layer
-   layer = LogicDense(in_dim=784, out_dim=128, tree_depth=3)
-
-   # Create a logic convolutional layer
-   conv = LogicConv2d(
-       in_dim=(28, 28),
-       num_kernels=16,
-       tree_depth=3,
-       receptive_field_size=5
-   )
-
-   # Use pre-built models
-   model = CNN(class_count=10, tau=1.0)
+   TorchLogix is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)),
+   and extends it by new concepts such as compact parametrizations, higher-dimensional logic blocks, learnable connections and binarization as
+   described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)).
+   It also implements convolutions as described in "Convolutional Differentiable Logic Gate Networks (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)).
 
 Documentation Contents
 ----------------------
@@ -48,8 +22,7 @@ Documentation Contents
 
    guides/installation
    guides/quickstart
-   guides/logic_gates
-   guides/examples
+   guides/concepts
 
 .. toctree::
    :maxdepth: 2
@@ -59,12 +32,6 @@ Documentation Contents
    api/layers
    api/models
    api/functional
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Development
-
-   guides/contributing
 
 Indices and Tables
 ==================
