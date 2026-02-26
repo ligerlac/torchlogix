@@ -77,11 +77,11 @@ verilog_code_str = compiled_model.get_verilog_code()
 
 Various experiments can be run using the script `experiments/train.py`. For example, the medium-sized convolutional model on CIFAR-10 from the paper  "Convolutional Differentiable Logic Gate Networks", can be trained like so:
 ```
-python train.py --dataset cifar-10 -a ClgnCifar10Medium --connections-init-method unique-random -lr 0.02 -wd 0.002 --device cuda --compile-model
+python train.py --dataset cifar-10 -a ClgnCifar10Medium --connections-init-method random-unique -lr 0.02 -wd 0.002 --device cuda --compile-model
 ```
 This achieves roughly 66% discrete test accurcay, which can be increased to 68.5% with the same architecture by learning the binarization thresholds and restricting each kernel in the first layer to just a single channel:
 ```
-python train.py --dataset cifar-10 -a ClgnCifar10Medium2 --connections-init-method unique-random --binarization learnable -lr 0.02 -wd 0.002 --binarization-learning-rate 0.01 --device cuda --compile-model
+python train.py --dataset cifar-10 -a ClgnCifar10Medium2 --connections-init-method random-unique --binarization learnable -lr 0.02 -wd 0.002 --binarization-learning-rate 0.01 --device cuda --compile-model
 ```
 The training converges within roughly 30 minutes on an `A100`. The accuracy can be increased further with data augmentation, and knowledge distillation but details of the training procedure are beyond the scope of this package.
 
