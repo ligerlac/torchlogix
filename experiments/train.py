@@ -90,13 +90,8 @@ def get_parser():
         default="fixed", help="Connection strategy"
     )
     parser.add_argument(
-        # "--connections-init-method", type=str, choices=["random", "random-unique", "random2"],
-        "--connections-init-method", type=str, choices=["random", "no_self", "no_duplicates"],
+        "--connections-init-method", type=str, choices=["random", "random-unique"],
         default="random", help="Connection initilization strategy"
-    )
-    parser.add_argument(
-        "--connections-channel-balance", type=str, choices=[None, "per_lut", "per_tuple"],
-        default=None, help="Connection channel balance strategy. Only applicable for conv models with group size > 1."
     )
     parser.add_argument(
         "--connections-temperature", type=float, default=0.001,

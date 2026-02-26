@@ -88,7 +88,6 @@ def get_model(thresholds, args):
         "connections": args.connections,
         "connections_kwargs": {
             "init_method": args.connections_init_method,
-            "channel_balance": args.connections_channel_balance,
             "temperature": args.connections_temperature,
             "gumbel": args.connections_gumbel
             },
