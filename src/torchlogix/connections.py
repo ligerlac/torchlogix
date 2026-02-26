@@ -27,22 +27,7 @@ def _sample_positions(
         )
         return all_positions[idx]
 
-    elif tuple_mode == "no_self":
-
-        if num_positions < lut_rank:
-            raise ValueError("Not enough positions.")
-
-        tuples = []
-        for _ in range(sample_size):
-            perm = torch.randperm(
-                num_positions,
-                device=device
-            )[:lut_rank]
-            tuples.append(all_positions[perm])
-
-        return torch.stack(tuples, dim=0)
-
-    elif tuple_mode == "no_duplicates":
+    elif tuple_mode == "random-unique":
 
         all_indices = list(
             itertools.combinations(
@@ -376,9 +361,8 @@ class FixedConvConnections(Connections):
             conv_dimension: int = 2,
             lut_rank=2, 
             device=None,
-            init_method="random",  # | "no_self" | "no_duplicates"
+            init_method="random",  # | "random-unique"
             channel_group_size: int = None,
-            channel_balance: str = None,  # None | "per_lut" | "per_tuple"
             **kwargs
         ):
         super().__init__(
@@ -411,12 +395,10 @@ class FixedConvConnections(Connections):
             assert channels > channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"
             )
-        self.channel_balance = channel_balance
         self.indices = self._init_connections()
         
     def _init_connections(self):
         kernels = self._get_receptive_field_tensor(
-            channel_balance=self.channel_balance,
             tuple_mode=self.init_method,
         )
         # # Setup connections
@@ -432,8 +414,7 @@ class FixedConvConnections(Connections):
 
     def _get_receptive_field_tensor(
         self,
-        tuple_mode: str = "random", # "random" | "no_self" | "no_duplicates"
-        channel_balance: str = None,        # None | "per_lut" | "per_tuple"
+        tuple_mode: str = "random", # "random" | "random-unique"
     ):
         """
         Fully configurable RF sampler.
@@ -442,8 +423,6 @@ class FixedConvConnections(Connections):
             coords: (lut_rank, num_kernels, sample_size, 3)
         """
 
-        print(f"get_receptive_field_tensor with channel_balance={channel_balance} and tuple_mode={tuple_mode}")
-
         c = self.channels
         g = self.channel_group_size
         device = self.device
@@ -451,13 +430,7 @@ class FixedConvConnections(Connections):
         sample_size = self.lut_rank ** (self.tree_depth - 1)
         total_inputs = self.lut_rank * sample_size
 
-        if g is None and channel_balance is not None:
-            raise ValueError("Balanced modes require channel_group_size != None")
-
-        if channel_balance not in [None, "per_lut", "per_tuple"]:
-            raise ValueError(f"Unknown channel_balance: {channel_balance}")
-
-        if tuple_mode not in ["random", "no_self", "no_duplicates"]:
+        if tuple_mode not in ["random", "random-unique"]:
             raise ValueError(f"Unknown tuple_mode: {tuple_mode}")
 
         # ---------------------------
@@ -498,7 +471,7 @@ class FixedConvConnections(Connections):
             # CHANNEL BALANCE STRATEGY
             # -------------------------------------------------------
 
-            if channel_balance is None:
+            if g is None:
 
                 # full position space
                 grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
@@ -514,8 +487,9 @@ class FixedConvConnections(Connections):
                     device,
                 )
 
-            elif channel_balance == "per_lut":
+            else:
 
+                # balance across channels first, then spatial positions within each channel
                 if total_inputs % g != 0:
                     raise ValueError(
                         f"Cannot evenly distribute {total_inputs} "
@@ -563,63 +537,6 @@ class FixedConvConnections(Connections):
                 coords_k = coords_k[perm]
 
                 coords_k = coords_k.view(sample_size, self.lut_rank, 3)
-
-            elif channel_balance == "per_tuple":
-
-                if self.lut_rank % g != 0:
-                    raise ValueError(
-                        f"lut_rank={self.lut_rank} must be divisible "
-                        f"by channel_group_size={g} "
-                        "for per_tuple balancing."
-                    )
-
-                per_channel = self.lut_rank // g
-
-                tuples = []
-
-                for _ in range(sample_size):
-
-                    elems = []
-
-                    for channel in c_rf:
-
-                        if tuple_mode == "allow_duplicates":
-                            idx = torch.randint(
-                                0, num_spatial,
-                                (per_channel,),
-                                device=device,
-                            )
-                        else:
-                            if num_spatial < per_channel:
-                                raise ValueError(
-                                    "Not enough spatial positions."
-                                )
-                            idx = torch.randperm(
-                                num_spatial,
-                                device=device
-                            )[:per_channel]
-
-                        chosen = spatial_positions[idx]
-
-                        ch_col = torch.full(
-                            (per_channel, 1),
-                            channel,
-                            device=device,
-                        )
-
-                        elems.append(
-                            torch.cat([chosen, ch_col], dim=1)
-                        )
-
-                    tuple_coords = torch.cat(elems, dim=0)
-
-                    # shuffle inside tuple
-                    perm = torch.randperm(self.lut_rank, device=device)
-                    tuple_coords = tuple_coords[perm]
-
-                    tuples.append(tuple_coords)
-
-                coords_k = torch.stack(tuples, dim=0)
 
             coords_per_kernel.append(coords_k)
 
