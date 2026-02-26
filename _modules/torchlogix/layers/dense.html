@@ -7,15 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>torchlogix.layers.dense &mdash; TorchLogix 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
 
   
       <script src="../../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../../_static/documentation_options.js?v=01f34227"></script>
-      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../../../_static/copybutton.js?v=30646c52"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
@@ -86,37 +86,34 @@
            <div itemprop="articleBody">
              
   <h1>Source code for torchlogix.layers.dense</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">rich</span><span class="w"> </span><span class="kn">import</span> <span class="nb">print</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.common_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">_size_2_t</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.modules.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">_pair</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">gumbel_softmax</span><span class="p">,</span> <span class="n">softmax</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">product</span>
-
+<span class="kn">from</span><span class="w"> </span><span class="nn">..connections</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_connections</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..functional</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">GradFactor</span><span class="p">,</span>
-    <span class="n">bin_op_s</span><span class="p">,</span>
-    <span class="n">get_unique_connections</span><span class="p">,</span>
-    <span class="n">gumbel_sigmoid</span><span class="p">,</span>
-    <span class="n">soft_raw</span><span class="p">,</span>
-    <span class="n">soft_walsh</span><span class="p">,</span>
-    <span class="n">hard_raw</span><span class="p">,</span>
-    <span class="n">hard_walsh</span><span class="p">,</span>
-    <span class="n">WALSH_COEFFICIENTS</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..packbitstensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">PackBitsTensor</span>
+    <span class="n">GradFactor</span><span class="p">,</span> <span class="n">get_regularization_loss</span><span class="p">,</span> <span class="n">rescale_weights</span>
+    <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicBase</span>
 
-
-<span class="c1">##########################################################################</span>
 
 <div class="viewcode-block" id="LogicDense">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">LogicDense</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    The core module for differentiable logic gate networks. Provides a differentiable logic gate layer.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LogicDense</span><span class="p">(</span><span class="n">LogicBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fully-connected logic gate layer with differentiable learning.</span>
+
+<span class="sd">    This module provides the core implementation of Differentiable Deep Logic</span>
+<span class="sd">    Gate Networks. Each neuron learns a Boolean logic function (LUT) that</span>
+<span class="sd">    operates on a subset of input features.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        in_dim (int): Number of input features.</span>
+<span class="sd">        out_dim (int): Number of neurons (output features).</span>
+<span class="sd">        device (str): Device to run the layer on (&#39;cpu&#39; or &#39;cuda&#39;).</span>
+<span class="sd">        grad_factor (float): Gradient scaling factor.</span>
+<span class="sd">        lut_rank (int): Rank of the LUTs used in the layer.</span>
+<span class="sd">        parametrization (str): Type of parametrization to use (&#39;raw&#39;, &#39;warp&#39;, &#39;light&#39;).</span>
+<span class="sd">        parametrization_kwargs (dict): Additional keyword arguments for parametrization.</span>
+<span class="sd">        connections (str): Type of connections to use (&#39;fixed&#39;, &#39;learnable&#39;, etc.).</span>
+<span class="sd">        connections_kwargs (dict): Additional keyword arguments for connections.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="LogicDense.__init__">
@@ -127,346 +124,143 @@
         <span class="n">out_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
         <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-        <span class="n">implementation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;random&quot;</span><span class="p">,</span>
-        <span class="n">weight_init</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;residual&quot;</span><span class="p">,</span>  <span class="c1"># &quot;residual&quot; or &quot;random&quot;</span>
-        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>  <span class="c1"># standard or walsh or anf</span>
-        <span class="n">temperature</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-        <span class="n">forward_sampling</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;soft&quot;</span>  <span class="c1"># &quot;soft&quot;, &quot;hard&quot;, &quot;gumbel_soft&quot;, &quot;gumbel_hard&quot;</span>
+        <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        :param in_dim:      input dimensionality of the layer</span>
-<span class="sd">        :param out_dim:     output dimensionality of the layer</span>
-<span class="sd">        :param device:      device (options: &#39;cuda&#39; / &#39;cpu&#39;)</span>
-<span class="sd">        :param grad_factor: for deep models (&gt;6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients</span>
-<span class="sd">        :param implementation: implementation to use (options: &#39;cuda&#39; / &#39;python&#39;).</span>
-<span class="sd">        :param connections: method for initializing the connectivity of the logic gate net</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">=</span> <span class="n">parametrization</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span> <span class="o">=</span> <span class="n">temperature</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">=</span> <span class="n">forward_sampling</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">weight_init</span> <span class="o">=</span> <span class="n">weight_init</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;raw&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;residual&quot;</span><span class="p">:</span>
-                <span class="c1"># all weights to 0 except for weight number 3, which is set to 5</span>
-                <span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">out_dim</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                <span class="n">weights</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mf">5.0</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">parameter</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">parameter</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">out_dim</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">weight_init</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;walsh&quot;</span><span class="p">,</span> <span class="s2">&quot;anf&quot;</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;residual&quot;</span><span class="p">:</span>
-                <span class="c1"># chose randomly from walsh_coefficients, but prefer id=10</span>
-                <span class="n">walsh_coefficients_tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">WALSH_COEFFICIENTS</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                <span class="n">weights</span> <span class="o">=</span> <span class="n">walsh_coefficients_tensor</span><span class="p">[</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="p">(</span><span class="n">out_dim</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                <span class="p">]</span>
-                <span class="n">n</span> <span class="o">=</span> <span class="n">out_dim</span> <span class="o">//</span> <span class="mi">2</span>
-                <span class="c1"># set half of weights to id=10 (pick index randomly)</span>
-                <span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="n">out_dim</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                <span class="n">weights</span><span class="p">[</span><span class="n">indices</span><span class="p">[:</span><span class="n">n</span><span class="p">]]</span> <span class="o">=</span> <span class="n">walsh_coefficients_tensor</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">parameter</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">parameter</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">out_dim</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.1</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">weight_init</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="p">)</span>
-        
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">grad_factor</span><span class="o">=</span><span class="n">grad_factor</span><span class="p">,</span>
+            <span class="n">lut_rank</span><span class="o">=</span><span class="n">lut_rank</span><span class="p">,</span>
+            <span class="n">parametrization</span><span class="o">=</span><span class="n">parametrization</span><span class="p">,</span>
+            <span class="n">parametrization_kwargs</span><span class="o">=</span><span class="n">parametrization_kwargs</span><span class="p">,</span>
+            <span class="n">connections</span><span class="o">=</span><span class="n">connections</span><span class="p">,</span>
+            <span class="n">connections_kwargs</span><span class="o">=</span><span class="n">connections_kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span> <span class="o">=</span> <span class="n">in_dim</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span> <span class="o">=</span> <span class="n">out_dim</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span> <span class="o">=</span> <span class="n">grad_factor</span>
-
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only</span>
-<span class="sd">        available for device=&#39;cuda&#39;. The `python` implementation exists for 2 reasons:</span>
-<span class="sd">        1. To provide an easy-to-understand implementation of differentiable logic gate networks</span>
-<span class="sd">        2. To provide a CPU implementation of differentiable logic gate networks</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="o">=</span> <span class="n">implementation</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">device</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="o">=</span> <span class="s2">&quot;python&quot;</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="s2">&quot;python&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">connections</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;random&quot;</span><span class="p">,</span> <span class="s2">&quot;unique&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_connections</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">:</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">            Defining additional indices for improving the efficiency of the backward of the CUDA implementation.</span>
-<span class="sd">            &quot;&quot;&quot;</span>
-            <span class="n">given_x_indices_of_y</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)]</span>
-            <span class="n">indices_0_np</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-            <span class="n">indices_1_np</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-            <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">out_dim</span><span class="p">):</span>
-                <span class="n">given_x_indices_of_y</span><span class="p">[</span><span class="n">indices_0_np</span><span class="p">[</span><span class="n">y</span><span class="p">]]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
-                <span class="n">given_x_indices_of_y</span><span class="p">[</span><span class="n">indices_1_np</span><span class="p">[</span><span class="n">y</span><span class="p">]]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">given_x_indices_of_y_start</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">g</span><span class="p">)</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">given_x_indices_of_y</span><span class="p">])</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(),</span>
-                <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
-                <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">given_x_indices_of_y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span>
-                <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">sublist</span> <span class="ow">in</span> <span class="n">given_x_indices_of_y</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">sublist</span><span class="p">],</span>
-                <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
-                <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
-            <span class="p">)</span>
-
+        <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">(</span><span class="n">out_dim</span><span class="o">=</span><span class="n">out_dim</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_connections</span><span class="p">()</span>
+        <span class="c1"># Legacy attributes for compatibility</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_neurons</span> <span class="o">=</span> <span class="n">out_dim</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_weights</span> <span class="o">=</span> <span class="n">out_dim</span></div>
 
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">out_dim</span><span class="p">):</span>
+        <span class="c1"># Initialize weights using parametrization</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">init_weights</span><span class="p">(</span>
+            <span class="n">out_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+
 <div class="viewcode-block" id="LogicDense.forward">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.forward">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">PackBitsTensor</span><span class="p">):</span>
-            <span class="k">assert</span> <span class="p">(</span>
-                <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span>
-            <span class="p">),</span> <span class="s2">&quot;PackBitsTensor is not supported for the differentiable training mode.&quot;</span>
-            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="p">(</span>
-                <span class="s2">&quot;PackBitsTensor is only supported for CUDA, not for </span><span class="si">{}</span><span class="s2">. &quot;</span>
-                <span class="s2">&quot;If you want fast inference on CPU, please use CompiledDiffLogicModel.&quot;</span>
-                <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="p">)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Applies the LogicDense transformation to the input.</span>
 
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span> <span class="o">!=</span> <span class="mf">1.0</span><span class="p">:</span>
-                <span class="n">x</span> <span class="o">=</span> <span class="n">GradFactor</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span><span class="p">)</span>
+<span class="sd">        For each neuron, the layer:</span>
+<span class="sd">        1. Selects ``lut_rank`` input features according to the connection</span>
+<span class="sd">           pattern in ``self.indices``.</span>
+<span class="sd">        2. Samples (or selects) LUT weights based on ``self.weight`` and</span>
+<span class="sd">           the sampler strategy.</span>
+<span class="sd">        3. Evaluates the resulting binary operation.</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">PackBitsTensor</span><span class="p">):</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_cuda_eval</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_cuda</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">implementation</span> <span class="o">==</span> <span class="s2">&quot;python&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_python</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">implementation</span><span class="p">)</span></div>
+<span class="sd">        Args:</span>
+<span class="sd">            x: Input tensor of shape ``(..., in_dim)``. The last dimension must</span>
+<span class="sd">                match ``self.in_dim``.</span>
 
-
-<div class="viewcode-block" id="LogicDense.forward_python">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.forward_python">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">forward_python</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">torch</span><span class="o">.</span><span class="n">int64</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
-        <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;raw&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;soft&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">soft_raw</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;hard&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">hard_raw</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_soft&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">gumbel_softmax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_hard&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">gumbel_softmax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-                <span class="n">x</span> <span class="o">=</span> <span class="n">bin_op_s</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">float32</span>
-                <span class="p">)</span>
-                <span class="n">x</span> <span class="o">=</span> <span class="n">bin_op_s</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">weights</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;walsh&quot;</span><span class="p">:</span>
-            <span class="n">A</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">a</span> <span class="o">-</span><span class="mi">1</span>
-            <span class="n">B</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">b</span> <span class="o">-</span><span class="mi">1</span>
-            <span class="n">basis</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-                <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">A</span><span class="p">),</span>
-                <span class="n">A</span><span class="p">,</span>
-                <span class="n">B</span><span class="p">,</span>
-                <span class="n">A</span><span class="o">*</span><span class="n">B</span>
-            <span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-            <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">*</span> <span class="n">basis</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;soft&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">soft_walsh</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;hard&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">hard_walsh</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_soft&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">gumbel_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_hard&quot;</span><span class="p">:</span>
-                    <span class="n">x</span> <span class="o">=</span> <span class="n">gumbel_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">x</span></div>
-
-
-<div class="viewcode-block" id="LogicDense.forward_cuda">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.forward_cuda">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cuda</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">device</span>
-        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span>
-
-        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
-
-        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)</span>
-
-        <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-            <span class="n">w</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">LogicDenseCudaFunction</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
-                <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">given_x_indices_of_y_start</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">given_x_indices_of_y</span>
-            <span class="p">)</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">w</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-                <span class="k">return</span> <span class="n">LogicDenseCudaFunction</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
-                    <span class="n">x</span><span class="p">,</span>
-                    <span class="n">a</span><span class="p">,</span>
-                    <span class="n">b</span><span class="p">,</span>
-                    <span class="n">w</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">given_x_indices_of_y_start</span><span class="p">,</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">given_x_indices_of_y</span><span class="p">,</span>
-                <span class="p">)</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="LogicDense.forward_cuda_eval">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.forward_cuda_eval">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cuda_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">PackBitsTensor</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        WARNING: this is an in-place operation.</span>
-
-<span class="sd">        :param x:</span>
-<span class="sd">        :return:</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            A tensor of shape ``(..., out_dim)`` containing the neuron outputs.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">assert</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span>
-        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">PackBitsTensor</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span>
+        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)</span>
 
-        <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span>
-        <span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
-        <span class="n">x</span><span class="o">.</span><span class="n">t</span> <span class="o">=</span> <span class="n">torchlogix_cuda</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">t</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span> <span class="o">!=</span> <span class="mf">1.0</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">GradFactor</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">x</span></div>
+        <span class="c1"># Extract inputs according to connection pattern</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Shape: (batch_size, lut_rank, out_dim)</span>
+
+        <span class="c1"># Delegate to parametrization with einsum contraction</span>
+        <span class="c1"># b=batch, n=neurons, k=num_basis</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
+            <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
+            <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;n,bn-&gt;bn&#39;</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="LogicDense.extra_repr">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.extra_repr">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">extra_repr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">, </span><span class="si">{}</span><span class="s2">, </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">,</span> <span class="s2">&quot;train&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="k">else</span> <span class="s2">&quot;eval&quot;</span>
-        <span class="p">)</span></div>
+        <span class="n">weight_repr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Parameter containing: [</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> of size </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">is_cuda</span><span class="p">:</span>
+            <span class="n">weight_repr</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="n">weight_repr</span> <span class="o">+=</span> <span class="s2">&quot;]&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="si">}</span><span class="se">\n</span><span class="s2">weight: </span><span class="si">{</span><span class="n">weight_repr</span><span class="si">}</span><span class="se">\n</span><span class="s2">parametrization: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="se">\n</span><span class="s2">connections: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="si">}</span><span class="s2">&quot;</span></div>
 
 
-<div class="viewcode-block" id="LogicDense.get_connections">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_connections">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_connections</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connections</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">):</span>
-        <span class="c1"># assert self.out_dim * 2 &gt;= self.in_dim, &#39;The number of neurons ({}) must not be smaller than half of the &#39; \</span>
-        <span class="c1">#                                        &#39;number of inputs ({}) because otherwise not all inputs could be &#39; \</span>
-        <span class="c1">#                                        &#39;used or considered.&#39;.format(self.out_dim, self.in_dim)</span>
-        <span class="k">if</span> <span class="n">connections</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-            <span class="n">c</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span>
-            <span class="n">c</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)[</span><span class="n">c</span><span class="p">]</span>
-            <span class="n">c</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">)</span>
-            <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">c</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-            <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">),</span> <span class="n">b</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
-            <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="n">b</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span>
-        <span class="k">elif</span> <span class="n">connections</span> <span class="o">==</span> <span class="s2">&quot;unique&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">get_unique_connections</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="n">connections</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="LogicDense.get_gate_ids">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_gate_ids">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_gate_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes most-probable gate for each learned set of weights.</span>
-<span class="sd">        Returns tensor of most-probable gate IDs.&quot;&quot;&quot;</span>
-
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;raw&quot;</span><span class="p">,</span> <span class="s2">&quot;walsh&quot;</span><span class="p">],</span> \
-            <span class="sa">f</span><span class="s2">&quot;Cannot compute gate IDs for parameterization=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">parameterization</span><span class="si">}</span><span class="s2">&quot;</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">==</span><span class="s2">&quot;walsh&quot;</span><span class="p">:</span>
-            <span class="n">n_inputs</span> <span class="o">=</span> <span class="mi">2</span>
-            <span class="n">n_rows</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="n">n_inputs</span>
-
-            <span class="c1"># generate all 2^n input combinations</span>
-            <span class="n">binary_inputs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span>
-                <span class="nb">list</span><span class="p">(</span><span class="n">product</span><span class="p">([</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">repeat</span><span class="o">=</span><span class="n">n_inputs</span><span class="p">)),</span>
-                <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> 
-                <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span>
-            <span class="p">)</span> <span class="c1"># shape: (4, 2)</span>
-
-            <span class="c1"># generate truth tables</span>
-            <span class="n">truth_tables</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span>
-                <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-            <span class="p">)</span>
-            <span class="n">truth_tables</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">truth_tables</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-
-            <span class="n">num_gates</span><span class="p">,</span> <span class="n">num_coeffs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">shape</span>
-            <span class="k">assert</span> <span class="n">num_coeffs</span> <span class="o">==</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">n_inputs</span> <span class="o">+</span> <span class="p">(</span><span class="n">n_inputs</span><span class="o">*</span><span class="p">(</span><span class="n">n_inputs</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">//</span><span class="mi">2</span><span class="p">,</span> \
-                <span class="sa">f</span><span class="s2">&quot;Unexpected param shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> for n_inputs=</span><span class="si">{</span><span class="n">n_inputs</span><span class="si">}</span><span class="s2">&quot;</span>
-            
-            <span class="c1"># bias term</span>
-            <span class="n">linear_preds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_rows</span><span class="p">)</span>  <span class="c1"># shape: (16, 4)</span>
-
-            <span class="c1"># add linear terms</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_inputs</span><span class="p">):</span>
-                <span class="n">linear_preds</span> <span class="o">=</span> <span class="n">linear_preds</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">[:,</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">binary_inputs</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-
-            <span class="c1"># add pairwise product terms</span>
-            <span class="n">idx</span> <span class="o">=</span> <span class="n">n_inputs</span><span class="o">+</span><span class="mi">1</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_inputs</span><span class="p">):</span>
-                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_inputs</span><span class="p">):</span>
-                    <span class="n">linear_preds</span> <span class="o">+=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">[:,</span> <span class="n">idx</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">binary_inputs</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> 
-                                    <span class="o">*</span> <span class="n">binary_inputs</span><span class="p">[:,</span> <span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
-                    <span class="n">idx</span> <span class="o">+=</span><span class="mi">1</span>
-
-            <span class="n">preds</span> <span class="o">=</span> <span class="p">(</span><span class="n">linear_preds</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span> <span class="c1"># shape: (16, 4)</span>
-            <span class="n">dists</span> <span class="o">=</span> <span class="p">(</span><span class="n">preds</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">!=</span> <span class="n">truth_tables</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-            <span class="n">ids</span> <span class="o">=</span> <span class="n">dists</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># index of closest truth table</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_connections</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs input–neuron connection indices.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">setup_connections</span><span class="p">(</span>
+            <span class="n">structure</span><span class="o">=</span><span class="s2">&quot;dense&quot;</span><span class="p">,</span>
+            <span class="n">connections</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">,</span>
+            <span class="n">lut_rank</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lut_rank</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">in_dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span>
+            <span class="n">out_dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">,</span>
+            <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">connections_kwargs</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span>
         
-        <span class="k">else</span><span class="p">:</span> 
-            <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<div class="viewcode-block" id="LogicDense.get_luts_and_ids">
+<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_luts_and_ids">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_luts_and_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT and its ID for each neuron.</span>
 
-        <span class="k">return</span> <span class="n">ids</span></div>
+<span class="sd">        Method is dependent on the chosen parametrization.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple[torch.Tensor, torch.Tensor]:</span>
+<span class="sd">                - ``luts``: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,</span>
+<span class="sd">                  where each row is the most probable LUT truth table for a</span>
+<span class="sd">                  neuron (entry is True for output 1, False for 0).</span>
+<span class="sd">                - ``ids``: Integer tensor of shape ``(out_dim,)`` where each</span>
+<span class="sd">                  entry is the integer ID of the corresponding LUT, obtained by</span>
+<span class="sd">                  interpreting its truth table as a binary number (or None if</span>
+<span class="sd">                  not applicable for high lut_rank).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="LogicDense.get_luts">
+<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_luts">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_luts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT for each neuron.</span>
+
+<span class="sd">        Method is dependent on the chosen parametrization.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            torch.Tensor: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,</span>
+<span class="sd">                  where each row is the most probable LUT truth table for a</span>
+<span class="sd">                  neuron (entry is True for output 1, False for 0).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">get_luts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LogicDense.get_regularization_loss">
+<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_regularization_loss">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_regularization_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regularizer</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">get_regularization_loss</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">regularizer</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="LogicDense.rescale_weights">
+<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.rescale_weights">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">rescale_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">):</span>
+        <span class="n">rescale_weights</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span></div>
 </div>
 
-
-
-
-<span class="c1">##########################################################################</span>
-
-
-<span class="k">class</span><span class="w"> </span><span class="nc">LogicDenseCudaFunction</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">autograd</span><span class="o">.</span><span class="n">Function</span><span class="p">):</span>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">given_x_indices_of_y_start</span><span class="p">,</span> <span class="n">given_x_indices_of_y</span><span class="p">):</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">save_for_backward</span><span class="p">(</span>
-            <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">given_x_indices_of_y_start</span><span class="p">,</span> <span class="n">given_x_indices_of_y</span>
-        <span class="p">)</span>
-        <span class="k">return</span> <span class="n">torchlogix_cuda</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">grad_y</span><span class="p">):</span>
-        <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">given_x_indices_of_y_start</span><span class="p">,</span> <span class="n">given_x_indices_of_y</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">saved_tensors</span>
-        <span class="n">grad_y</span> <span class="o">=</span> <span class="n">grad_y</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
-
-        <span class="n">grad_w</span> <span class="o">=</span> <span class="n">grad_x</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">needs_input_grad</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
-            <span class="n">grad_x</span> <span class="o">=</span> <span class="n">torchlogix_cuda</span><span class="o">.</span><span class="n">backward_x</span><span class="p">(</span>
-                <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">grad_y</span><span class="p">,</span> <span class="n">given_x_indices_of_y_start</span><span class="p">,</span> <span class="n">given_x_indices_of_y</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">needs_input_grad</span><span class="p">[</span><span class="mi">3</span><span class="p">]:</span>
-            <span class="n">grad_w</span> <span class="o">=</span> <span class="n">torchlogix_cuda</span><span class="o">.</span><span class="n">backward_w</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">grad_y</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">grad_x</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">grad_w</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span>
 </pre></div>
 
            </div>

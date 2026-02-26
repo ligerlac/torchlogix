@@ -7,15 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>torchlogix.compiled_model &mdash; TorchLogix 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
 
   
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../_static/documentation_options.js?v=01f34227"></script>
-      <script src="../../_static/doctools.js?v=9bcbadda"></script>
-      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../../_static/copybutton.js?v=30646c52"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
@@ -98,10 +98,12 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy.typing</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.layers.conv</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">,</span> <span class="n">OrPooling</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.layers.conv</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">LogicConv3d</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.layers.pool</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrPooling2d</span><span class="p">,</span> <span class="n">OrPooling3d</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.layers.dense</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.layers.groupsum</span><span class="w"> </span><span class="kn">import</span> <span class="n">GroupSum</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.layers.thresholding</span><span class="w"> </span><span class="kn">import</span> <span class="n">LearnableThermometerThresholding</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.layers.binarization</span><span class="w"> </span><span class="kn">import</span> <span class="n">Binarization</span>
+
 
 <span class="n">ALL_OPERATIONS</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;zero&quot;</span><span class="p">,</span> <span class="s2">&quot;and&quot;</span><span class="p">,</span> <span class="s2">&quot;not_implies&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="s2">&quot;not_implied_by&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">,</span> <span class="s2">&quot;xor&quot;</span><span class="p">,</span> <span class="s2">&quot;or&quot;</span><span class="p">,</span>
@@ -135,6 +137,7 @@
         <span class="n">cpu_compiler</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gcc&quot;</span><span class="p">,</span>
         <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">use_bitpacking</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">apply_groupsum_scaling</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
@@ -143,6 +146,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># Will be set during _parse_model</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span> <span class="o">=</span> <span class="n">use_bitpacking</span>  <span class="c1"># Store user&#39;s choice</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">cpu_compiler</span> <span class="o">=</span> <span class="n">cpu_compiler</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span> <span class="o">=</span> <span class="n">apply_groupsum_scaling</span>
 
         <span class="k">assert</span> <span class="n">cpu_compiler</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;clang&quot;</span><span class="p">,</span> <span class="s2">&quot;gcc&quot;</span><span class="p">],</span> <span class="n">cpu_compiler</span>
         <span class="k">assert</span> <span class="n">num_bits</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">]</span>
@@ -170,20 +174,11 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse the model structure, handling conv, pooling, and linear layers.&quot;&quot;&quot;</span>
 
-        <span class="c1"># Detect if first layer is thresholding</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">LearnableThermometerThresholding</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="o">=</span> <span class="kc">True</span>
-
-            <span class="c1"># Validate bitpacking constraint</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="s2">&quot;Bitpacking (use_bitpacking=True) cannot be used with thresholding layers. &quot;</span>
-                    <span class="s2">&quot;The thresholding layer requires processing one sample at a time.&quot;</span>
-                <span class="p">)</span>
-
-            <span class="c1"># Set constraints for thresholding mode</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span> <span class="o">=</span> <span class="mi">1</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">use_bitpacking</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="c1"># Detect if first layer is thresholding (but not DummyBinarization)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">Binarization</span><span class="p">):</span>
+            <span class="c1"># Check if it&#39;s actually a real thresholding layer (not dummy)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">thresholds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="o">=</span> <span class="kc">True</span>
 
         <span class="c1"># Find GroupSum layer for num_classes</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">:</span>
@@ -198,26 +193,24 @@
 
         <span class="c1"># Parse all layers and track execution order</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LearnableThermometerThresholding</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">Binarization</span><span class="p">):</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;LearnableThermometerThresholding layer must appear first in layer order.&quot;</span><span class="p">)</span>
-                <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_thresholding_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span> <span class="o">=</span> <span class="n">thresholding_info</span>  <span class="c1"># there will only be one thresholding layer</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicConv2d</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Binarization layer must appear first in layer order.&quot;</span><span class="p">)</span>
+                <span class="c1"># Only extract thresholding info for real thresholding layers (not dummy)</span>
+                <span class="k">if</span> <span class="n">layer</span><span class="o">.</span><span class="n">thresholds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_thresholding_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span> <span class="o">=</span> <span class="n">thresholding_info</span>  <span class="c1"># there will only be one thresholding layer</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="p">(</span><span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">)):</span>
                 <span class="n">conv_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_conv_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">conv_info</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">):</span>
-                <span class="n">conv_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_conv_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">conv_info</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">OrPooling</span><span class="p">):</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="p">(</span><span class="n">OrPooling2d</span><span class="p">,</span> <span class="n">OrPooling3d</span><span class="p">)):</span>
                 <span class="n">pool_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_extract_pooling_layer_info</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">pooling_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pool_info</span><span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;pool&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pooling_layers</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">LogicDense</span><span class="p">):</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+                    <span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">connections</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">connections</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">layer</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
                 <span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">layer_order</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;linear&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">):</span>
@@ -240,11 +233,16 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Model must contain at least one LogicConv2d, LogicConv3d, or LogicDense layer.&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_thresholding_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">LearnableThermometerThresholding</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_thresholding_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">Binarization</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract information from a thresholding layer for compilation.&quot;&quot;&quot;</span>
+        <span class="n">thresholds</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">get_thresholds</span><span class="p">()</span>
+        <span class="c1"># Detect if thresholds are float or int</span>
+        <span class="n">is_float</span> <span class="o">=</span> <span class="n">thresholds</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">is_floating_point</span>
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s1">&#39;num_thresholds&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">num_thresholds</span><span class="p">,</span>
+            <span class="c1"># &#39;num_thresholds&#39;: layer.num_thresholds,</span>
+            <span class="s1">&#39;num_thresholds&#39;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">thresholds</span><span class="p">),</span>
             <span class="s1">&#39;thresholds&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">get_thresholds</span><span class="p">(),</span>
+            <span class="s1">&#39;is_float&#39;</span><span class="p">:</span> <span class="n">is_float</span><span class="p">,</span>
         <span class="p">}</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_extract_conv_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">LogicConv3d</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
@@ -258,7 +256,7 @@
             <span class="n">tree_operations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_ops</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s1">&#39;indices&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">indices</span><span class="p">,</span>
+            <span class="s1">&#39;indices&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">connections</span><span class="o">.</span><span class="n">indices</span><span class="p">,</span>
             <span class="s1">&#39;tree_operations&#39;</span><span class="p">:</span> <span class="n">tree_operations</span><span class="p">,</span>
             <span class="s1">&#39;tree_depth&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">,</span>
             <span class="s1">&#39;num_kernels&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">,</span>
@@ -269,7 +267,7 @@
             <span class="s1">&#39;channels&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span>
         <span class="p">}</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_pooling_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">OrPooling</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_pooling_layer_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">OrPooling2d</span><span class="p">,</span> <span class="n">OrPooling3d</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract information from an OrPooling layer for compilation.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s1">&#39;kernel_size&#39;</span><span class="p">:</span> <span class="n">layer</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span>
@@ -384,9 +382,9 @@
                 <span class="n">conv_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">[</span><span class="n">layer_idx</span><span class="p">]</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">current_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>  <span class="c1"># (C, H, W)</span>
                     <span class="n">c</span><span class="p">,</span> <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">current_shape</span>
-                    <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">h</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">])</span>
+                    <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">h</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
                              <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
-                    <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">w</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">])</span>
+                    <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">w</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
                              <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
                     <span class="n">output_shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;num_kernels&#39;</span><span class="p">],</span> <span class="n">h_out</span><span class="p">,</span> <span class="n">w_out</span><span class="p">)</span>
                     <span class="n">output_size</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;num_kernels&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span>
@@ -452,9 +450,9 @@
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
             <span class="n">conv_dim</span> <span class="o">=</span> <span class="mi">2</span>
-            <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">])</span>
+            <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
                     <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
-            <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">])</span>
+            <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
                     <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
         <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
             <span class="n">conv_dim</span> <span class="o">=</span> <span class="mi">3</span>
@@ -480,7 +478,7 @@
                 <span class="n">right_indices</span> <span class="o">=</span> <span class="n">level_0_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">kernel_idx</span><span class="p">,</span> <span class="n">pos_idx</span><span class="p">]</span>
 
                 <span class="c1"># Generate variables for the first level</span>
-                <span class="k">for</span> <span class="n">gate_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]):</span>
+                <span class="k">for</span> <span class="n">gate_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)):</span>
                     <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                         <span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_c</span> <span class="o">=</span> <span class="n">left_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
                         <span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_c</span> <span class="o">=</span> <span class="n">right_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
@@ -543,7 +541,7 @@
                     <span class="p">)</span>
 
                 <span class="c1"># Process remaining tree levels</span>
-                <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]):</span>
                     <span class="n">level_indices</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
                     <span class="n">left_gate_indices</span> <span class="o">=</span> <span class="n">level_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
                     <span class="n">right_gate_indices</span> <span class="o">=</span> <span class="n">level_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
@@ -558,7 +556,7 @@
                         <span class="n">left_var</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_l</span><span class="si">{</span><span class="n">level</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">_g</span><span class="si">{</span><span class="n">left_idx</span><span class="si">}</span><span class="s2">&quot;</span>
                         <span class="n">right_var</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_l</span><span class="si">{</span><span class="n">level</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">_g</span><span class="si">{</span><span class="n">right_idx</span><span class="si">}</span><span class="s2">&quot;</span>
 
-                        <span class="k">if</span> <span class="n">level</span> <span class="o">==</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]:</span>
+                        <span class="k">if</span> <span class="n">level</span> <span class="o">==</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
                             <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                                 <span class="n">output_idx</span> <span class="o">=</span> <span class="p">(</span><span class="n">kernel_idx</span> <span class="o">*</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span> <span class="o">+</span> <span class="n">pos_idx</span><span class="p">)</span>
                             <span class="k">else</span><span class="p">:</span>
@@ -979,14 +977,70 @@
             <span class="n">math</span><span class="o">.</span><span class="n">log2</span><span class="p">(</span><span class="n">num_neurons_ll</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
         <span class="p">)</span>
 
-        <span class="k">return</span> <span class="p">[</span>
-            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">void apply_logic_net(bool const *inp, </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out, size_t len) </span><span class="se">{{</span>
-<span class="s2">    </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *inp_temp = malloc(</span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">));</span>
-<span class="s2">    </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out_temp = malloc(</span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">));</span>
-<span class="s2">    </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out_temp_o = malloc(</span><span class="si">{</span><span class="n">log2_of_num_neurons_per_class_ll</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">));</span>
+        <span class="c1"># Thresholding setup</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span>
+            <span class="n">num_thresholds</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;num_thresholds&quot;</span><span class="p">]</span>
+            <span class="n">thresholds</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;thresholds&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="n">is_float</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;is_float&quot;</span><span class="p">]</span>
 
-<span class="s2">    for(size_t i = 0; i &lt; len; ++i) </span><span class="se">{{</span>
+            <span class="k">if</span> <span class="n">is_float</span><span class="p">:</span>
+                <span class="n">thresholds_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">)</span>
+                <span class="n">thresholds_c_def</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;const float thresholds[</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">)</span><span class="si">}</span><span class="s2">] = </span><span class="se">{{</span><span class="si">{</span><span class="n">thresholds_str</span><span class="si">}</span><span class="se">}}</span><span class="s2">;&quot;</span>
+                <span class="n">inp_dtype</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">thresholds_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">)</span>
+                <span class="n">thresholds_c_def</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;const int thresholds[</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">)</span><span class="si">}</span><span class="s2">] = </span><span class="se">{{</span><span class="si">{</span><span class="n">thresholds_str</span><span class="si">}</span><span class="se">}}</span><span class="s2">;&quot;</span>
+                <span class="n">inp_dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+
+            <span class="n">logic_net_inp_size</span> <span class="o">=</span> <span class="n">input_size</span> <span class="o">*</span> <span class="n">num_thresholds</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">inp_dtype</span> <span class="o">=</span> <span class="s2">&quot;bool&quot;</span>
+            <span class="n">logic_net_inp_size</span> <span class="o">=</span> <span class="n">input_size</span>
+
+        <span class="c1"># Output type: float if scaling is applied, int otherwise</span>
+        <span class="n">out_dtype</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span> <span class="k">else</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+
+        <span class="n">code_start</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">void apply_logic_net(</span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2"> const *inp, </span><span class="si">{</span><span class="n">out_dtype</span><span class="si">}</span><span class="s2"> *out, size_t len) </span><span class="se">{{</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *inp_temp = malloc(</span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">));</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out_temp = malloc(</span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">));</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> *out_temp_o = malloc(</span><span class="si">{</span><span class="n">log2_of_num_neurons_per_class_ll</span><span class="si">}</span><span class="s2">*sizeof(</span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">));&quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">code_start</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    bool *bool_temp = malloc(</span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> * sizeof(bool));</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">thresholds_c_def</span><span class="si">}</span><span class="s2">&quot;&quot;&quot;</span>
+
+        <span class="n">code_start</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+
+<span class="s2">    for(size_t i = 0; i &lt; len; ++i) </span><span class="se">{{</span><span class="s2">&quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">code_threshold</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+
+<span class="s2">        // Apply thresholding to convert inputs to boolean</span>
+<span class="s2">        for (size_t b = 0; b &lt; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2">; ++b) </span><span class="se">{{</span>
+<span class="s2">            for (size_t t = 0; t &lt; </span><span class="si">{</span><span class="n">num_thresholds</span><span class="si">}</span><span class="s2">; ++t) </span><span class="se">{{</span>
+<span class="s2">                for (size_t in_idx = 0; in_idx &lt; </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">; ++in_idx) </span><span class="se">{{</span>
+<span class="s2">                    size_t out_idx = b * </span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2"> + t * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> + in_idx;</span>
+<span class="s2">                    size_t inp_idx = i * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> + b * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> + in_idx;</span>
+<span class="s2">                    bool_temp[out_idx] = (inp[inp_idx] &gt; thresholds[t]) ? 1 : 0;</span>
+<span class="s2">                </span><span class="se">}}</span>
+<span class="s2">            </span><span class="se">}}</span>
+<span class="s2">        </span><span class="se">}}</span>
+
+<span class="s2">        // Converting the bool array into a bitpacked array</span>
+<span class="s2">        for(size_t d = 0; d &lt; </span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2">; ++d) </span><span class="se">{{</span>
+<span class="s2">            </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2"> res = </span><span class="si">{</span><span class="n">BITS_TO_ZERO_LITERAL</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="p">]</span><span class="si">}</span><span class="s2">;</span>
+<span class="s2">            for(size_t b = 0; b &lt; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2">; ++b) </span><span class="se">{{</span>
+<span class="s2">                res &lt;&lt;= 1;</span>
+<span class="s2">                res += !!(bool_temp[b * </span><span class="si">{</span><span class="n">logic_net_inp_size</span><span class="si">}</span><span class="s2"> + d]);</span>
+<span class="s2">            </span><span class="se">}}</span>
+<span class="s2">            inp_temp[d] = res;</span>
+<span class="s2">        </span><span class="se">}}</span><span class="s2">&quot;&quot;&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">code_threshold</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 
 <span class="s2">        // Converting the bool array into a bitpacked array</span>
 <span class="s2">        for(size_t d = 0; d &lt; </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">; ++d) </span><span class="se">{{</span>
@@ -996,7 +1050,10 @@
 <span class="s2">                res += !!(inp[i * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> + (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> - b - 1) * </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> + d]);</span>
 <span class="s2">            </span><span class="se">}}</span>
 <span class="s2">            inp_temp[d] = res;</span>
-<span class="s2">        </span><span class="se">}}</span>
+<span class="s2">        </span><span class="se">}}</span><span class="s2">&quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="n">code_start</span> <span class="o">+</span> <span class="n">code_threshold</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 
 <span class="s2">        // Applying the logic net</span>
 <span class="s2">        logic_net(inp_temp, out_temp);</span>
@@ -1027,14 +1084,16 @@
 <span class="s2">                    res &lt;&lt;= 1;</span>
 <span class="s2">                    res += !!(out_temp_o[d] &amp; bit_mask);</span>
 <span class="s2">                </span><span class="se">}}</span>
-<span class="s2">                out[(i * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> + b) * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2"> + c] = (res + </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="si">}</span><span class="s2">) / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="si">}</span><span class="s2">;</span>
+<span class="s2">                out[(i * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_bits</span><span class="si">}</span><span class="s2"> + b) * </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2"> + c] = </span><span class="si">{</span><span class="s2">&quot;(res + &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s2">&quot;) / &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="p">)</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s2">&quot;res&quot;</span><span class="si">}</span><span class="s2">;</span>
 <span class="s2">            </span><span class="se">}}</span>
 <span class="s2">        </span><span class="se">}}</span>
 <span class="s2">    </span><span class="se">}}</span>
 <span class="s2">    free(inp_temp);</span>
 <span class="s2">    free(out_temp);</span>
-<span class="s2">    free(out_temp_o);</span>
-<span class="se">}}</span>
+<span class="s2">    free(out_temp_o);&quot;&quot;&quot;</span>
+            <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    free(bool_temp);&quot;&quot;&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">}</span>
 <span class="s2">&quot;&quot;&quot;</span>
         <span class="p">]</span>
 
@@ -1050,16 +1109,25 @@
             <span class="n">thresholding_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span>
             <span class="n">num_thresholds</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;num_thresholds&quot;</span><span class="p">]</span>
             <span class="n">thresholds</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;thresholds&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
-            <span class="n">thresholds_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">)</span>
-            <span class="n">thresholds_c_def</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;const int thresholds[</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">)</span><span class="si">}</span><span class="s2">] = </span><span class="se">{{</span><span class="si">{</span><span class="n">thresholds_str</span><span class="si">}</span><span class="se">}}</span><span class="s2">;&quot;</span>
-        
-        <span class="n">inp_dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="k">else</span> <span class="s2">&quot;bool&quot;</span>
+            <span class="n">is_float</span> <span class="o">=</span> <span class="n">thresholding_info</span><span class="p">[</span><span class="s2">&quot;is_float&quot;</span><span class="p">]</span>
+
+            <span class="k">if</span> <span class="n">is_float</span><span class="p">:</span>
+                <span class="n">thresholds_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">)</span>
+                <span class="n">thresholds_c_def</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;const float thresholds[</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">)</span><span class="si">}</span><span class="s2">] = </span><span class="se">{{</span><span class="si">{</span><span class="n">thresholds_str</span><span class="si">}</span><span class="se">}}</span><span class="s2">;&quot;</span>
+                <span class="n">inp_dtype</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">thresholds_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">thresholds</span><span class="p">)</span>
+                <span class="n">thresholds_c_def</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;const int thresholds[</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">thresholds</span><span class="p">)</span><span class="si">}</span><span class="s2">] = </span><span class="se">{{</span><span class="si">{</span><span class="n">thresholds_str</span><span class="si">}</span><span class="se">}}</span><span class="s2">;&quot;</span>
+                <span class="n">inp_dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">inp_dtype</span> <span class="o">=</span> <span class="s2">&quot;bool&quot;</span>
         <span class="n">out_len</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span>
         <span class="n">logic_net_out_arg</span> <span class="o">=</span> <span class="s2">&quot;out_temp&quot;</span>
-        <span class="n">out_dtype</span> <span class="o">=</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+        <span class="c1"># Output type: float if scaling is applied, int otherwise</span>
+        <span class="n">out_dtype</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span> <span class="k">else</span> <span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
 
         <span class="n">code</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;void apply_logic_net_one_event(</span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2"> const inp[</span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">], </span><span class="si">{</span><span class="n">BITS_TO_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span><span class="si">}</span><span class="s2"> out[</span><span class="si">{</span><span class="n">out_len</span><span class="si">}</span><span class="s2">]) </span><span class="se">{{</span>
+            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;void apply_logic_net_one_event(</span><span class="si">{</span><span class="n">inp_dtype</span><span class="si">}</span><span class="s2"> const inp[</span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2">], </span><span class="si">{</span><span class="n">out_dtype</span><span class="si">}</span><span class="s2"> out[</span><span class="si">{</span><span class="n">out_len</span><span class="si">}</span><span class="s2">]) </span><span class="se">{{</span>
 <span class="s2">    bool out_temp[</span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2">];&quot;&quot;&quot;</span>
         <span class="p">]</span>
 
@@ -1092,7 +1160,7 @@
 <span class="s2">            sum += out_temp[c * </span><span class="si">{</span><span class="n">num_neurons_ll</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="si">}</span><span class="s2"> + a];</span>
 <span class="s2">        </span><span class="se">}}</span><span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="o">!=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="o">!=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span><span class="p">:</span>
                 <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 <span class="s2">        out[c] = (sum + </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="si">}</span><span class="s2">) / </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="si">}</span><span class="s2">;</span>
 <span class="s2">    </span><span class="se">}}</span>
@@ -1188,8 +1256,14 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_setup_library_function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">lib</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Setup the library function with appropriate signatures.&quot;&quot;&quot;</span>
-        <span class="n">inp_type</span> <span class="o">=</span> <span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span> <span class="k">else</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_bool</span>
-        <span class="n">out_type</span> <span class="o">=</span> <span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">is_float</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span><span class="p">[</span><span class="s2">&quot;is_float&quot;</span><span class="p">]</span>
+            <span class="n">inp_type</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_float</span> <span class="k">if</span> <span class="n">is_float</span> <span class="k">else</span> <span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">inp_type</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_bool</span>
+
+        <span class="c1"># Output type: float if scaling is applied, int otherwise</span>
+        <span class="n">out_type</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_float</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span> <span class="k">else</span> <span class="n">BITS_TO_C_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
 
         <span class="n">lib_fn</span> <span class="o">=</span> <span class="n">lib</span><span class="o">.</span><span class="n">apply_logic_net</span>
         <span class="n">lib_fn</span><span class="o">.</span><span class="n">restype</span> <span class="o">=</span> <span class="kc">None</span>
@@ -1228,8 +1302,17 @@
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
             <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;x.shape&quot;</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
 
-        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">BITS_TO_NP_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">])</span>
+        <span class="c1"># Output dtype: float32 if scaling is applied, int32 otherwise</span>
+        <span class="n">out_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_groupsum_scaling</span> <span class="k">else</span> <span class="n">BITS_TO_NP_DTYPE</span><span class="p">[</span><span class="mi">32</span><span class="p">]</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_classes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">out_dtype</span><span class="p">)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Ensure input has the correct dtype for the library function</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">apply_thresholding</span><span class="p">:</span>
+            <span class="n">is_float</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholding_layer</span><span class="p">[</span><span class="s2">&quot;is_float&quot;</span><span class="p">]</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span> <span class="k">if</span> <span class="n">is_float</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">lib_fn</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">n_iter</span><span class="p">)</span>
 

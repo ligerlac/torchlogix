@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>torchlogix.layers.LogicDense &mdash; TorchLogix 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
 
   
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../_static/documentation_options.js?v=01f34227"></script>
-      <script src="../../_static/doctools.js?v=9bcbadda"></script>
-      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../../_static/copybutton.js?v=30646c52"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
@@ -90,30 +90,37 @@
 <h1>torchlogix.layers.LogicDense<a class="headerlink" href="#torchlogix-layers-logicdense" title="Link to this heading"></a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.layers.LogicDense">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">LogicDense</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">implementation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'residual'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forward_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'soft'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense" title="Link to this definition"></a></dt>
-<dd><p>The core module for differentiable logic gate networks. Provides a differentiable logic gate layer.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">implementation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'residual'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forward_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'soft'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.__init__" title="Link to this definition"></a></dt>
-<dd><dl class="field-list simple">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">LogicDense</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lut_rank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fixed'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense" title="Link to this definition"></a></dt>
+<dd><p>Fully-connected logic gate layer with differentiable learning.</p>
+<p>This module provides the core implementation of Differentiable Deep Logic
+Gate Networks. Each neuron learns a Boolean logic function (LUT) that
+operates on a subset of input features.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>in_dim</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – input dimensionality of the layer</p></li>
-<li><p><strong>out_dim</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – output dimensionality of the layer</p></li>
-<li><p><strong>device</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – device (options: ‘cuda’ / ‘cpu’)</p></li>
-<li><p><strong>grad_factor</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a></span>) – for deep models (&gt;6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients</p></li>
-<li><p><strong>implementation</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – implementation to use (options: ‘cuda’ / ‘python’).</p></li>
-<li><p><strong>connections</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – method for initializing the connectivity of the logic gate net</p></li>
+<li><p><strong>in_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of input features.</p></li>
+<li><p><strong>out_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of neurons (output features).</p></li>
+<li><p><strong>device</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Device to run the layer on (‘cpu’ or ‘cuda’).</p></li>
+<li><p><strong>grad_factor</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Gradient scaling factor.</p></li>
+<li><p><strong>lut_rank</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Rank of the LUTs used in the layer.</p></li>
+<li><p><strong>parametrization</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Type of parametrization to use (‘raw’, ‘warp’, ‘light’).</p></li>
+<li><p><strong>parametrization_kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Additional keyword arguments for parametrization.</p></li>
+<li><p><strong>connections</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Type of connections to use (‘fixed’, ‘learnable’, etc.).</p></li>
+<li><p><strong>connections_kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Additional keyword arguments for connections.</p></li>
 </ul>
 </dd>
 </dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lut_rank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fixed'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.__init__" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
 </dd></dl>
 
 <p class="rubric">Methods</p>
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.__init__" title="torchlogix.layers.LogicDense.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(in_dim, out_dim[, device, ...])</p></td>
-<td><p></p></td>
+<td><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_module</span></code>(name, module)</p></td>
 <td><p>Add a child module to the current module.</p></td>
@@ -131,7 +138,7 @@
 <td><p>Return an iterator over immediate children modules.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile</span></code>(*args, **kwargs)</p></td>
-<td><p>Compile this Module's forward using <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.compile.html#torch.compile" title="(in PyTorch v2.9)"><code class="xref py py-func docutils literal notranslate"><span class="pre">torch.compile()</span></code></a>.</p></td>
+<td><p>Compile this Module's forward using <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.compile.html#torch.compile" title="(in PyTorch v2.10)"><code class="xref py py-func docutils literal notranslate"><span class="pre">torch.compile()</span></code></a>.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">cpu</span></code>()</p></td>
 <td><p>Move all model parameters and buffers to the CPU.</p></td>
@@ -152,22 +159,10 @@
 <td><p>Casts all floating point parameters and buffers to <code class="docutils literal notranslate"><span class="pre">float</span></code> datatype.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.forward" title="torchlogix.layers.LogicDense.forward"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward</span></code></a>(x)</p></td>
-<td><p>Define the computation performed at every call.</p></td>
+<td><p>Applies the LogicDense transformation to the input.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.forward_cuda" title="torchlogix.layers.LogicDense.forward_cuda"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward_cuda</span></code></a>(x)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.forward_cuda_eval" title="torchlogix.layers.LogicDense.forward_cuda_eval"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward_cuda_eval</span></code></a>(x)</p></td>
-<td><p>WARNING: this is an in-place operation.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.forward_python" title="torchlogix.layers.LogicDense.forward_python"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward_python</span></code></a>(x)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_buffer</span></code>(target)</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_buffer</span></code>(target)</p></td>
 <td><p>Return the buffer given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.get_connections" title="torchlogix.layers.LogicDense.get_connections"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_connections</span></code></a>(connections[, device])</p></td>
-<td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_extra_state</span></code>()</p></td>
 <td><p>Return any extra state to include in the module's state_dict.</p></td>
@@ -239,10 +234,10 @@
 <td><p>Add a parameter to the module.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_state_dict_post_hook</span></code>(hook)</p></td>
-<td><p>Register a post-hook for the <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.state_dict" title="(in PyTorch v2.9)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code></a> method.</p></td>
+<td><p>Register a post-hook for the <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.state_dict" title="(in PyTorch v2.10)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code></a> method.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_state_dict_pre_hook</span></code>(hook)</p></td>
-<td><p>Register a pre-hook for the <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.state_dict" title="(in PyTorch v2.9)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code></a> method.</p></td>
+<td><p>Register a pre-hook for the <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.state_dict" title="(in PyTorch v2.10)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code></a> method.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">requires_grad_</span></code>([requires_grad])</p></td>
 <td><p>Change if autograd should record operations on parameters in this module.</p></td>
@@ -254,7 +249,7 @@
 <td><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">share_memory</span></code>()</p></td>
-<td><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.share_memory_.html#torch.Tensor.share_memory_" title="(in PyTorch v2.9)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.share_memory_()</span></code></a>.</p></td>
+<td><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.share_memory_.html#torch.Tensor.share_memory_" title="(in PyTorch v2.10)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.share_memory_()</span></code></a>.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">state_dict</span></code>(*args[, destination, prefix, ...])</p></td>
 <td><p>Return a dictionary containing references to the whole state of the module.</p></td>
@@ -291,74 +286,38 @@
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_patches</span></code></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.grad_factor" title="torchlogix.layers.LogicDense.grad_factor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">grad_factor</span></code></a></p></td>
-<td><p>The CUDA implementation is the fast implementation.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="../layers.html#torchlogix.layers.LogicDense.training" title="torchlogix.layers.LogicDense.training"><code class="xref py py-obj docutils literal notranslate"><span class="pre">training</span></code></a></p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">training</span></code></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
 </table>
 <dl class="py method">
 <dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">implementation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'random'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'residual'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forward_sampling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'soft'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>in_dim</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – input dimensionality of the layer</p></li>
-<li><p><strong>out_dim</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – output dimensionality of the layer</p></li>
-<li><p><strong>device</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – device (options: ‘cuda’ / ‘cpu’)</p></li>
-<li><p><strong>grad_factor</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a></span>) – for deep models (&gt;6 layers), the grad_factor should be increased (e.g., 2) to avoid vanishing gradients</p></li>
-<li><p><strong>implementation</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – implementation to use (options: ‘cuda’ / ‘python’).</p></li>
-<li><p><strong>connections</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – method for initializing the connectivity of the logic gate net</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.grad_factor">
-<span class="sig-name descname"><span class="pre">grad_factor</span></span><a class="headerlink" href="#torchlogix.layers.LogicDense.grad_factor" title="Link to this definition"></a></dt>
-<dd><p>The CUDA implementation is the fast implementation. As the name implies, the cuda implementation is only
-available for device=’cuda’. The <cite>python</cite> implementation exists for 2 reasons:
-1. To provide an easy-to-understand implementation of differentiable logic gate networks
-2. To provide a CPU implementation of differentiable logic gate networks</p>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lut_rank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parametrization_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fixed'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connections_kwargs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.layers.LogicDense.forward">
 <span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.forward" title="Link to this definition"></a></dt>
-<dd><p>Define the computation performed at every call.</p>
-<p>Should be overridden by all subclasses.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Although the recipe for forward pass needs to be defined within
-this function, one should call the <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code> instance afterwards
-instead of this since the former takes care of running the
-registered hooks while the latter silently ignores them.</p>
-</div>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.forward_python">
-<span class="sig-name descname"><span class="pre">forward_python</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.forward_python"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.forward_python" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.forward_cuda">
-<span class="sig-name descname"><span class="pre">forward_cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.forward_cuda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.forward_cuda" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.forward_cuda_eval">
-<span class="sig-name descname"><span class="pre">forward_cuda_eval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.forward_cuda_eval"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.forward_cuda_eval" title="Link to this definition"></a></dt>
-<dd><p>WARNING: this is an in-place operation.</p>
+<dd><p>Applies the LogicDense transformation to the input.</p>
+<p>For each neuron, the layer:
+1. Selects <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code> input features according to the connection</p>
+<blockquote>
+<div><p>pattern in <code class="docutils literal notranslate"><span class="pre">self.indices</span></code>.</p>
+</div></blockquote>
+<ol class="arabic simple" start="2">
+<li><p>Samples (or selects) LUT weights based on <code class="docutils literal notranslate"><span class="pre">self.weight</span></code> and
+the sampler strategy.</p></li>
+<li><p>Evaluates the resulting binary operation.</p></li>
+</ol>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>x</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="../torchlogix.html#torchlogix.PackBitsTensor" title="torchlogix.packbitstensor.PackBitsTensor"><code class="xref py py-class docutils literal notranslate"><span class="pre">PackBitsTensor</span></code></a></span>)</p>
+<dd class="field-odd"><p><strong>x</strong> – Input tensor of shape <code class="docutils literal notranslate"><span class="pre">(...,</span> <span class="pre">in_dim)</span></code>. The last dimension must
+match <code class="docutils literal notranslate"><span class="pre">self.in_dim</span></code>.</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p></p>
+<dd class="field-even"><p>A tensor of shape <code class="docutils literal notranslate"><span class="pre">(...,</span> <span class="pre">out_dim)</span></code> containing the neuron outputs.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -373,15 +332,72 @@ strings are acceptable.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.get_connections">
-<span class="sig-name descname"><span class="pre">get_connections</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connections</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.get_connections"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.get_connections" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.get_luts_and_ids">
+<span class="sig-name descname"><span class="pre">get_luts_and_ids</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.get_luts_and_ids"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.get_luts_and_ids" title="Link to this definition"></a></dt>
+<dd><p>Computes the most probable LUT and its ID for each neuron.</p>
+<p>Method is dependent on the chosen parametrization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">luts</span></code>: Boolean tensor of shape <code class="docutils literal notranslate"><span class="pre">(out_dim,</span> <span class="pre">2</span> <span class="pre">**</span> <span class="pre">lut_rank)</span></code>,
+where each row is the most probable LUT truth table for a
+neuron (entry is True for output 1, False for 0).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ids</span></code>: Integer tensor of shape <code class="docutils literal notranslate"><span class="pre">(out_dim,)</span></code> where each
+entry is the integer ID of the corresponding LUT, obtained by
+interpreting its truth table as a binary number (or None if
+not applicable for high lut_rank).</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple[<a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)">torch.Tensor</a>, <a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)">torch.Tensor</a>]</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.get_gate_ids">
-<span class="sig-name descname"><span class="pre">get_gate_ids</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.get_gate_ids"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.get_gate_ids" title="Link to this definition"></a></dt>
-<dd><p>Computes most-probable gate for each learned set of weights.
-Returns tensor of most-probable gate IDs.</p>
+<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.get_luts">
+<span class="sig-name descname"><span class="pre">get_luts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.get_luts"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.get_luts" title="Link to this definition"></a></dt>
+<dd><p>Computes the most probable LUT for each neuron.</p>
+<p>Method is dependent on the chosen parametrization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><dl class="simple">
+<dt>Boolean tensor of shape <code class="docutils literal notranslate"><span class="pre">(out_dim,</span> <span class="pre">2</span> <span class="pre">**</span> <span class="pre">lut_rank)</span></code>,</dt><dd><p>where each row is the most probable LUT truth table for a
+neuron (entry is True for output 1, False for 0).</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)">torch.Tensor</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.get_regularization_loss">
+<span class="sig-name descname"><span class="pre">get_regularization_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regularizer</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.get_regularization_loss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.get_regularization_loss" title="Link to this definition"></a></dt>
+<dd><p>Computes regularization loss for the layer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Scalar tensor representing the regularization loss.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.10)">torch.Tensor</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.rescale_weights">
+<span class="sig-name descname"><span class="pre">rescale_weights</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/layers/dense.html#LogicDense.rescale_weights"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.rescale_weights" title="Link to this definition"></a></dt>
+<dd><p>Rescales the weights of the layer according to the specified method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>method</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Rescaling method. Options are ‘clip’, ‘abs_sum’, ‘L2’.</p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>

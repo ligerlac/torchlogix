@@ -1,0 +1,628 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Core Concepts &mdash; TorchLogix 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            TorchLogix
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="logic_gates.html">Logic Gates in TorchLogix</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/layers.html">Layers Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/models.html">Models Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/functional.html">Functional Module</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to TorchLogix</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TorchLogix</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Core Concepts</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/guides/concepts.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="core-concepts">
+<h1>Core Concepts<a class="headerlink" href="#core-concepts" title="Link to this heading"></a></h1>
+<p>This guide explains the key architectural concepts and design principles behind TorchLogix. For detailed API documentation, see the <a class="reference internal" href="../api/torchlogix.html"><span class="std std-doc">API Reference</span></a>.</p>
+<section id="design-philosophy">
+<h2>Design Philosophy<a class="headerlink" href="#design-philosophy" title="Link to this heading"></a></h2>
+<p>TorchLogix is built around three core principles:</p>
+<ol class="arabic simple">
+<li><p><strong>PyTorch API Compatibility</strong>: Layers follow standard <code class="docutils literal notranslate"><span class="pre">torch.nn.Module</span></code> conventions</p></li>
+<li><p><strong>Separation of Concerns</strong>: Each layer separates connection patterns from parametrization strategies</p></li>
+<li><p><strong>Differentiable-to-Discrete</strong>: Training uses continuous relaxations with multiple discretization strategies</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="pytorch-api-compatibility">
+<h2>PyTorch API Compatibility<a class="headerlink" href="#pytorch-api-compatibility" title="Link to this heading"></a></h2>
+<p>All TorchLogix layers follow standard PyTorch <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> conventions, making them compatible with existing PyTorch workflows. However, <strong>logic layers are not drop-in replacements</strong> for standard layers like <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code> or <code class="docutils literal notranslate"><span class="pre">nn.Conv2d</span></code> - they have fundamentally different computational properties and require significantly more neurons (or kernels) to achieve comparable expressiveness.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span>
+
+<span class="c1"># Standard PyTorch: 256 neurons</span>
+<span class="n">linear</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">784</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
+
+<span class="c1"># TorchLogix: Need 1000+ neurons for similar capacity</span>
+<span class="n">logic</span> <span class="o">=</span> <span class="n">LogicDense</span><span class="p">(</span><span class="mi">784</span><span class="p">,</span> <span class="mi">4096</span><span class="p">)</span>  <span class="c1"># More neurons required!</span>
+</pre></div>
+</div>
+<section id="standard-pytorch-conventions">
+<h3>Standard PyTorch Conventions<a class="headerlink" href="#standard-pytorch-conventions" title="Link to this heading"></a></h3>
+<p>Despite different computational characteristics, TorchLogix layers follow all standard PyTorch patterns:</p>
+<ul class="simple">
+<li><p><strong>Inherit from <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></strong>: All layers are proper PyTorch modules</p></li>
+<li><p><strong>Learnable parameters</strong>: Registered via <code class="docutils literal notranslate"><span class="pre">nn.Parameter</span></code> for automatic gradient computation</p></li>
+<li><p><strong>Training/eval modes</strong>: <code class="docutils literal notranslate"><span class="pre">.train()</span></code> and <code class="docutils literal notranslate"><span class="pre">.eval()</span></code> control behavior</p></li>
+<li><p><strong>Device management</strong>: Standard <code class="docutils literal notranslate"><span class="pre">.to(device)</span></code> and <code class="docutils literal notranslate"><span class="pre">.cuda()</span></code> work as expected</p></li>
+<li><p><strong>Composition</strong>: Use with <code class="docutils literal notranslate"><span class="pre">nn.Sequential</span></code>, custom <code class="docutils literal notranslate"><span class="pre">forward()</span></code> methods, etc.</p></li>
+<li><p><strong>State dict</strong>: Save and load with <code class="docutils literal notranslate"><span class="pre">state_dict()</span></code> and <code class="docutils literal notranslate"><span class="pre">load_state_dict()</span></code></p></li>
+</ul>
+<p>This means you can use TorchLogix with standard PyTorch optimizers, learning rate schedulers, data loaders, and training loops - just be mindful that logic networks need different architectural scales (and typically much higher learning rates).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="separation-of-concerns">
+<h2>Separation of Concerns<a class="headerlink" href="#separation-of-concerns" title="Link to this heading"></a></h2>
+<p>Each logic layer is composed of two independent, swappable components:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌─────────────────────────────────────────┐
+│          Logic Layer (nn.Module)        │
+│                                         │
+│  ┌─────────────┐  ┌──────────────────┐  │
+│  │ Connections │  │ Parametrization  │  │
+│  │             │  │                  │  │
+│  │ Which       │  │ - How Boolean    │  │
+│  │ inputs      │  │   functions are  │  │
+│  │ connect?    │  │   represented?   │  │
+│  │             │  │ - Forward        │  │
+│  │             │  │   sampling mode  │  │
+│  └─────────────┘  └──────────────────┘  │
+└─────────────────────────────────────────┘
+</pre></div>
+</div>
+<p>This modular design allows you to mix and match different strategies for each component.</p>
+<section id="connections-input-routing">
+<h3>1. Connections: Input Routing<a class="headerlink" href="#connections-input-routing" title="Link to this heading"></a></h3>
+<p>The <strong>Connections</strong> component determines which inputs from the previous layer connect to each neuron or convolutional kernel.</p>
+<p><strong>Why separate this?</strong> Different connectivity patterns enable different trade-offs between expressiveness and parameter efficiency.</p>
+<section id="types-of-connections">
+<h4>Types of Connections<a class="headerlink" href="#types-of-connections" title="Link to this heading"></a></h4>
+<p><strong>Fixed Connections</strong> (<code class="docutils literal notranslate"><span class="pre">connections=&quot;fixed&quot;</span></code>):</p>
+<ul class="simple">
+<li><p>Randomly select which inputs connect to each neuron</p></li>
+<li><p>Fixed after initialization (no learning overhead)</p></li>
+<li><p>Options: <code class="docutils literal notranslate"><span class="pre">&quot;random&quot;</span></code> (with replacement) or <code class="docutils literal notranslate"><span class="pre">&quot;random-unique&quot;</span></code> (without replacement)</p></li>
+<li><p>Used in most pre-configured models for efficiency</p></li>
+</ul>
+<p><strong>Learnable Connections</strong> (<code class="docutils literal notranslate"><span class="pre">connections=&quot;learnable&quot;</span></code>):</p>
+<ul class="simple">
+<li><p>Learn which inputs to connect during training</p></li>
+<li><p>Uses Gumbel-Softmax for differentiable selection</p></li>
+<li><p>More flexible but adds computational cost</p></li>
+<li><p>Useful when input structure is unknown</p></li>
+</ul>
+</section>
+<section id="dense-vs-convolutional-structure">
+<h4>Dense vs Convolutional Structure<a class="headerlink" href="#dense-vs-convolutional-structure" title="Link to this heading"></a></h4>
+<p><strong>Dense Structure</strong>:</p>
+<ul class="simple">
+<li><p>Each neuron selects <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code> inputs from all previous layer outputs</p></li>
+<li><p>Fully connected within the selection</p></li>
+</ul>
+<p><strong>Convolutional Structure</strong>:</p>
+<ul class="simple">
+<li><p>Each kernel selects inputs from a spatial receptive field</p></li>
+<li><p>Organized as a binary tree with depth <code class="docutils literal notranslate"><span class="pre">tree_depth</span></code></p></li>
+<li><p>Supports channel grouping via <code class="docutils literal notranslate"><span class="pre">channel_group_size</span></code></p></li>
+<li><p>By default, channels balanced. E.g. a kernel w/ 8 inputs and and a channel group size of 2 would pick 4 inputs from each channel</p></li>
+</ul>
+</section>
+</section>
+<section id="parametrization-representing-boolean-functions">
+<h3>2. Parametrization: Representing Boolean Functions<a class="headerlink" href="#parametrization-representing-boolean-functions" title="Link to this heading"></a></h3>
+<p>The <strong>Parametrization</strong> component defines how Boolean functions (look-up tables) are represented as learnable parameters and how they are sampled during forward passes.</p>
+<p><strong>Why separate this?</strong> Different parametrizations have different optimization landscapes and computational costs, and different sampling strategies enable different exploration-exploitation trade-offs.</p>
+<p>Any Boolean function can be represented as a weighted sum over a basis. TorchLogix provides three parametrization strategies:</p>
+<section id="raw-parametrization-parametrization-raw">
+<h4>Raw Parametrization (<code class="docutils literal notranslate"><span class="pre">parametrization=&quot;raw&quot;</span></code>)<a class="headerlink" href="#raw-parametrization-parametrization-raw" title="Link to this heading"></a></h4>
+<p>Directly represents the truth table using all 16 possible 2-input Boolean functions as described in https://arxiv.org/abs/2210.08277</p>
+<ul class="simple">
+<li><p><strong>Weights</strong>: 16 logits per neuron (one per Boolean function)</p></li>
+<li><p><strong>Sampling</strong>: Softmax over the 16 functions</p></li>
+<li><p><strong>Limitation</strong>: Only supports <code class="docutils literal notranslate"><span class="pre">lut_rank=2</span></code> (2 inputs)</p></li>
+<li><p><strong>Use case</strong>: Baseline method, interpretable gate selection</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Each neuron learns: [w₀, w₁, ..., w₁₅]
+                      ↓
+                   softmax
+                      ↓
+       Weighted sum of 16 Boolean gates
+</pre></div>
+</div>
+</section>
+<section id="warp-parametrization-parametrization-warp">
+<h4>WARP Parametrization (<code class="docutils literal notranslate"><span class="pre">parametrization=&quot;warp&quot;</span></code>)<a class="headerlink" href="#warp-parametrization-parametrization-warp" title="Link to this heading"></a></h4>
+<p>Represents functions using Walsh-Hadamard basis coefficients (parity functions) as described in https://arxiv.org/abs/2602.03527</p>
+<ul class="simple">
+<li><p><strong>Weights</strong>: 2^k coefficients per neuron (where k = <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code>)</p></li>
+<li><p><strong>Sampling</strong>: Sigmoid-based thresholding</p></li>
+<li><p><strong>Supports</strong>: <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code> ∈ {1, 2, 4, 6}</p></li>
+<li><p><strong>Use case</strong>: Fewer parameters than raw, scales to higher-rank LUTs</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Walsh basis: {1, x₁, x₂, x₁⊕x₂}  (for k=2)
+
+Each neuron learns: [c₀, c₁, c₂, c₃]
+                      ↓
+          f(x₁,x₂) = Σᵢ cᵢ · basisᵢ(x₁,x₂)
+</pre></div>
+</div>
+<p><strong>Benefits</strong>:</p>
+<ul class="simple">
+<li><p>More parameter-efficient than raw (4 coefficients vs 16 for <code class="docutils literal notranslate"><span class="pre">lut_rank=2</span></code>)</p></li>
+<li><p>Scales to higher-rank LUTs (4-input, 6-input gates)</p></li>
+</ul>
+</section>
+<section id="light-parametrization-parametrization-light">
+<h4>Light Parametrization (<code class="docutils literal notranslate"><span class="pre">parametrization=&quot;light&quot;</span></code>)<a class="headerlink" href="#light-parametrization-parametrization-light" title="Link to this heading"></a></h4>
+<p>Uses indicator polynomial basis (product terms) with all-positive coefficients as described in https://arxiv.org/abs/2510.03250</p>
+<ul class="simple">
+<li><p><strong>Weights</strong>: 2^k sigmoid-mapped coefficients</p></li>
+<li><p><strong>Supports</strong>: <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code> ∈ {2, 4, 6}</p></li>
+<li><p><strong>Use case</strong>: Alternative basis with different inductive bias</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Light basis: {1, x₁, x₂, x₁·x₂}  (for k=2)
+
+Each neuron learns: [w₀, w₁, w₂, w₃]
+                      ↓
+                  sigmoid(wᵢ) → positive
+                      ↓
+          f(x₁,x₂) = Σᵢ σ(wᵢ) · basisᵢ(x₁,x₂)
+</pre></div>
+</div>
+</section>
+<section id="lut-rank-higher-order-logic">
+<h4>LUT Rank: Higher-Order Logic<a class="headerlink" href="#lut-rank-higher-order-logic" title="Link to this heading"></a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code> parameter controls how many inputs each logic gate operates on. There are <code class="docutils literal notranslate"><span class="pre">2^(2^n)</span></code> boolean functions w/ <code class="docutils literal notranslate"><span class="pre">n</span></code> inputs:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">lut_rank=2</span></code></strong>: 2-input gates (16 possible functions)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">lut_rank=4</span></code></strong>: 4-input gates (65,536 possible functions)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">lut_rank=6</span></code></strong>: 6-input gates (18 quintillion possible functions)</p></li>
+</ul>
+<p>Higher rank = more expressive gates but exponentially more parameters.</p>
+</section>
+<section id="weight-initialization">
+<h4>Weight Initialization<a class="headerlink" href="#weight-initialization" title="Link to this heading"></a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">weight_init</span></code> parameter controls how parameters are initialized:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;residual&quot;</span></code></strong> (default): Initialize near identity/passthrough</p>
+<ul>
+<li><p>Critical for training deep networks (&gt;6 layers)</p></li>
+<li><p>Prevents vanishing gradients at initialization</p></li>
+<li><p>Typically results in more trivial identity gates are optimized away at compile-time</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;random&quot;</span></code></strong>: Random initialization</p>
+<ul>
+<li><p>Good for shallow networks</p></li>
+<li><p>May struggle with depth &gt;6</p></li>
+</ul>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;residual-catalog&quot;</span></code></strong>: Mix of identity and random (WARP only)</p>
+<ul>
+<li><p>Used in WARP-LUTs paper experiments</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="forward-sampling-modes">
+<h4>Forward Sampling Modes<a class="headerlink" href="#forward-sampling-modes" title="Link to this heading"></a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">forward_sampling</span></code> parameter (part of parametrization) controls how continuous relaxations are converted to outputs during the forward pass.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mode</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>When to Use</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;soft&quot;</span></code></strong></p></td>
+<td><p>Continuous softmax/sigmoid relaxation</p></td>
+<td><p>Default, stable gradients</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;hard&quot;</span></code></strong></p></td>
+<td><p>Straight-through estimator (STE)</p></td>
+<td><p>Reduce train-test mismatch</p></td>
+</tr>
+<tr class="row-even"><td><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;gumbel_soft&quot;</span></code></strong></p></td>
+<td><p>Gumbel-Softmax/Sigmoid with noise</p></td>
+<td><p>Exploration during training</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong><code class="docutils literal notranslate"><span class="pre">&quot;gumbel_hard&quot;</span></code></strong></p></td>
+<td><p>Gumbel + STE</p></td>
+<td><p>Exploration + discretization</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Straight-Through Estimators (STE)</strong>:</p>
+<p>Hard sampling modes use the straight-through estimator trick:</p>
+<ul class="simple">
+<li><p><strong>Forward pass</strong>: Discrete (argmax or threshold)</p></li>
+<li><p><strong>Backward pass</strong>: Gradient of continuous relaxation</p></li>
+</ul>
+<p>This allows training discrete models with gradient-based optimization:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Forward:  y = argmax(logits)           [discrete, non-differentiable]
+Backward: ∂L/∂logits = ∂L/∂softmax    [continuous, differentiable]
+</pre></div>
+</div>
+<p><strong>Gumbel Noise Injection</strong>:</p>
+<p>Gumbel sampling modes add noise to enable exploration:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Without Gumbel: deterministic selection</span>
+<span class="n">logits</span> <span class="o">=</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]</span>
+<span class="n">probs</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="p">)</span>  <span class="c1"># Always picks first</span>
+
+<span class="c1"># With Gumbel: stochastic selection</span>
+<span class="n">logits</span> <span class="o">=</span> <span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]</span>
+<span class="n">noisy_logits</span> <span class="o">=</span> <span class="n">logits</span> <span class="o">+</span> <span class="n">Gumbel</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">probs</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">noisy_logits</span> <span class="o">/</span> <span class="n">temperature</span><span class="p">)</span>  <span class="c1"># Explores</span>
+</pre></div>
+</div>
+<p><strong>Training vs Evaluation Modes</strong>:</p>
+<p>The sampling mode only applies during training. At evaluation time, the model always discretizes:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Training mode</span>
+<span class="n">model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Uses specified forward_sampling mode</span>
+
+<span class="c1"># Evaluation mode</span>
+<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Always uses hard discretization (argmax/threshold)</span>
+</pre></div>
+</div>
+<p>This ensures that:</p>
+<ol class="arabic simple">
+<li><p>Training benefits from gradient flow through continuous relaxations</p></li>
+<li><p>Inference uses fully discrete operations (fast, interpretable)</p></li>
+</ol>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="layer-specific-concepts">
+<h2>Layer-Specific Concepts<a class="headerlink" href="#layer-specific-concepts" title="Link to this heading"></a></h2>
+<section id="logicdense-fully-connected-layers">
+<h3>LogicDense: Fully-Connected Layers<a class="headerlink" href="#logicdense-fully-connected-layers" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">LogicDense</span></code> is the fundamental building block, analogous to <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code>.</p>
+<p><strong>Key differences from <code class="docutils literal notranslate"><span class="pre">nn.Linear</span></code></strong>:</p>
+<ul class="simple">
+<li><p>No bias term (bias is a Boolean function: constant True/False)</p></li>
+<li><p>Neurons operate on <code class="docutils literal notranslate"><span class="pre">lut_rank</span></code> inputs (not all inputs)</p></li>
+<li><p>Output is bounded [0, 1] in eval mode (Boolean values)</p></li>
+<li><p>Requires many more neurons for comparable expressiveness</p></li>
+</ul>
+<p><strong>Computation flow</strong>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Input x: (batch, in_dim)
+   ↓
+Connections: select lut_rank inputs per neuron
+   ↓
+Shape: (batch, lut_rank, out_dim)
+   ↓
+Parametrization: apply Boolean functions
+   ↓
+Output: (batch, out_dim)
+</pre></div>
+</div>
+</section>
+<section id="logicconv2d-3d-convolutional-layers">
+<h3>LogicConv2d/3d: Convolutional Layers<a class="headerlink" href="#logicconv2d-3d-convolutional-layers" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">LogicConv2d</span></code> and <code class="docutils literal notranslate"><span class="pre">LogicConv3d</span></code> are analogous to <code class="docutils literal notranslate"><span class="pre">nn.Conv2d</span></code> and <code class="docutils literal notranslate"><span class="pre">nn.Conv3d</span></code>.</p>
+<p><strong>Key architectural difference</strong>: Uses a <strong>binary tree</strong> of logic gates instead of a single large LUT.</p>
+<section id="binary-tree-structure">
+<h4>Binary Tree Structure<a class="headerlink" href="#binary-tree-structure" title="Link to this heading"></a></h4>
+<p>Each convolutional kernel is organized as a binary tree:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>                    Output
+                      ↑
+                  Level 2: 1 gate
+                    ↗   ↖
+              Level 1: 2 gates
+              ↗  ↖      ↗  ↖
+         Level 0: 4 positions in receptive field
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Tree depth</strong>: Controlled by <code class="docutils literal notranslate"><span class="pre">tree_depth</span></code> parameter</p></li>
+<li><p><strong>Receptive field</strong>: <code class="docutils literal notranslate"><span class="pre">lut_rank^tree_depth</span></code> spatial positions</p></li>
+<li><p><strong>Example</strong>: <code class="docutils literal notranslate"><span class="pre">lut_rank=2</span></code>, <code class="docutils literal notranslate"><span class="pre">tree_depth=2</span></code> → 4 positions in receptive field</p></li>
+</ul>
+<p><strong>Why use a tree?</strong> Enables hierarchical composition of local features without exponential parameter growth.</p>
+<p><strong>Weight structure</strong>: Each tree level has separate learnable parameters:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># LogicConv2d with tree_depth=2</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ParameterList</span><span class="p">([</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>  <span class="c1"># Level 0: 4 kernels</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>  <span class="c1"># Level 1: 2 kernels</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>   <span class="c1"># Level 2: 1 kernel (output)</span>
+<span class="p">])</span>
+</pre></div>
+</div>
+</section>
+<section id="channel-grouping">
+<h4>Channel Grouping<a class="headerlink" href="#channel-grouping" title="Link to this heading"></a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">channel_group_size</span></code> parameter restricts each kernel to a subset of input channels:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">layer</span> <span class="o">=</span> <span class="n">LogicConv2d</span><span class="p">(</span>
+    <span class="n">in_channels</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+    <span class="n">num_kernels</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+    <span class="n">channel_group_size</span><span class="o">=</span><span class="mi">8</span>  <span class="c1"># Each kernel sees 8 input channels</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This creates overlapping groups, reducing parameters while maintaining coverage.</p>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="supporting-components">
+<h2>Supporting Components<a class="headerlink" href="#supporting-components" title="Link to this heading"></a></h2>
+<section id="groupsum-classification-head">
+<h3>GroupSum: Classification Head<a class="headerlink" href="#groupsum-classification-head" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> aggregates neuron outputs into class logits:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Input: (batch, n_neurons)</span>
+<span class="c1"># Output: (batch, num_classes=:k)</span>
+
+<span class="n">layer</span> <span class="o">=</span> <span class="n">GroupSum</span><span class="p">(</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+    <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>  <span class="c1"># Temperature for normalization</span>
+    <span class="n">beta</span><span class="o">=</span><span class="mf">0.0</span>  <span class="c1"># Offset, useful for regression tasks</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>How it works</strong>:</p>
+<ol class="arabic simple">
+<li><p>Reshape <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">num_classes</span> <span class="pre">×</span> <span class="pre">neurons_per_class)</span></code> → <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">num_classes,</span> <span class="pre">neurons_per_class)</span></code></p></li>
+<li><p>Sum over neuron groups</p></li>
+<li><p>Divide by <code class="docutils literal notranslate"><span class="pre">tau</span></code> to normalize range</p></li>
+<li><p>Shift by <code class="docutils literal notranslate"><span class="pre">beta</span></code> to desired range</p></li>
+</ol>
+<p><strong>Why <code class="docutils literal notranslate"><span class="pre">tau</span></code>?</strong> Each Boolean neuron outputs [0, 1], so a sum of 100 neurons is [0, 100]. Setting <code class="docutils literal notranslate"><span class="pre">tau=100</span></code> normalizes to [0, 1] range. And setting <code class="docutils literal notranslate"><span class="pre">beta</span></code> to <code class="docutils literal notranslate"><span class="pre">-42</span></code> would result in [-42, -41].</p>
+</section>
+<section id="binarization-layers">
+<h3>Binarization Layers<a class="headerlink" href="#binarization-layers" title="Link to this heading"></a></h3>
+<p>Since logic gates operate on Boolean values, TorchLogix provides layers to convert continuous inputs:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">FixedBinarization</span></code></strong>: Fixed thresholds (e.g., 0.5)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">LearnableBinarization</span></code></strong>: Learn thresholds during training</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">SoftBinarization</span></code></strong>: Differentiable sigmoid-based thresholding, but with fixed position. Can aid training but temperature should be annealed during training to close discretization gap.</p></li>
+</ul>
+<p>Inputs can be binarized <code class="docutils literal notranslate"><span class="pre">per_feature</span></code>, or <code class="docutils literal notranslate"><span class="pre">global</span></code>. For image-like data, there is also the <code class="docutils literal notranslate"><span class="pre">per_channel</span></code> option.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="advanced-topics">
+<h2>Advanced Topics<a class="headerlink" href="#advanced-topics" title="Link to this heading"></a></h2>
+<section id="gradient-scaling-for-deep-networks">
+<h3>Gradient Scaling for Deep Networks<a class="headerlink" href="#gradient-scaling-for-deep-networks" title="Link to this heading"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">grad_factor</span></code> parameter scales gradients during the backward pass:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">layer</span> <span class="o">=</span> <span class="n">LogicDense</span><span class="p">(</span>
+    <span class="n">in_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+    <span class="n">out_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+    <span class="n">grad_factor</span><span class="o">=</span><span class="mf">2.0</span>  <span class="c1"># Scale gradients by 2x</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Why needed?</strong> Logic gates can have very small gradients (e.g., AND gate: <code class="docutils literal notranslate"><span class="pre">∂(a·b)/∂a</span> <span class="pre">=</span> <span class="pre">b</span></code>). For deep networks (&gt;6 layers), this causes vanishing gradients.</p>
+<p><strong>How it works</strong>: Uses a custom autograd function:</p>
+<ul class="simple">
+<li><p><strong>Forward pass</strong>: Identity (<code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">x</span></code>)</p></li>
+<li><p><strong>Backward pass</strong>: Scale gradient (<code class="docutils literal notranslate"><span class="pre">∂L/∂x</span> <span class="pre">=</span> <span class="pre">grad_factor</span> <span class="pre">·</span> <span class="pre">∂L/∂y</span></code>)</p></li>
+</ul>
+<p><strong>When to use</strong>: Set <code class="docutils literal notranslate"><span class="pre">grad_factor=2.0</span></code> or higher for networks deeper than 6 layers.</p>
+</section>
+<section id="extracting-discrete-boolean-functions">
+<h3>Extracting Discrete Boolean Functions<a class="headerlink" href="#extracting-discrete-boolean-functions" title="Link to this heading"></a></h3>
+<p>After training, you can extract the learned Boolean functions:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Important: switch to eval mode</span>
+
+<span class="c1"># Get truth tables</span>
+<span class="n">luts</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_luts</span><span class="p">()</span>  <span class="c1"># Shape: (num_neurons, 2^lut_rank)</span>
+
+<span class="c1"># Get integer IDs (for lut_rank=2 only)</span>
+<span class="n">luts</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">()</span>  <span class="c1"># ids in [0, 15]</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">ids</span></code> map to the 16 Boolean functions (0=False, 1=AND, 7=OR, 14=NAND, 15=True).</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="deployment-from-training-to-inference">
+<h2>Deployment: From Training to Inference<a class="headerlink" href="#deployment-from-training-to-inference" title="Link to this heading"></a></h2>
+<p>TorchLogix provides multiple inference backends optimized for different use cases:</p>
+<section id="standard-pytorch-training-validation">
+<h3>1. Standard PyTorch (Training &amp; Validation)<a class="headerlink" href="#standard-pytorch-training-validation" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">LogicDense</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Discretizes to Boolean operations</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Standard PyTorch inference</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>: Validation during training, small-scale inference.</p>
+</section>
+<section id="packbitstensor-gpu-batch-inference">
+<h3>2. PackBitsTensor (GPU Batch Inference)<a class="headerlink" href="#packbitstensor-gpu-batch-inference" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">PackBitsTensor</span>
+
+<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+<span class="n">model</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
+
+<span class="c1"># Pack boolean tensors to single bits</span>
+<span class="n">input_packed</span> <span class="o">=</span> <span class="n">PackBitsTensor</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Requires CUDA</span>
+<span class="n">output_packed</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_packed</span><span class="p">)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">output_packed</span><span class="o">.</span><span class="n">unpack</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>: Large batch inference on GPU, up to 32× memory savings.</p>
+<p><strong>Limitation</strong>: Requires CUDA device.</p>
+</section>
+<section id="compiledlogicnet-cpu-production-inference">
+<h3>3. CompiledLogicNet (CPU Production Inference)<a class="headerlink" href="#compiledlogicnet-cpu-production-inference" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+
+<span class="c1"># Compile to C code</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">compiler</span><span class="o">=</span><span class="s1">&#39;gcc&#39;</span><span class="p">,</span> <span class="n">optimization_level</span><span class="o">=</span><span class="s1">&#39;-O3&#39;</span><span class="p">)</span>
+
+<span class="c1"># Run inference</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">compiled</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Calls compiled C code</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>: Production deployment on CPU, edge devices.</p>
+<p><strong>Benefits</strong>: 10-100× faster than PyTorch, no Python/PyTorch dependencies at runtime.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="common-patterns">
+<h2>Common Patterns<a class="headerlink" href="#common-patterns" title="Link to this heading"></a></h2>
+<section id="building-a-classifier">
+<h3>Building a Classifier<a class="headerlink" href="#building-a-classifier" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">,</span> <span class="n">LearnableBinarization</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">LearnableBinarization</span><span class="p">(</span><span class="n">num_thresholds</span><span class="o">=</span><span class="mi">3</span><span class="p">),</span>  <span class="c1"># Input preprocessing</span>
+    <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">28</span><span class="o">*</span><span class="mi">28</span><span class="o">*</span><span class="mi">3</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">512</span><span class="p">),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">512</span><span class="p">),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="n">in_dim</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span> <span class="n">out_dim</span><span class="o">=</span><span class="mi">1000</span><span class="p">),</span>
+    <span class="n">GroupSum</span><span class="p">(</span><span class="n">num_classes</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">neurons_per_class</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="using-pre-configured-models">
+<h3>Using Pre-configured Models<a class="headerlink" href="#using-pre-configured-models" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">DlgnMediumMnist</span><span class="p">,</span> <span class="n">ClgnMediumCifar10</span>
+
+<span class="c1"># Dense model for MNIST</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">DlgnMediumMnist</span><span class="p">()</span>
+
+<span class="c1"># Convolutional model for CIFAR-10</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">ClgnMediumCifar10</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Pre-configured models follow naming convention: <code class="docutils literal notranslate"><span class="pre">{D/C}lgn{Size}{Dataset}{Variant}</span></code></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">D</span></code> = Dense, <code class="docutils literal notranslate"><span class="pre">C</span></code> = Convolutional</p></li>
+<li><p>Size: Tiny, Small, Medium, Large, Large2, Large4</p></li>
+<li><p>Dataset: Mnist, Cifar10</p></li>
+<li><p>Variant: (empty), Rank4, Rank6, Learn0, Learn1, Learn2</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p>TorchLogix’s architecture is built on three key ideas:</p>
+<ol class="arabic simple">
+<li><p><strong>PyTorch Compatibility</strong>: Seamless integration with existing PyTorch workflows (but not drop-in replacements)</p></li>
+<li><p><strong>Modular Design</strong>: Separate concerns (connections, parametrization) for maximum flexibility</p></li>
+<li><p><strong>Differentiable-to-Discrete</strong>: Train with continuous relaxations, deploy with discrete operations</p></li>
+</ol>
+<p>This design allows you to:</p>
+<ul class="simple">
+<li><p>Use logic layers like any other PyTorch layer</p></li>
+<li><p>Mix and match different connection patterns, parametrization strategies, and sampling modes</p></li>
+<li><p>Train with gradients and deploy as efficient Boolean circuits</p></li>
+</ul>
+<p>For detailed API documentation, see the <a class="reference internal" href="../api/torchlogix.html"><span class="std std-doc">API Reference</span></a>.</p>
+<p>For hands-on examples, see the <a class="reference internal" href="quickstart.html"><span class="std std-doc">Quickstart Guide</span></a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023-2024 Felix Petersen (original DiffLogic), Lino Gerlach (TorchLogix extensions).</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python 3.6 or higher
+- Python 3.10 or higher
 - PyTorch 1.9.0 or higher
 
 ## Basic Installation
@@ -58,7 +58,7 @@ print(f"Output shape: {output.shape}")
 
 ## Supported Versions
 
-- **Python**: 3.6+
+- **Python**: 3.10+
 - **PyTorch**: 1.9.0 - 1.13.x (tested)
 
 For experiments, install additional dependencies:

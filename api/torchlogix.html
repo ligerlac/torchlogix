@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TorchLogix Package &mdash; TorchLogix 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
 
   
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../_static/documentation_options.js?v=01f34227"></script>
-      <script src="../_static/doctools.js?v=9bcbadda"></script>
-      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../_static/copybutton.js?v=30646c52"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
@@ -62,18 +62,17 @@
 <li class="toctree-l2"><a class="reference internal" href="#module-torchlogix">Package Contents</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.CompiledLogicNet"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.__init__"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_gate_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_gate_code()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_c_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_c_code()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.compile"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.compile()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.forward"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.forward()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_c_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_c_code()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_gate_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_gate_code()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.load"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.load()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.training"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.training</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.PackBitsTensor"><code class="docutils literal notranslate"><span class="pre">PackBitsTensor</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.PackBitsTensor.__init__"><code class="docutils literal notranslate"><span class="pre">PackBitsTensor.__init__()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#torchlogix.PackBitsTensor.flatten"><code class="docutils literal notranslate"><span class="pre">PackBitsTensor.flatten()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.PackBitsTensor.group_sum"><code class="docutils literal notranslate"><span class="pre">PackBitsTensor.group_sum()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.PackBitsTensor.flatten"><code class="docutils literal notranslate"><span class="pre">PackBitsTensor.flatten()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -137,13 +136,35 @@
 <p>The main package for torchlogix.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.CompiledLogicNet">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">torchlogix.</span></span><span class="sig-name descname"><span class="pre">CompiledLogicNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpu_compiler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gcc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_bitpacking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet" title="Link to this definition"></a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.9)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.</span></span><span class="sig-name descname"><span class="pre">CompiledLogicNet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpu_compiler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gcc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_bitpacking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_groupsum_scaling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.10)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
 <p>Unified compiled logic network that handles convolutional, pooling, and linear layers.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpu_compiler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gcc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_bitpacking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.__init__" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpu_compiler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gcc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_bitpacking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_groupsum_scaling</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.__init__" title="Link to this definition"></a></dt>
 <dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_gate_code">
+<span class="sig-name descname"><span class="pre">get_gate_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">var1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">var2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gate_op</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_gate_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_gate_code" title="Link to this definition"></a></dt>
+<dd><p>Generate C code for a logic gate operation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_c_code">
+<span class="sig-name descname"><span class="pre">get_c_code</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_c_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_c_code" title="Link to this definition"></a></dt>
+<dd><p>Generate the complete C code for the network.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
@@ -164,49 +185,27 @@
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_c_code">
-<span class="sig-name descname"><span class="pre">get_c_code</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_c_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_c_code" title="Link to this definition"></a></dt>
-<dd><p>Generate the complete C code for the network.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_gate_code">
-<span class="sig-name descname"><span class="pre">get_gate_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">var1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">var2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gate_op</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_gate_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_gate_code" title="Link to this definition"></a></dt>
-<dd><p>Generate C code for a logic gate operation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.load">
-<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save_lib_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.load" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save_lib_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.load" title="Link to this definition"></a></dt>
 <dd><p>Load a compiled network from a shared library.</p>
 <p>Note: input_shape is required here since we’re loading a pre-compiled library
 without access to the original model structure for inference.</p>
 </dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.training">
-<span class="sig-name descname"><span class="pre">training</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#torchlogix.CompiledLogicNet.training" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.PackBitsTensor">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">torchlogix.</span></span><span class="sig-name descname"><span class="pre">PackBitsTensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/packbitstensor.html#PackBitsTensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.PackBitsTensor" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.</span></span><span class="sig-name descname"><span class="pre">PackBitsTensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/packbitstensor.html#PackBitsTensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.PackBitsTensor" title="Link to this definition"></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.PackBitsTensor.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cuda'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/packbitstensor.html#PackBitsTensor.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.PackBitsTensor.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.PackBitsTensor.group_sum">
+<span class="sig-name descname"><span class="pre">group_sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/packbitstensor.html#PackBitsTensor.group_sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.PackBitsTensor.group_sum" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -215,11 +214,6 @@ without access to the original model structure for inference.</p>
 <dd><p>Returns the PackBitsTensor object itself.
 Arguments are ignored.</p>
 </dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="torchlogix.PackBitsTensor.group_sum">
-<span class="sig-name descname"><span class="pre">group_sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/packbitstensor.html#PackBitsTensor.group_sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.PackBitsTensor.group_sum" title="Link to this definition"></a></dt>
-<dd></dd></dl>
 
 </dd></dl>
 

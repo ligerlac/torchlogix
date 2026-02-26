@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>torchlogix.functional.GradFactor &mdash; TorchLogix 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
 
   
       <script src="../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../_static/documentation_options.js?v=01f34227"></script>
-      <script src="../../_static/doctools.js?v=9bcbadda"></script>
-      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../../_static/copybutton.js?v=30646c52"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
@@ -24,7 +24,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Contributing to TorchLogix" href="../../guides/contributing.html" />
-    <link rel="prev" title="torchlogix.functional.get_unique_connections" href="torchlogix.functional.get_unique_connections.html" /> 
+    <link rel="prev" title="torchlogix.functional.compute_all_logic_ops_vectorized" href="torchlogix.functional.compute_all_logic_ops_vectorized.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -60,7 +60,6 @@
 <li class="toctree-l1 current"><a class="reference internal" href="../functional.html">Functional Module</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../functional.html#logic-operations">Logic Operations</a></li>
 <li class="toctree-l2 current"><a class="reference internal" href="../functional.html#utility-functions">Utility Functions</a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="torchlogix.functional.get_unique_connections.html">torchlogix.functional.get_unique_connections</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">torchlogix.functional.GradFactor</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.functional.GradFactor"><code class="docutils literal notranslate"><span class="pre">GradFactor</span></code></a></li>
 </ul>
@@ -107,7 +106,7 @@
 <h1>torchlogix.functional.GradFactor<a class="headerlink" href="#torchlogix-functional-gradfactor" title="Link to this heading"></a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.functional.GradFactor">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">GradFactor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/functional.html#GradFactor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">GradFactor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/functional.html#GradFactor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor" title="Link to this definition"></a></dt>
 <dd><dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.functional.GradFactor.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#torchlogix.functional.GradFactor.__init__" title="Link to this definition"></a></dt>
@@ -168,7 +167,7 @@
 <td><p>Define a formula for differentiating the operation with backward mode automatic differentiation.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">vmap</span></code>(info, in_dims, *args)</p></td>
-<td><p>Define the behavior for this autograd.Function underneath <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.vmap.html#torch.vmap" title="(in PyTorch v2.9)"><code class="xref py py-func docutils literal notranslate"><span class="pre">torch.vmap()</span></code></a>.</p></td>
+<td><p>Define the behavior for this autograd.Function underneath <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.vmap.html#torch.vmap" title="(in PyTorch v2.10)"><code class="xref py py-func docutils literal notranslate"><span class="pre">torch.vmap()</span></code></a>.</p></td>
 </tr>
 </tbody>
 </table>
@@ -215,7 +214,7 @@
 </table>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.functional.GradFactor.forward">
-<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/functional.html#GradFactor.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.forward" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/functional.html#GradFactor.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.forward" title="Link to this definition"></a></dt>
 <dd><p>Define the forward of the custom autograd Function.</p>
 <p>This function is to be overridden by all subclasses.
 There are two ways to define forward:</p>
@@ -228,7 +227,7 @@ There are two ways to define forward:</p>
 <ul class="simple">
 <li><p>It must accept a context ctx as the first argument, followed by any
 number of arguments (tensors or other types).</p></li>
-<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#combining-forward-context" title="(in PyTorch v2.9)"><span>Combined or separate forward() and setup_context()</span></a> for more details</p></li>
+<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#combining-forward-context" title="(in PyTorch v2.10)"><span>Combined or separate forward() and setup_context()</span></a> for more details</p></li>
 </ul>
 <p>Usage 2 (Separate forward and ctx):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@staticmethod</span>
@@ -247,7 +246,7 @@ number of arguments (tensors or other types).</p></li>
 staticmethod to handle setting up the <code class="docutils literal notranslate"><span class="pre">ctx</span></code> object.
 <code class="docutils literal notranslate"><span class="pre">output</span></code> is the output of the forward, <code class="docutils literal notranslate"><span class="pre">inputs</span></code> are a Tuple of inputs
 to the forward.</p></li>
-<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#extending-autograd" title="(in PyTorch v2.9)"><span>Extending torch.autograd</span></a> for more details</p></li>
+<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#extending-autograd" title="(in PyTorch v2.10)"><span>Extending torch.autograd</span></a> for more details</p></li>
 </ul>
 <p>The context can be used to store arbitrary data that can be then
 retrieved during the backward pass. Tensors should not be stored
@@ -260,7 +259,7 @@ if they are intended to be used for in <code class="docutils literal notranslate
 
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.functional.GradFactor.backward">
-<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/functional.html#GradFactor.backward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.backward" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/functional.html#GradFactor.backward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.backward" title="Link to this definition"></a></dt>
 <dd><p>Define a formula for differentiating the operation with backward mode automatic differentiation.</p>
 <p>This function is to be overridden by all subclasses.
 (Defining this function is equivalent to defining the <code class="docutils literal notranslate"><span class="pre">vjp</span></code> function.)</p>
@@ -288,7 +287,7 @@ output.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="torchlogix.functional.get_unique_connections.html" class="btn btn-neutral float-left" title="torchlogix.functional.get_unique_connections" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="torchlogix.functional.compute_all_logic_ops_vectorized.html" class="btn btn-neutral float-left" title="torchlogix.functional.compute_all_logic_ops_vectorized" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="../../guides/contributing.html" class="btn btn-neutral float-right" title="Contributing to TorchLogix" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

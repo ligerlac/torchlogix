@@ -13,7 +13,7 @@ Key Features
 * **Differentiable Logic Gates**: Implement neural networks using 16 different binary logical operations
 * **Convolutional Support**: 2D and 3D logic convolutional layers with flexible receptive fields
 * **Model Compilation**: Convert trained logic networks to optimized implementations
-* **CUDA Acceleration**: Optional CUDA extensions for high-performance computing
+* **GPU Support**: CUDA-accelerated training and inference for high-performance computing
 * **Easy Integration**: New layers mostly follow PyTorch conventions
 
 Quick Start

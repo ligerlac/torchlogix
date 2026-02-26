@@ -7,15 +7,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>torchlogix.layers.conv &mdash; TorchLogix 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
 
   
       <script src="../../../_static/jquery.js?v=5d32c60e"></script>
       <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="../../../_static/documentation_options.js?v=01f34227"></script>
-      <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../../../_static/copybutton.js?v=30646c52"></script>
       <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
@@ -86,761 +86,331 @@
            <div itemprop="articleBody">
              
   <h1>Source code for torchlogix.layers.conv</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Union</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Union</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.common_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">_size_2_t</span><span class="p">,</span> <span class="n">_size_3_t</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.modules.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">_pair</span><span class="p">,</span> <span class="n">_triple</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">gumbel_softmax</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">..functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">bin_op_cnn</span><span class="p">,</span> <span class="n">bin_op_cnn_walsh</span><span class="p">,</span> <span class="n">gumbel_sigmoid</span><span class="p">,</span> <span class="n">soft_raw</span><span class="p">,</span> <span class="n">soft_walsh</span><span class="p">,</span> <span class="n">hard_raw</span><span class="p">,</span> <span class="n">hard_walsh</span><span class="p">,</span> <span class="n">WALSH_COEFFICIENTS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..connections</span><span class="w"> </span><span class="kn">import</span> <span class="n">setup_connections</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..functional</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">get_regularization_loss</span><span class="p">,</span> <span class="n">rescale_weights</span>
+    <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicBase</span>
 
 
-<div class="viewcode-block" id="LogicConv2d">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">LogicConv2d</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;2d convolutional layer with differentiable logic operations.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_LogicConvNd</span><span class="p">(</span><span class="n">LogicBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Abstract baseclass for convolutional logic layers.</span>
+<span class="sd">    This module provides common functionality for 2D and 3D logic convolutional</span>
+<span class="sd">    layers with differentiable learning.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        in_dim: Input spatial dimensions ``(depth, height, width)``.</span>
+<span class="sd">        channels: Number of input channels.</span>
+<span class="sd">        num_kernels: Number of output logic kernels (analogous to output channels)</span>
+<span class="sd">        tree_depth: Depth of the binary logic tree. A depth of ``d`` uses</span>
+<span class="sd">            ``2**d`` leaves per receptive field.</span>
+<span class="sd">        receptive_field_size: Spatial size (depth, height and width) of the</span>
+<span class="sd">            receptive field (assumed cubic).</span>
+<span class="sd">        stride: Convolution stride in all spatial dimensions.</span>
+<span class="sd">        padding: Zero-padding applied symmetrically to depth, height and width</span>
+<span class="sd">            before selecting receptive fields.</span>
+<span class="sd">        conv_dimension: Dimension of the convolution (2 or 3).</span>
+<span class="sd">        device (str): Device to run the layer on (&#39;cpu&#39; or &#39;cuda&#39;).</span>
+<span class="sd">        grad_factor (float): Gradient scaling factor.</span>
+<span class="sd">        lut_rank (int): Rank of the LUTs used in the layer.</span>
+<span class="sd">        parametrization (str): Type of parametrization to use (&#39;raw&#39;, &#39;warp&#39;, &#39;light&#39;).</span>
+<span class="sd">        parametrization_kwargs (dict): Additional keyword arguments for parametrization.</span>
+<span class="sd">        connections (str): Type of connections to use (&#39;fixed&#39;, &#39;learnable&#39;, etc.).</span>
+<span class="sd">        connections_kwargs (dict): Additional keyword arguments for connections.&quot;&quot;&quot;</span>
 
-<span class="sd">    This layer implements a 2d convolution with differentiable logic operations.</span>
-<span class="sd">    It uses a binary tree structure to combine input features using logical</span>
-<span class="sd">    operations.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-<div class="viewcode-block" id="LogicConv2d.__init__">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">in_dim</span><span class="p">:</span> <span class="n">_size_2_t</span><span class="p">,</span>
-        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span>
-        <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">in_dim</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_2_t</span><span class="p">,</span> <span class="n">_size_3_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
         <span class="n">channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">num_kernels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
         <span class="n">tree_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">receptive_field_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">implementation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;random&quot;</span><span class="p">,</span>  <span class="c1"># or &#39;random-unique&#39;</span>
-        <span class="n">weight_init</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;residual&quot;</span><span class="p">,</span>  <span class="c1"># &quot;residual&quot; or &quot;random&quot;</span>
+        <span class="n">receptive_field_size</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_2_t</span><span class="p">,</span> <span class="n">_size_3_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
         <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span> <span class="c1"># or &#39;walsh&#39;</span>
-        <span class="n">temperature</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-        <span class="n">forward_sampling</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;soft&quot;</span> <span class="c1"># or &quot;hard&quot;, &quot;gumbel_soft&quot;, or &quot;gumbel_hard&quot;</span>
+        <span class="n">conv_dimension</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the 2d logic convolutional layer.</span>
-
-<span class="sd">        Args:</span>
-<span class="sd">            in_dim: Input dimensions (height, width)</span>
-<span class="sd">            device: Device to run the layer on</span>
-<span class="sd">            grad_factor: Gradient factor for the logic operations</span>
-<span class="sd">            channels: Number of input channels</span>
-<span class="sd">            num_kernels: Number of output kernels</span>
-<span class="sd">            tree_depth: Depth of the binary tree</span>
-<span class="sd">            receptive_field_size: Size of the receptive field</span>
-<span class="sd">            implementation: Implementation type (&quot;python&quot; or &quot;cuda&quot;)</span>
-<span class="sd">            connections: Connection type: &quot;random&quot; or &quot;unique&quot;. The latter will overwrite</span>
-<span class="sd">                the tree_depth parameter and use a full binary tree of all possible connections</span>
-<span class="sd">                within the receptive field.</span>
-<span class="sd">            stride: Stride of the convolution</span>
-<span class="sd">            padding: Padding of the convolution</span>
-<span class="sd">            parametrization: Parametrization to use (&quot;raw&quot; or &quot;walsh&quot;)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">=</span> <span class="n">parametrization</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">=</span> <span class="n">forward_sampling</span>
-
-        <span class="c1"># self.tree_weights = []</span>
-        <span class="k">assert</span> <span class="n">stride</span> <span class="o">&lt;=</span> <span class="n">receptive_field_size</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Stride (</span><span class="si">{</span><span class="n">stride</span><span class="si">}</span><span class="s2">) cannot be larger than receptive field size &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">receptive_field_size</span><span class="si">}</span><span class="s2">).&quot;</span>
-        <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">tree_depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)):</span>  <span class="c1"># Iterate over tree levels</span>
-            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">ParameterList</span><span class="p">()</span>
-            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="n">i</span><span class="p">):</span>  <span class="c1"># Iterate over nodes at this level</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;raw&quot;</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;residual&quot;</span><span class="p">:</span>
-                        <span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
-                            <span class="n">num_kernels</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span>
-                        <span class="p">)</span>  <span class="c1"># Initialize with zeros</span>
-                        <span class="n">weights</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>  <span class="c1"># Set the fourth element (index 3) to 5</span>
-                    <span class="k">elif</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-                        <span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">num_kernels</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;walsh&quot;</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;residual&quot;</span><span class="p">:</span>
-                        <span class="c1"># chose randomly from walsh_coefficients, but prefer id=10</span>
-                        <span class="n">walsh_coefficients_tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">WALSH_COEFFICIENTS</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                        <span class="n">weights</span> <span class="o">=</span> <span class="n">walsh_coefficients_tensor</span><span class="p">[</span>
-                            <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="p">(</span><span class="n">num_kernels</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                        <span class="p">]</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>  <span class="c1"># .clone() for safety</span>
-                        <span class="n">n</span> <span class="o">=</span> <span class="n">num_kernels</span> <span class="o">//</span> <span class="mi">2</span>
-                        <span class="c1"># set half of weights to id=10 (pick index randomly)</span>
-                        <span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="n">num_kernels</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-                        <span class="n">weights</span><span class="p">[</span><span class="n">indices</span><span class="p">[:</span><span class="n">n</span><span class="p">]]</span> <span class="o">=</span> <span class="n">walsh_coefficients_tensor</span><span class="p">[</span><span class="mi">10</span><span class="p">]</span>
-                    <span class="k">elif</span> <span class="n">weight_init</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-                        <span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">num_kernels</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.1</span>
-                <span class="n">level_weights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_weights</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span> <span class="o">=</span> <span class="n">grad_factor</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">grad_factor</span><span class="o">=</span><span class="n">grad_factor</span><span class="p">,</span>
+            <span class="n">lut_rank</span><span class="o">=</span><span class="n">lut_rank</span><span class="p">,</span>
+            <span class="n">parametrization</span><span class="o">=</span><span class="n">parametrization</span><span class="p">,</span>
+            <span class="n">parametrization_kwargs</span><span class="o">=</span><span class="n">parametrization_kwargs</span><span class="p">,</span>
+            <span class="n">connections</span><span class="o">=</span><span class="n">connections</span><span class="p">,</span>
+            <span class="n">connections_kwargs</span><span class="o">=</span><span class="n">connections_kwargs</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span> <span class="o">=</span> <span class="n">num_kernels</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">=</span> <span class="n">tree_depth</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">channels</span> <span class="o">=</span> <span class="n">channels</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span> <span class="o">=</span> <span class="n">receptive_field_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conv_dimension</span> <span class="o">=</span> <span class="n">conv_dimension</span>
+        <span class="k">assert</span> <span class="n">conv_dimension</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s2">&quot;conv_dimension must be 2 or 3&quot;</span>
+        <span class="k">if</span> <span class="n">conv_dimension</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">receptive_field_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span> <span class="o">=</span> <span class="n">_triple</span><span class="p">(</span><span class="n">receptive_field_size</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span> <span class="o">=</span> <span class="n">_triple</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="p">(</span>
+            <span class="nb">all</span><span class="p">(</span><span class="n">stride</span> <span class="o">&lt;=</span> <span class="n">dim</span> <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">)</span>
+        <span class="p">),</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Stride (</span><span class="si">{</span><span class="n">stride</span><span class="si">}</span><span class="s2">) cannot be larger than &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;receptive field size (</span><span class="si">{</span><span class="n">receptive_field_size</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>        
         <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="n">stride</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">=</span> <span class="n">padding</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">connections</span>
-        <span class="k">if</span> <span class="n">connections</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">kernel_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_random_receptive_field_pairs</span><span class="p">()</span>
-        <span class="k">elif</span> <span class="n">connections</span> <span class="o">==</span> <span class="s2">&quot;random-unique&quot;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">kernel_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_random_unique_receptive_field_pairs</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown connections type: </span><span class="si">{</span><span class="n">connections</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_indices_from_kernel_pairs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_pairs</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span> <span class="o">=</span> <span class="n">temperature</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_weights</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_connections</span><span class="p">()</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Initialize tree weights using parametrization</span>
+        <span class="n">tree_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">ParameterList</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">)):</span>
+            <span class="c1"># each tree level has lut_rank**i nodes per kernel</span>
+            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+                <span class="p">[</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">init_weights</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">,</span> 
+                        <span class="bp">self</span><span class="o">.</span><span class="n">device</span>
+                    <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lut_rank</span><span class="o">**</span><span class="n">i</span><span class="p">)</span>
+                <span class="p">]</span>
+            <span class="p">))</span>
+            <span class="n">tree_weights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_weights</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tree_weights</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_connections</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+         <span class="c1"># Setup connections</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">setup_connections</span><span class="p">(</span>
+            <span class="n">structure</span><span class="o">=</span><span class="s2">&quot;conv&quot;</span><span class="p">,</span>
+            <span class="n">connections</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">,</span>
+            <span class="n">lut_rank</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lut_rank</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">in_dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span>
+            <span class="n">channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span>
+            <span class="n">num_kernels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">,</span>
+            <span class="n">tree_depth</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">,</span>
+            <span class="n">receptive_field_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">,</span>
+            <span class="n">conv_dimension</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conv_dimension</span><span class="p">,</span>
+            <span class="n">stride</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span>
+            <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span>
+            <span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">connections_kwargs</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span>
 
-
-<div class="viewcode-block" id="LogicConv2d.forward">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.forward">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Implement the binary tree using the pre-selected indices.&quot;&quot;&quot;</span>
-        <span class="n">current_level</span> <span class="o">=</span> <span class="n">x</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Applies the logic convolution to the input.</span>
+
+<span class="sd">        The forward pass proceeds as follows:</span>
+
+<span class="sd">        1. Optionally pad the input spatially.</span>
+<span class="sd">        2. Select all receptive-field positions for the first tree level using</span>
+<span class="sd">           precomputed index tensors.</span>
+<span class="sd">        3. For each tree level:</span>
+<span class="sd">            a. Sample or select LUT weights for all nodes at that level.</span>
+<span class="sd">            b. Apply binary logic operations to the child activations,</span>
+<span class="sd">               reducing them up the tree.</span>
+<span class="sd">        4. Reshape the final per-kernel outputs into a 4D tensor of shape</span>
+<span class="sd">           ``(batch_size, num_kernels, out_height, out_width)``.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            x: Input tensor of shape ``(batch_size, channels, height, width)``.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Tensor of shape ``(batch_size, num_kernels, out_height, out_width)``,</span>
+<span class="sd">            where ``out_height`` and ``out_width`` are determined by the</span>
+<span class="sd">            convolution parameters:</span>
+
+<span class="sd">            * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``</span>
+<span class="sd">            * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">current_level</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
-                <span class="n">current_level</span><span class="p">,</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
+                <span class="n">x</span><span class="p">,</span>
                 <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
                 <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;constant&quot;</span><span class="p">,</span>
                 <span class="n">value</span><span class="o">=</span><span class="mi">0</span>
             <span class="p">)</span>
-
-        <span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">a_h</span><span class="p">,</span> <span class="n">a_w</span><span class="p">,</span> <span class="n">a_c</span> <span class="o">=</span> <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-        <span class="n">b_h</span><span class="p">,</span> <span class="n">b_w</span><span class="p">,</span> <span class="n">b_c</span> <span class="o">=</span> <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-        <span class="n">a</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[:,</span> <span class="n">a_c</span><span class="p">,</span> <span class="n">a_h</span><span class="p">,</span> <span class="n">a_w</span><span class="p">]</span>
-        <span class="n">b</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[:,</span> <span class="n">b_c</span><span class="p">,</span> <span class="n">b_h</span><span class="p">,</span> <span class="n">b_w</span><span class="p">]</span>
-
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;raw&quot;</span><span class="p">:</span>
-            <span class="n">weighting_func</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s2">&quot;soft&quot;</span><span class="p">:</span> <span class="n">soft_raw</span><span class="p">,</span>
-                <span class="s2">&quot;hard&quot;</span><span class="p">:</span> <span class="n">hard_raw</span><span class="p">,</span>
-                <span class="s2">&quot;gumbel_soft&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">w</span><span class="p">:</span> <span class="n">gumbel_softmax</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
-                <span class="s2">&quot;gumbel_hard&quot;</span><span class="p">:</span> <span class="k">lambda</span> <span class="n">w</span><span class="p">:</span> <span class="n">gumbel_softmax</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-            <span class="p">}[</span><span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span><span class="p">]</span>
-
-            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
-                <span class="p">[</span><span class="n">weighting_func</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span>
+        <span class="c1"># First level tree indices</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="c1"># Process first level with einsum contraction</span>
+        <span class="c1"># b=batch, c=channels, s=spatial, f=features, k=num_basis/16</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
+            <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
+            <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;fc,bcsf-&gt;bcsf&#39;</span>
+        <span class="p">)</span>
+        <span class="c1"># Process remaining levels</span>
+        <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">level</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">movedim</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
+                <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
+                <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;fc,bcsf-&gt;bcsf&#39;</span>
             <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">level_weights</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">float32</span>
-                <span class="p">)</span>
-
-            <span class="n">current_level</span> <span class="o">=</span> <span class="n">bin_op_cnn</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">level_weights</span><span class="p">)</span>
-
-            <span class="c1"># Process remaining levels</span>
-            <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-                <span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
-                <span class="n">a</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">left_indices</span><span class="p">]</span>
-                <span class="n">b</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">right_indices</span><span class="p">]</span>
-                <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
-                    <span class="p">[</span><span class="n">weighting_func</span><span class="p">(</span><span class="n">w</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">]],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span>
-                <span class="p">)</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                    <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">level_weights</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
-                        <span class="n">torch</span><span class="o">.</span><span class="n">float32</span>
-                    <span class="p">)</span>
-
-                <span class="n">current_level</span> <span class="o">=</span> <span class="n">bin_op_cnn</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">level_weights</span><span class="p">)</span>
-
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span> <span class="o">==</span> <span class="s2">&quot;walsh&quot;</span><span class="p">:</span>
-            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">w</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-            <span class="n">current_level</span> <span class="o">=</span> <span class="n">bin_op_cnn_walsh</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">level_weights</span><span class="p">)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;soft&quot;</span><span class="p">:</span>
-                    <span class="n">current_level</span> <span class="o">=</span> <span class="n">soft_walsh</span><span class="p">(</span><span class="n">current_level</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;hard&quot;</span><span class="p">:</span>
-                    <span class="n">current_level</span> <span class="o">=</span> <span class="n">hard_walsh</span><span class="p">(</span><span class="n">current_level</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_soft&quot;</span><span class="p">:</span>
-                    <span class="n">current_level</span> <span class="o">=</span> <span class="n">gumbel_sigmoid</span><span class="p">(</span><span class="n">current_level</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_hard&quot;</span><span class="p">:</span>
-                    <span class="n">current_level</span> <span class="o">=</span> <span class="n">gumbel_sigmoid</span><span class="p">(</span><span class="n">current_level</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">current_level</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_level</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-
-            <span class="c1"># Process remaining levels</span>
-            <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-                <span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
-                <span class="n">a</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">left_indices</span><span class="p">]</span>
-                <span class="n">b</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">right_indices</span><span class="p">]</span>
-                <span class="c1"># level_weights = self.tree_weights[level]</span>
-                <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">w</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">]],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
-                <span class="n">current_level</span> <span class="o">=</span> <span class="n">bin_op_cnn_walsh</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">level_weights</span><span class="p">)</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                    <span class="n">current_level</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">current_level</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span><span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">current_level</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_level</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-
         <span class="c1"># Reshape flattened output</span>
-        <span class="n">reshape_h</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">+</span> <span class="mi">1</span>
-        <span class="n">reshape_w</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">reshape</span> <span class="o">=</span> <span class="p">[(</span><span class="n">in_dim</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">-</span> <span class="n">rfs</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">+</span> <span class="mi">1</span> 
+                   <span class="k">for</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">rfs</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">)]</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="o">*</span><span class="n">reshape</span><span class="p">)</span>
 
-        <span class="n">current_level</span> <span class="o">=</span> <span class="n">current_level</span><span class="o">.</span><span class="n">view</span><span class="p">(</span>
-            <span class="n">current_level</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-            <span class="n">current_level</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
-            <span class="n">reshape_h</span><span class="p">,</span>
-            <span class="n">reshape_w</span><span class="p">,</span>
-        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span>
 
-        <span class="k">return</span> <span class="n">current_level</span></div>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_luts_and_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT and its ID for each neuron.</span>
 
-
-
-<div class="viewcode-block" id="LogicConv2d.get_random_receptive_field_pairs">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.get_random_receptive_field_pairs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_random_receptive_field_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate random index pairs within the receptive field for each kernel.</span>
-<span class="sd">        May contain self connections and duplicate connections.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Tuple[List[List[torch.Tensor]], List[List[torch.Tensor]]]:</span>
+<span class="sd">                - ``tree_luts``: Nested list of Boolean tensors (truth tables)</span>
+<span class="sd">                - ``tree_ids``: Nested list of integer tensors (LUT IDs)</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">c</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="n">w_k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span>
-        <span class="n">sample_size</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span>
-
-        <span class="n">all_pairs_a</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_pairs_b</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="c1"># Generate different random pairs for each kernel</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">):</span>
-            <span class="c1"># Randomly select positions within the receptive field</span>
-            <span class="n">h_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">w_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">c_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-            <span class="c1"># Stack the indices</span>
-            <span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">h_indices</span><span class="p">,</span> <span class="n">w_indices</span><span class="p">,</span> <span class="n">c_indices</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-            <span class="c1"># Split for binary tree (split the random connections)</span>
-            <span class="n">pairs_a</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[:</span><span class="n">sample_size</span><span class="p">]</span>
-            <span class="n">pairs_b</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="n">sample_size</span><span class="p">:]</span>
-
-            <span class="n">all_pairs_a</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_a</span><span class="p">)</span>
-            <span class="n">all_pairs_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_b</span><span class="p">)</span>
-
-        <span class="c1"># Stack all kernel pairs: shape (num_kernels, sample_size, 3)</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_a</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_b</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv2d.get_random_unique_receptive_field_pairs">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.get_random_unique_receptive_field_pairs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_random_unique_receptive_field_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate random unique index pairs within the receptive field for each kernel.</span>
-<span class="sd">        No self-connections or duplicate pairs.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">c</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="n">w_k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span>
-        <span class="n">sample_size</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span>
-
-        <span class="c1"># Pre-compute all RF positions</span>
-        <span class="n">h_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">w_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">c_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-        <span class="n">h_rf_grid</span><span class="p">,</span> <span class="n">w_rf_grid</span><span class="p">,</span> <span class="n">c_rf_grid</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">h_rf</span><span class="p">,</span> <span class="n">w_rf</span><span class="p">,</span> <span class="n">c_rf</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
-        <span class="n">all_positions</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-            <span class="n">h_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>
-            <span class="n">w_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>
-            <span class="n">c_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
-        <span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
-        <span class="n">num_positions</span> <span class="o">=</span> <span class="n">h_k</span> <span class="o">*</span> <span class="n">w_k</span> <span class="o">*</span> <span class="n">c</span>
-        <span class="n">max_unique_pairs</span> <span class="o">=</span> <span class="n">num_positions</span> <span class="o">*</span> <span class="p">(</span><span class="n">num_positions</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
-
-        <span class="k">if</span> <span class="n">sample_size</span> <span class="o">&gt;</span> <span class="n">max_unique_pairs</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Not enough unique pairs: need </span><span class="si">{</span><span class="n">sample_size</span><span class="si">}</span><span class="s2">, have </span><span class="si">{</span><span class="n">max_unique_pairs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
-        <span class="c1"># Use torch.randperm for efficient unique sampling</span>
-        <span class="c1"># Create all possible pair indices</span>
-        <span class="n">triu_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">triu_indices</span><span class="p">(</span><span class="n">num_positions</span><span class="p">,</span> <span class="n">num_positions</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">total_pairs</span> <span class="o">=</span> <span class="n">triu_indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-
-        <span class="n">all_pairs_a</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_pairs_b</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="c1"># Generate different unique pairs for each kernel</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">):</span>
-            <span class="c1"># Randomly select sample_size pairs</span>
-            <span class="n">selected_pair_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="n">total_pairs</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)[:</span><span class="n">sample_size</span><span class="p">]</span>
-            <span class="n">selected_i</span> <span class="o">=</span> <span class="n">triu_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">selected_pair_indices</span><span class="p">]</span>
-            <span class="n">selected_j</span> <span class="o">=</span> <span class="n">triu_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">selected_pair_indices</span><span class="p">]</span>
-
-            <span class="n">pairs_a</span> <span class="o">=</span> <span class="n">all_positions</span><span class="p">[</span><span class="n">selected_i</span><span class="p">]</span>
-            <span class="n">pairs_b</span> <span class="o">=</span> <span class="n">all_positions</span><span class="p">[</span><span class="n">selected_j</span><span class="p">]</span>
-
-            <span class="n">all_pairs_a</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_a</span><span class="p">)</span>
-            <span class="n">all_pairs_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_b</span><span class="p">)</span>
-
-        <span class="c1"># Stack all kernel pairs: shape (num_kernels, sample_size, 3)</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_a</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_b</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv2d.apply_sliding_window">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.apply_sliding_window">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">apply_sliding_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pairs_tuple</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Apply sliding window to the receptive field pairs across all kernel positions.&quot;&quot;&quot;</span>
-        <span class="n">pairs_a</span><span class="p">,</span> <span class="n">pairs_b</span> <span class="o">=</span> <span class="n">pairs_tuple</span>  <span class="c1"># Shape: (num_kernels, sample_size, 3)</span>
-        <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-        <span class="n">h_k</span><span class="p">,</span> <span class="n">w_k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span>
-
-        <span class="c1"># Account for padding</span>
-        <span class="n">h_padded</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span>
-        <span class="n">w_padded</span> <span class="o">=</span> <span class="n">w</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span>
-
-        <span class="k">assert</span> <span class="n">h_k</span> <span class="o">&lt;=</span> <span class="n">h_padded</span> <span class="ow">and</span> <span class="n">w_k</span> <span class="o">&lt;=</span> <span class="n">w_padded</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Receptive field size (</span><span class="si">{</span><span class="n">h_k</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">w_k</span><span class="si">}</span><span class="s2">) must fit within input dimensions &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">h_padded</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">w_padded</span><span class="si">}</span><span class="s2">) after padding.&quot;</span>
-        <span class="p">)</span>
-
-        <span class="c1"># Generate all possible positions the kernel can slide to</span>
-        <span class="n">h_starts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_padded</span> <span class="o">-</span> <span class="n">h_k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">w_starts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">w_padded</span> <span class="o">-</span> <span class="n">w_k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-        <span class="c1"># Generate meshgrid for all possible starting points of the receptive field</span>
-        <span class="n">h_grid</span><span class="p">,</span> <span class="n">w_grid</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">h_starts</span><span class="p">,</span> <span class="n">w_starts</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
-
-        <span class="n">all_stacked_as</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_stacked_bs</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="c1"># Process for each kernel with its unique pairs</span>
-        <span class="k">for</span> <span class="n">kernel_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">):</span>
-            <span class="n">stacked_as</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="n">stacked_bs</span> <span class="o">=</span> <span class="p">[]</span>
-
-            <span class="c1"># Get the pairs for this specific kernel</span>
-            <span class="n">kernel_pairs_a</span> <span class="o">=</span> <span class="n">pairs_a</span><span class="p">[</span><span class="n">kernel_idx</span><span class="p">]</span>  <span class="c1"># Shape: (sample_size, 3)</span>
-            <span class="n">kernel_pairs_b</span> <span class="o">=</span> <span class="n">pairs_b</span><span class="p">[</span><span class="n">kernel_idx</span><span class="p">]</span>  <span class="c1"># Shape: (sample_size, 3)</span>
-
-            <span class="c1"># Slide the kernel over the image (across all positions)</span>
-            <span class="k">for</span> <span class="n">h_start</span><span class="p">,</span> <span class="n">w_start</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">h_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">w_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">()):</span>
-                <span class="c1"># Apply sliding window offset</span>
-                <span class="n">indices_a</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">h_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
-                <span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-                <span class="n">indices_b</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">h_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span>
-                <span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-                <span class="n">stacked_as</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">indices_a</span><span class="p">)</span>
-                <span class="n">stacked_bs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">indices_b</span><span class="p">)</span>
-
-            <span class="c1"># After sliding over the whole image, store the result for this kernel</span>
-            <span class="n">all_stacked_as</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">stacked_as</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-            <span class="n">all_stacked_bs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">stacked_bs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-
-        <span class="c1"># Stack the results for all kernels</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_stacked_as</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_stacked_bs</span><span class="p">)</span></div>
-
-
-    
-<div class="viewcode-block" id="LogicConv2d.get_indices_from_kernel_pairs">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.get_indices_from_kernel_pairs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_indices_from_kernel_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pairs_tuple</span><span class="p">):</span>
-        <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">apply_sliding_window</span><span class="p">(</span><span class="n">pairs_tuple</span><span class="p">)</span>
-        <span class="p">]</span>
+        <span class="n">tree_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">tree_luts</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
-            <span class="n">size</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">-</span> <span class="n">level</span><span class="p">)</span>
-            <span class="n">left_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">right_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">indices</span></div>
+            <span class="n">level_ids</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">level_luts</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">]:</span>
+                <span class="n">luts</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+                <span class="n">level_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
+                <span class="n">level_luts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">luts</span><span class="p">)</span>
+            <span class="n">tree_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_ids</span><span class="p">)</span>
+            <span class="n">tree_luts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_luts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tree_luts</span><span class="p">,</span> <span class="n">tree_ids</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_luts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT for each neuron.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">           List[List[torch.Tensor]]: Nested list of Boolean tensors (LUTs)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tree_luts</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
+            <span class="n">level_luts</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">]:</span>
+                <span class="n">luts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">get_luts</span><span class="p">(</span><span class="n">w</span><span class="p">)</span>
+                <span class="n">level_luts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">luts</span><span class="p">)</span>
+            <span class="n">tree_luts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_luts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tree_luts</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_regularization_loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">regularizer</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">reg_loss</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">:</span>
+            <span class="n">reg_loss</span> <span class="o">+=</span> <span class="n">get_regularization_loss</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">regularizer</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">reg_loss</span>
+    
+    <span class="k">def</span><span class="w"> </span><span class="nf">rescale_weights</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">:</span>
+            <span class="n">rescale_weights</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="LogicConv2d">
+<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LogicConv2d</span><span class="p">(</span><span class="n">_LogicConvNd</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;2D convolutional layer with differentiable logic operations.</span>
+
+<span class="sd">    This layer implements a 2D convolution where each output location is</span>
+<span class="sd">    computed by evaluating a learned logic tree over a receptive field.</span>
+<span class="sd">    Instead of linear filters, it uses a binary tree of differentiable</span>
+<span class="sd">    logic operations (LUTs) applied to selected positions in the receptive</span>
+<span class="sd">    field, per kernel and per spatial location.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="LogicConv2d.__init__">
+<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">in_dim</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_2_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+        <span class="n">channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">num_kernels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+        <span class="n">tree_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">receptive_field_size</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_2_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">in_dim</span><span class="o">=</span><span class="n">in_dim</span><span class="p">,</span>
+            <span class="n">channels</span><span class="o">=</span><span class="n">channels</span><span class="p">,</span>
+            <span class="n">num_kernels</span><span class="o">=</span><span class="n">num_kernels</span><span class="p">,</span>
+            <span class="n">tree_depth</span><span class="o">=</span><span class="n">tree_depth</span><span class="p">,</span>
+            <span class="n">receptive_field_size</span><span class="o">=</span><span class="n">receptive_field_size</span><span class="p">,</span>
+            <span class="n">stride</span><span class="o">=</span><span class="n">stride</span><span class="p">,</span>
+            <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span>
+            <span class="n">conv_dimension</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">grad_factor</span><span class="o">=</span><span class="n">grad_factor</span><span class="p">,</span>
+            <span class="n">lut_rank</span><span class="o">=</span><span class="n">lut_rank</span><span class="p">,</span>
+            <span class="n">parametrization</span><span class="o">=</span><span class="n">parametrization</span><span class="p">,</span>
+            <span class="n">parametrization_kwargs</span><span class="o">=</span><span class="n">parametrization_kwargs</span><span class="p">,</span>
+            <span class="n">connections</span><span class="o">=</span><span class="n">connections</span><span class="p">,</span>
+            <span class="n">connections_kwargs</span><span class="o">=</span><span class="n">connections_kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
 </div>
 
 
 
 <div class="viewcode-block" id="LogicConv3d">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">LogicConv3d</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;3d convolutional layer with differentiable logic operations.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LogicConv3d</span><span class="p">(</span><span class="n">_LogicConvNd</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;3D convolutional layer with differentiable logic operations.</span>
 
-<span class="sd">    This layer implements a 3d convolution with differentiable logic operations.</span>
-<span class="sd">    It uses a binary tree structure to combine input features using logical</span>
-<span class="sd">    operations.</span>
+<span class="sd">    This layer implements a 3D convolution where each output location is</span>
+<span class="sd">    computed by evaluating a learned logic tree over a receptive field.</span>
+<span class="sd">    Instead of linear filters, it uses a binary tree of differentiable</span>
+<span class="sd">    logic operations (LUTs) applied to selected positions in the receptive</span>
+<span class="sd">    field, per kernel and per spatial location.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-
 <div class="viewcode-block" id="LogicConv3d.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">in_dim</span><span class="p">:</span> <span class="n">_size_3_t</span><span class="p">,</span>
-        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span>
-        <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">in_dim</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_3_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
         <span class="n">channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">num_kernels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
         <span class="n">tree_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">receptive_field_size</span><span class="p">:</span> <span class="n">_size_3_t</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">implementation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;random&quot;</span><span class="p">,</span>  <span class="c1"># or &#39;random-unique&#39;</span>
+        <span class="n">receptive_field_size</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_3_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
         <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-        <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize the 3d logic convolutional layer.</span>
-
-<span class="sd">        Args:</span>
-<span class="sd">            in_dim: Input dimensions (height, width, depth)</span>
-<span class="sd">            device: Device to run the layer on</span>
-<span class="sd">            grad_factor: Gradient factor for the logic operations</span>
-<span class="sd">            channels: Number of input channels</span>
-<span class="sd">            num_kernels: Number of output kernels</span>
-<span class="sd">            tree_depth: Depth of the binary tree</span>
-<span class="sd">            receptive_field_size: Size of the receptive field</span>
-<span class="sd">            implementation: Implementation type (&quot;python&quot; or &quot;cuda&quot;)</span>
-<span class="sd">            connections: Connection type: &quot;random&quot; or &quot;unique&quot;. The latter will overwrite</span>
-<span class="sd">                the tree_depth parameter and use a full binary tree of all possible connections</span>
-<span class="sd">                within the receptive field.</span>
-<span class="sd">            stride: Stride of the convolution</span>
-<span class="sd">            padding: Padding of the convolution</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span> <span class="o">=</span> <span class="n">_triple</span><span class="p">(</span><span class="n">receptive_field_size</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">stride</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">and</span>
-            <span class="p">(</span><span class="n">stride</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="ow">and</span>
-            <span class="p">(</span><span class="n">stride</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">2</span><span class="p">])),</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Stride (</span><span class="si">{</span><span class="n">stride</span><span class="si">}</span><span class="s2">) cannot be larger than receptive field size &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">receptive_field_size</span><span class="si">}</span><span class="s2">)&quot;</span>
-            <span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">tree_depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)):</span>  <span class="c1"># Iterate over tree levels</span>
-            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">ParameterList</span><span class="p">()</span>
-            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="n">i</span><span class="p">):</span>  <span class="c1"># Iterate over nodes at this level</span>
-                <span class="n">weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
-                    <span class="n">num_kernels</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span>
-                <span class="p">)</span>  <span class="c1"># Initialize with zeros</span>
-                <span class="n">weights</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>  <span class="c1"># Set the fourth element (index 3) to 5</span>
-                <span class="c1"># Wrap as a trainable parameter</span>
-                <span class="n">level_weights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_weights</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span> <span class="o">=</span> <span class="n">_triple</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span> <span class="o">=</span> <span class="n">grad_factor</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span> <span class="o">=</span> <span class="n">num_kernels</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">=</span> <span class="n">tree_depth</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">channels</span> <span class="o">=</span> <span class="n">channels</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="n">stride</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">=</span> <span class="n">padding</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">connections</span>
-        <span class="k">if</span> <span class="n">connections</span> <span class="o">==</span> <span class="s2">&quot;random&quot;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">kernel_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_random_receptive_field_pairs</span><span class="p">()</span>
-        <span class="k">elif</span> <span class="n">connections</span> <span class="o">==</span> <span class="s2">&quot;random-unique&quot;</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">kernel_pairs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_random_unique_receptive_field_pairs</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown connections type: </span><span class="si">{</span><span class="n">connections</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_indices_from_kernel_pairs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_pairs</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv3d.forward">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.forward">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Implement the binary tree using the pre-selected indices.&quot;&quot;&quot;</span>
-        <span class="n">current_level</span> <span class="o">=</span> <span class="n">x</span>
-        <span class="c1"># apply zero padding</span>
-        <span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">a_h</span><span class="p">,</span> <span class="n">a_w</span><span class="p">,</span> <span class="n">a_d</span><span class="p">,</span> <span class="n">a_c</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
-            <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
-            <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
-            <span class="n">left_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
-        <span class="p">)</span>
-        <span class="n">b_h</span><span class="p">,</span> <span class="n">b_w</span><span class="p">,</span> <span class="n">b_d</span><span class="p">,</span> <span class="n">b_c</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
-            <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
-            <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
-            <span class="n">right_indices</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
-        <span class="p">)</span>
-        <span class="n">a</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[:,</span> <span class="n">a_c</span><span class="p">,</span> <span class="n">a_h</span><span class="p">,</span> <span class="n">a_w</span><span class="p">,</span> <span class="n">a_d</span><span class="p">]</span>
-        <span class="n">b</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[:,</span> <span class="n">b_c</span><span class="p">,</span> <span class="n">b_h</span><span class="p">,</span> <span class="n">b_w</span><span class="p">,</span> <span class="n">b_d</span><span class="p">]</span>
-
-        <span class="c1"># Process first level</span>
-        <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
-            <span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span>
-            <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">level_weights</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
-                <span class="n">torch</span><span class="o">.</span><span class="n">float32</span>
-            <span class="p">)</span>
-
-        <span class="n">current_level</span> <span class="o">=</span> <span class="n">bin_op_cnn</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">level_weights</span><span class="p">)</span>
-
-        <span class="c1"># Process remaining levels</span>
-        <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-            <span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
-            <span class="n">a</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">left_indices</span><span class="p">]</span>
-            <span class="n">b</span> <span class="o">=</span> <span class="n">current_level</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">right_indices</span><span class="p">]</span>
-            <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
-                <span class="p">[</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-                    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
-                <span class="p">],</span>
-                <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
-            <span class="p">)</span>
-
-            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                <span class="n">level_weights</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">one_hot</span><span class="p">(</span><span class="n">level_weights</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">16</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
-                    <span class="n">torch</span><span class="o">.</span><span class="n">float32</span>
-                <span class="p">)</span>
-
-            <span class="n">current_level</span> <span class="o">=</span> <span class="n">bin_op_cnn</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">level_weights</span><span class="p">)</span>
-
-        <span class="c1"># Reshape flattened output</span>
-        <span class="n">reshape_h</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">+</span> <span class="mi">1</span>
-        <span class="n">reshape_w</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">+</span> <span class="mi">1</span>
-        <span class="n">reshape_d</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">+</span> <span class="mi">1</span>
-
-        <span class="n">current_level</span> <span class="o">=</span> <span class="n">current_level</span><span class="o">.</span><span class="n">view</span><span class="p">(</span>
-            <span class="n">current_level</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-            <span class="n">current_level</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
-            <span class="n">reshape_h</span><span class="p">,</span>
-            <span class="n">reshape_w</span><span class="p">,</span>
-            <span class="n">reshape_d</span>
-        <span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">current_level</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv3d.get_random_receptive_field_pairs">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.get_random_receptive_field_pairs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_random_receptive_field_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate random index pairs within the receptive field for each kernel.</span>
-<span class="sd">        May contain self connections and duplicate connections.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">c</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="n">d_k</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-        <span class="p">)</span>
-        <span class="n">sample_size</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span>
-
-        <span class="n">all_pairs_a</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_pairs_b</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="c1"># Generate different random pairs for each kernel</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">):</span>
-            <span class="c1"># Randomly select positions within the receptive field</span>
-            <span class="n">h_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">w_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">d_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">d_k</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">c_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sample_size</span><span class="p">,),</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-            <span class="c1"># Stack the indices</span>
-            <span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">h_indices</span><span class="p">,</span> <span class="n">w_indices</span><span class="p">,</span> <span class="n">d_indices</span><span class="p">,</span> <span class="n">c_indices</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-            <span class="c1"># Split for binary tree (split the random connections)</span>
-            <span class="n">pairs_a</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[:</span><span class="n">sample_size</span><span class="p">]</span>
-            <span class="n">pairs_b</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="n">sample_size</span><span class="p">:]</span>
-
-            <span class="n">all_pairs_a</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_a</span><span class="p">)</span>
-            <span class="n">all_pairs_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_b</span><span class="p">)</span>
-
-        <span class="c1"># Stack all kernel pairs: shape (num_kernels, sample_size, 4)</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_a</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_b</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv3d.get_random_unique_receptive_field_pairs">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.get_random_unique_receptive_field_pairs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_random_unique_receptive_field_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate random unique index pairs within the receptive field for each kernel.</span>
-<span class="sd">        No self-connections or duplicate pairs.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">c</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="n">d_k</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">,</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-        <span class="p">)</span>
-        <span class="n">sample_size</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span>
-
-        <span class="c1"># Pre-compute all RF positions</span>
-        <span class="n">h_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_k</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">w_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">d_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">d_k</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">c_rf</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-        <span class="n">h_rf_grid</span><span class="p">,</span> <span class="n">w_rf_grid</span><span class="p">,</span> <span class="n">d_rf_grid</span><span class="p">,</span> <span class="n">c_rf_grid</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">h_rf</span><span class="p">,</span> <span class="n">w_rf</span><span class="p">,</span> <span class="n">d_rf</span><span class="p">,</span> <span class="n">c_rf</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
-        <span class="n">all_positions</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-            <span class="n">h_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>
-            <span class="n">w_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>
-            <span class="n">d_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span>
-            <span class="n">c_rf_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
-        <span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-
-        <span class="n">num_positions</span> <span class="o">=</span> <span class="n">h_k</span> <span class="o">*</span> <span class="n">w_k</span> <span class="o">*</span> <span class="n">d_k</span> <span class="o">*</span> <span class="n">c</span>
-        <span class="n">max_unique_pairs</span> <span class="o">=</span> <span class="n">num_positions</span> <span class="o">*</span> <span class="p">(</span><span class="n">num_positions</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
-
-        <span class="k">if</span> <span class="n">sample_size</span> <span class="o">&gt;</span> <span class="n">max_unique_pairs</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Not enough unique pairs: need </span><span class="si">{</span><span class="n">sample_size</span><span class="si">}</span><span class="s2">, have </span><span class="si">{</span><span class="n">max_unique_pairs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
-        <span class="c1"># Use torch.randperm for efficient unique sampling</span>
-        <span class="c1"># Create all possible pair indices</span>
-        <span class="n">triu_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">triu_indices</span><span class="p">(</span><span class="n">num_positions</span><span class="p">,</span> <span class="n">num_positions</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">total_pairs</span> <span class="o">=</span> <span class="n">triu_indices</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-
-        <span class="n">all_pairs_a</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_pairs_b</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="c1"># Generate different unique pairs for each kernel</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">):</span>
-            <span class="c1"># Randomly select sample_size pairs</span>
-            <span class="n">selected_pair_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randperm</span><span class="p">(</span><span class="n">total_pairs</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)[:</span><span class="n">sample_size</span><span class="p">]</span>
-            <span class="n">selected_i</span> <span class="o">=</span> <span class="n">triu_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">selected_pair_indices</span><span class="p">]</span>
-            <span class="n">selected_j</span> <span class="o">=</span> <span class="n">triu_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="n">selected_pair_indices</span><span class="p">]</span>
-
-            <span class="n">pairs_a</span> <span class="o">=</span> <span class="n">all_positions</span><span class="p">[</span><span class="n">selected_i</span><span class="p">]</span>
-            <span class="n">pairs_b</span> <span class="o">=</span> <span class="n">all_positions</span><span class="p">[</span><span class="n">selected_j</span><span class="p">]</span>
-
-            <span class="n">all_pairs_a</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_a</span><span class="p">)</span>
-            <span class="n">all_pairs_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pairs_b</span><span class="p">)</span>
-
-        <span class="c1"># Stack all kernel pairs: shape (num_kernels, sample_size, 4)</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_a</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_pairs_b</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv3d.apply_sliding_window">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.apply_sliding_window">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">apply_sliding_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pairs_tuple</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Apply sliding window to the receptive field pairs across all kernel positions.&quot;&quot;&quot;</span>
-        <span class="n">pairs_a</span><span class="p">,</span> <span class="n">pairs_b</span> <span class="o">=</span> <span class="n">pairs_tuple</span>  <span class="c1"># Shape: (num_kernels, sample_size, 4)</span>
-        <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-        <span class="n">h_k</span><span class="p">,</span> <span class="n">w_k</span><span class="p">,</span> <span class="n">d_k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span>
-
-        <span class="c1"># Account for padding</span>
-        <span class="n">h_padded</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span>
-        <span class="n">w_padded</span> <span class="o">=</span> <span class="n">w</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span>
-        <span class="n">d_padded</span> <span class="o">=</span> <span class="n">d</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span>
-
-        <span class="k">assert</span> <span class="p">(</span><span class="n">h_k</span> <span class="o">&lt;=</span> <span class="n">h_padded</span> <span class="ow">and</span> <span class="n">w_k</span> <span class="o">&lt;=</span> <span class="n">w_padded</span><span class="p">)</span> <span class="ow">and</span> <span class="n">d_k</span> <span class="o">&lt;=</span> <span class="n">d_padded</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Receptive field size (</span><span class="si">{</span><span class="n">h_k</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">w_k</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">d_k</span><span class="si">}</span><span class="s2">) must fit within input dimensions &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">h_padded</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">w_padded</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">d_padded</span><span class="si">}</span><span class="s2">) after padding.&quot;</span>
-        <span class="p">)</span>
-
-        <span class="c1"># Generate all possible positions the kernel can slide to</span>
-        <span class="n">h_starts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_padded</span> <span class="o">-</span> <span class="n">h_k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">w_starts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">w_padded</span> <span class="o">-</span> <span class="n">w_k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-        <span class="n">d_starts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">d_padded</span> <span class="o">-</span> <span class="n">d_k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
-        <span class="c1"># Generate meshgrid for all possible starting points of the receptive field</span>
-        <span class="n">h_grid</span><span class="p">,</span> <span class="n">w_grid</span><span class="p">,</span> <span class="n">d_grid</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">h_starts</span><span class="p">,</span> <span class="n">w_starts</span><span class="p">,</span> <span class="n">d_starts</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
-
-        <span class="n">all_stacked_as</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">all_stacked_bs</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="c1"># Process for each kernel with its unique pairs</span>
-        <span class="k">for</span> <span class="n">kernel_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">num_kernels</span><span class="p">):</span>
-            <span class="n">stacked_as</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="n">stacked_bs</span> <span class="o">=</span> <span class="p">[]</span>
-
-            <span class="c1"># Get the pairs for this specific kernel</span>
-            <span class="n">kernel_pairs_a</span> <span class="o">=</span> <span class="n">pairs_a</span><span class="p">[</span><span class="n">kernel_idx</span><span class="p">]</span>  <span class="c1"># Shape: (sample_size, 4)</span>
-            <span class="n">kernel_pairs_b</span> <span class="o">=</span> <span class="n">pairs_b</span><span class="p">[</span><span class="n">kernel_idx</span><span class="p">]</span>  <span class="c1"># Shape: (sample_size, 4)</span>
-
-            <span class="c1"># Slide the kernel over the image (across all positions)</span>
-            <span class="k">for</span> <span class="n">h_start</span><span class="p">,</span> <span class="n">w_start</span><span class="p">,</span> <span class="n">d_start</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">h_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">w_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">d_grid</span><span class="o">.</span><span class="n">flatten</span><span class="p">()):</span>
-                <span class="c1"># Apply sliding window offset</span>
-                <span class="n">indices_a</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">h_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">d_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_a</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span>
-                <span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-                <span class="n">indices_b</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">h_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">d_start</span><span class="p">,</span>
-                    <span class="n">kernel_pairs_b</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">]</span>
-                <span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-                <span class="n">stacked_as</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">indices_a</span><span class="p">)</span>
-                <span class="n">stacked_bs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">indices_b</span><span class="p">)</span>
-
-            <span class="c1"># After sliding over the whole image, store the result for this kernel</span>
-            <span class="n">all_stacked_as</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">stacked_as</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-            <span class="n">all_stacked_bs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">stacked_bs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-
-        <span class="c1"># Stack the results for all kernels</span>
-        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_stacked_as</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">all_stacked_bs</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="LogicConv3d.get_indices_from_kernel_pairs">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.get_indices_from_kernel_pairs">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_indices_from_kernel_pairs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pairs_tuple</span><span class="p">):</span>
-        <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">apply_sliding_window</span><span class="p">(</span><span class="n">pairs_tuple</span><span class="p">)</span>
-        <span class="p">]</span>
-        <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
-            <span class="n">size</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">-</span> <span class="n">level</span><span class="p">)</span>
-            <span class="n">left_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">right_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">left_indices</span><span class="p">,</span> <span class="n">right_indices</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">indices</span></div>
-</div>
-
-
-
-<div class="viewcode-block" id="OrPooling">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">OrPooling</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Logic gate based pooling layer.&quot;&quot;&quot;</span>
-
-    <span class="c1"># create layer that selects max in the kernel</span>
-
-<div class="viewcode-block" id="OrPooling.__init__">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling.__init__">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">,</span> <span class="n">stride</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
-        <span class="nb">super</span><span class="p">(</span><span class="n">OrPooling</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">kernel_size</span> <span class="o">=</span> <span class="n">kernel_size</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="n">stride</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">=</span> <span class="n">padding</span></div>
-
-
-<div class="viewcode-block" id="OrPooling.forward">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling.forward">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Pool the max value in the kernel.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">4</span><span class="p">):</span>
-            <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">max_pool2d</span><span class="p">(</span>
-                <span class="n">x</span><span class="p">,</span>
-                <span class="n">kernel_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span>
-                <span class="n">stride</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span>
-                <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="k">elif</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">5</span><span class="p">):</span>
-            <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">max_pool3d</span><span class="p">(</span>
-                <span class="n">x</span><span class="p">,</span>
-                <span class="n">kernel_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span>
-                <span class="n">stride</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span>
-                <span class="n">padding</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
-                <span class="s2">&quot;OrPooling only implemented for input tensor with rank 4 or 5&quot;</span>
-            <span class="p">)</span>
-        <span class="k">return</span> <span class="n">x</span></div>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">in_dim</span><span class="o">=</span><span class="n">in_dim</span><span class="p">,</span>
+            <span class="n">channels</span><span class="o">=</span><span class="n">channels</span><span class="p">,</span>
+            <span class="n">num_kernels</span><span class="o">=</span><span class="n">num_kernels</span><span class="p">,</span>
+            <span class="n">tree_depth</span><span class="o">=</span><span class="n">tree_depth</span><span class="p">,</span>
+            <span class="n">receptive_field_size</span><span class="o">=</span><span class="n">receptive_field_size</span><span class="p">,</span>
+            <span class="n">stride</span><span class="o">=</span><span class="n">stride</span><span class="p">,</span>
+            <span class="n">padding</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span>
+            <span class="n">conv_dimension</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">grad_factor</span><span class="o">=</span><span class="n">grad_factor</span><span class="p">,</span>
+            <span class="n">lut_rank</span><span class="o">=</span><span class="n">lut_rank</span><span class="p">,</span>
+            <span class="n">parametrization</span><span class="o">=</span><span class="n">parametrization</span><span class="p">,</span>
+            <span class="n">parametrization_kwargs</span><span class="o">=</span><span class="n">parametrization_kwargs</span><span class="p">,</span>
+            <span class="n">connections</span><span class="o">=</span><span class="n">connections</span><span class="p">,</span>
+            <span class="n">connections_kwargs</span><span class="o">=</span><span class="n">connections_kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
 </div>
 
 </pre></div>
