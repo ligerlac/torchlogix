@@ -81,7 +81,7 @@ python train.py --dataset cifar-10 -a ClgnCifar10Medium --connections-init-metho
 ```
 This achieves roughly 66% discrete test accurcay, which can be increased to 68.5% with the same architecture by learning the binarization thresholds and restricting each kernel in the first layer to just a single channel:
 ```
-python train.py --dataset cifar-10 -a ClgnCifar10Medium2 --connections-init-method random-unique --binarization learnable -lr 0.02 -wd 0.002 --binarization-learning-rate 0.01 --device cuda --compile-model
+python train.py --dataset cifar-10 -a ClgnCifar10Medium2 --connections-init-method random-unique --binarization-init distributive --binarization learnable -lr 0.02 -wd 0.002 --binarization-learning-rate 0.01 --device cuda --compile-model
 ```
 The training converges within roughly 30 minutes on an `A100`. The accuracy can be increased further with data augmentation, and knowledge distillation but details of the training procedure are beyond the scope of this package.
 

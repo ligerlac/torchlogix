@@ -115,26 +115,3 @@ compiled_model = CompiledLogicNet(
 with torch.no_grad():
     fast_output = compiled_model(test_input)
 ```
-
-## Key Concepts
-
-### Logic Tree Depth
-- Controls the complexity of logic operations
-- Higher depth = more complex logic expressions
-- Typical values: 2-5
-
-### Receptive Field Size
-- Size of the convolutional kernel
-- Determines local connectivity
-- Must be ≤ input dimensions
-
-### Connection Types
-- `"random"`: Random connections (allows duplicates)
-- `"random-unique"`: Unique random connections
-- Affects learning capacity and speed
-
-## Next Steps
-
-- Read the [Logic Gates Guide](logic_gates.md) to understand the underlying operations
-- Check out [Examples](examples.md) for complete training scripts
-- Explore the [API Reference](../api/torchlogix.rst) for detailed documentation
