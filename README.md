@@ -15,6 +15,9 @@
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   </a>
+  <a href="https://doi.org/10.5281/zenodo.18800427">
+    <img src="https://zenodo.org/badge/1059516279.svg" alt="DOI">
+  </a>
 </p>
 
 `torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
@@ -80,6 +83,19 @@ This achieves roughly 66% discrete test accurcay, which can be increased to 68.5
 python train.py --dataset cifar-10 -a ClgnCifar10Medium2 --connections-init-method random-unique --binarization-init distributive --binarization learnable -lr 0.02 -wd 0.002 --binarization-learning-rate 0.01 --device cuda --compile-model
 ```
 The training converges within roughly 30 minutes on an `A100`. The accuracy can be increased further with data augmentation, and knowledge distillation but details of the training procedure are beyond the scope of this package.
+
+## Citation
+
+If you use torchlogix in your research, please cite:
+
+```bibtex
+@software{torchlogix2026,
+  author = {Gerlach, Lino and Gerlach, Thore and Kauffman, Elliott and Våge, Liv},
+  title = {torchlogix},
+  year = {2026},
+  doi = {10.5281/zenodo.18800427}
+}
+```
 
 ## License
 

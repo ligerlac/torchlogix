@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: torchlogix
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Gerlach
+    given-names: Lino
+  - family-names: Gerlach
+    given-names: Thore
+  - family-names: Kauffman
+    given-names: Elliott
+  - family-names: Våge
+    given-names: Liv
+repository-code: https://github.com/ligerlac/torchlogix
+url: https://github.com/ligerlac/torchlogix
+license: MIT
+version: 0.1.1
+doi: 10.5281/zenodo.18800427
+date-released: 2026-02-27
