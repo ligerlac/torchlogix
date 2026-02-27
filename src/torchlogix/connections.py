@@ -7,52 +7,6 @@ from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
 from .functional import softmax, take_tuples, get_combination_indices
-
-
-def _sample_positions(
-    all_positions,
-    sample_size,
-    lut_rank,
-    tuple_mode,
-    device,
-):
-    num_positions = all_positions.shape[0]
-
-    if tuple_mode == "random":
-
-        idx = torch.randint(
-            0, num_positions,
-            (sample_size, lut_rank),
-            device=device,
-        )
-        return all_positions[idx]
-
-    elif tuple_mode == "random-unique":
-
-        all_indices = list(
-            itertools.combinations(
-                range(num_positions),
-                lut_rank,
-            )
-        )
-
-        if len(all_indices) < sample_size:
-            raise ValueError(
-                "Not enough unique combinations."
-            )
-
-        chosen = torch.randperm(
-            len(all_indices),
-            device=device
-        )[:sample_size]
-
-        selected = [
-            torch.tensor(all_indices[i], device=device)
-            for i in chosen
-        ]
-
-        idx = torch.stack(selected, dim=0)
-        return all_positions[idx]
     
 
 def setup_connections(

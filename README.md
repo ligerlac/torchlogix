@@ -61,10 +61,6 @@ all_preds = model(all_X)  #  ~15 ms for all 10000 test examples on my laptop
 ```
 The full training- and evaluation of the model above is demonstrated in the example notebook [experiments/mnist_example.ipynb](experiments/mnist_example.ipynb).
 
-There is also a preliminary functionality to generate verlilog code:
-```python
-verilog_code_str = compiled_model.get_verilog_code()
-```
 
 ## Documentation
 
