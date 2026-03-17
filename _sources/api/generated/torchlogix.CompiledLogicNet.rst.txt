@@ -24,6 +24,7 @@
       ~CompiledLogicNet.cuda
       ~CompiledLogicNet.double
       ~CompiledLogicNet.eval
+      ~CompiledLogicNet.export_hdl
       ~CompiledLogicNet.extra_repr
       ~CompiledLogicNet.float
       ~CompiledLogicNet.forward
@@ -31,8 +32,10 @@
       ~CompiledLogicNet.get_c_code
       ~CompiledLogicNet.get_extra_state
       ~CompiledLogicNet.get_gate_code
+      ~CompiledLogicNet.get_gate_verilog
       ~CompiledLogicNet.get_parameter
       ~CompiledLogicNet.get_submodule
+      ~CompiledLogicNet.get_verilog_code
       ~CompiledLogicNet.half
       ~CompiledLogicNet.ipu
       ~CompiledLogicNet.load

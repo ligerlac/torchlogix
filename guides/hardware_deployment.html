@@ -1,0 +1,2044 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hardware Deployment Guide &mdash; TorchLogix 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="TorchLogix Package" href="../api/torchlogix.html" />
+    <link rel="prev" title="Core Concepts" href="concepts.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            TorchLogix
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Core Concepts</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Hardware Deployment Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#why-hardware-deployment">Why Hardware Deployment?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#design-approach-direct-gate-level-synthesis">Design Approach: Direct Gate-Level Synthesis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#comparison-direct-verilog-vs-chls">Comparison: Direct Verilog vs C→HLS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#supported-layer-types">Supported Layer Types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#basic-verilog-export">Basic Verilog Export</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#quick-start">Quick Start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#api-reference">API Reference</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#get-verilog-code-module-name-pipeline-stages"><code class="docutils literal notranslate"><span class="pre">get_verilog_code(module_name,</span> <span class="pre">pipeline_stages)</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#export-hdl-output-dir-module-name-format-pipeline-stages"><code class="docutils literal notranslate"><span class="pre">export_hdl(output_dir,</span> <span class="pre">module_name,</span> <span class="pre">format,</span> <span class="pre">pipeline_stages)</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#understanding-generated-verilog">Understanding Generated Verilog</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#combinational-design-pipeline-stages-0">Combinational Design (pipeline_stages=0)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pipelined-design-pipeline-stages-2">Pipelined Design (pipeline_stages=2)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#gate-operations-supported">Gate Operations Supported</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#pipelining-for-large-models">Pipelining for Large Models</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#the-problem-large-combinational-designs">The Problem: Large Combinational Designs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#symptoms-of-combinational-overload">Symptoms of Combinational Overload</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#why-this-happens">Why This Happens</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#the-solution-pipeline-stages">The Solution: Pipeline Stages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#benefits">Benefits</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#trade-offs">Trade-offs</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pipeline-stage-options">Pipeline Stage Options</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pipeline-stages-0-fully-combinational-default"><code class="docutils literal notranslate"><span class="pre">pipeline_stages=0</span></code> - Fully Combinational (Default)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pipeline-stages-1-output-register-only"><code class="docutils literal notranslate"><span class="pre">pipeline_stages=1</span></code> - Output Register Only</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pipeline-stages-n-n-pipeline-stages"><code class="docutils literal notranslate"><span class="pre">pipeline_stages=N</span></code> - N Pipeline Stages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#full-layer-level-pipelining">Full Layer-Level Pipelining</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#choosing-the-right-pipeline-configuration">Choosing the Right Pipeline Configuration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#decision-tree">Decision Tree</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#size-guidelines">Size Guidelines</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#empirical-testing">Empirical Testing</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#performance-optimization">Performance Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#finding-optimal-pipeline-depth">Finding Optimal Pipeline Depth</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#common-issues">Common Issues</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#testing-generated-verilog">Testing Generated Verilog</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-1-generate-test-vectors">Step 1: Generate Test Vectors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-2-create-a-verilog-testbench">Step 2: Create a Verilog Testbench</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#testbench-for-pipelined-designs">Testbench for Pipelined Designs</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#step-3-simulate-with-different-tools">Step 3: Simulate with Different Tools</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#option-a-vivado-simulator-xsim">Option A: Vivado Simulator (xsim)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#option-b-icarus-verilog">Option B: Icarus Verilog</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#option-c-modelsim-questasim">Option C: ModelSim/QuestaSim</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#step-4-analyze-results">Step 4: Analyze Results</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#success-criteria">Success Criteria</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id1">Common Issues</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#self-checking-testbench">Self-Checking Testbench</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#synthesis-with-vivado">Synthesis with Vivado</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id2">Overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id3">Prerequisites</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id4">Quick Start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#synthesis-methods">Synthesis Methods</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#method-1-batch-mode-with-tcl-script-recommended">Method 1: Batch Mode with TCL Script (Recommended)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#method-2-vivado-gui">Method 2: Vivado GUI</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#method-3-vivado-tcl-console">Method 3: Vivado Tcl Console</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#understanding-the-reports">Understanding the Reports</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#utilization-report">Utilization Report</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#timing-report">Timing Report</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#power-report">Power Report</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#interpreting-results-for-torchlogix-models">Interpreting Results for TorchLogix Models</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#resource-estimates">Resource Estimates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#latency-estimates">Latency Estimates</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pipelined-vs-combinational-designs">Pipelined vs Combinational Designs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#combinational-pipeline-stages-0">Combinational (pipeline_stages=0)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pipelined-pipeline-stages-0">Pipelined (pipeline_stages&gt;0)</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#synthesis-strategies">Synthesis Strategies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#for-minimum-latency">For Minimum Latency</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#for-minimum-area">For Minimum Area</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#for-balanced-results">For Balanced Results</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#common-issues-and-solutions">Common Issues and Solutions</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#issue-multi-driven-net-error">Issue: “Multi-driven net” Error</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#issue-unrealistically-high-fmax">Issue: Unrealistically High fmax</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#issue-very-high-lut-count">Issue: Very High LUT Count</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#next-steps-after-synthesis">Next Steps After Synthesis</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#complete-workflow-examples">Complete Workflow Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#example-1-small-model-full-workflow">Example 1: Small Model - Full Workflow</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-2-large-model-with-pipelining">Example 2: Large Model with Pipelining</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-3-convolutional-model">Example 3: Convolutional Model</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#example-4-python-driven-synthesis-loop">Example 4: Python-Driven Synthesis Loop</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-topics">Advanced Topics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#custom-timing-constraints">Custom Timing Constraints</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#comparing-c-code-and-verilog-implementations">Comparing C Code and Verilog Implementations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#integration-with-chls-pipeline">Integration with C→HLS Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#layer-support-status-and-future-work">Layer Support Status and Future Work</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#currently-supported">Currently Supported</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#in-progress-todo">In Progress / TODO</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#optimization-tips">Optimization Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/layers.html">Layers Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/models.html">Models Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/functional.html">Functional Module</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TorchLogix</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Hardware Deployment Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/guides/hardware_deployment.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="hardware-deployment-guide">
+<h1>Hardware Deployment Guide<a class="headerlink" href="#hardware-deployment-guide" title="Link to this heading"></a></h1>
+<p>This guide explains how to deploy TorchLogix models to FPGAs and other hardware platforms using direct Verilog/RTL generation.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>TorchLogix can generate hardware descriptions (Verilog RTL) directly from trained models, enabling deployment to FPGAs and ASIC implementations. This provides an alternative to the traditional C→HLS→RTL pipeline and offers several advantages for logic gate networks.</p>
+<section id="why-hardware-deployment">
+<h3>Why Hardware Deployment?<a class="headerlink" href="#why-hardware-deployment" title="Link to this heading"></a></h3>
+<p><strong>Benefits</strong>:</p>
+<ul class="simple">
+<li><p><strong>Ultra-low latency</strong>: FPGA implementations can achieve sub-microsecond inference</p></li>
+<li><p><strong>High throughput</strong>: Massive parallelism enables processing thousands of inputs per second</p></li>
+<li><p><strong>Energy efficiency</strong>: Specialized hardware is more power-efficient than general-purpose CPUs/GPUs</p></li>
+<li><p><strong>Deterministic timing</strong>: Predictable performance for real-time applications</p></li>
+</ul>
+<p><strong>Use Cases</strong>:</p>
+<ul class="simple">
+<li><p>Low-latency inference at network edge</p></li>
+<li><p>Real-time signal processing and control systems</p></li>
+<li><p>High-throughput batch processing</p></li>
+<li><p>Embedded systems with strict power budgets</p></li>
+</ul>
+</section>
+<section id="design-approach-direct-gate-level-synthesis">
+<h3>Design Approach: Direct Gate-Level Synthesis<a class="headerlink" href="#design-approach-direct-gate-level-synthesis" title="Link to this heading"></a></h3>
+<p>TorchLogix uses a <strong>direct gate-level synthesis</strong> approach rather than LUT-based truth tables:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>TorchLogix Model (PyTorch)
+         ↓
+   Gate Operations (AND, OR, XOR, etc.)
+         ↓
+   Verilog Expressions
+         ↓
+   FPGA Synthesis
+</pre></div>
+</div>
+<p><strong>Why direct gates instead of LUTs?</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Natural mapping</strong>: TorchLogix already defines 16 gate operations</p></li>
+<li><p><strong>Better optimization</strong>: Modern synthesis tools optimize gate-level HDL effectively</p></li>
+<li><p><strong>More readable</strong>: <code class="docutils literal notranslate"><span class="pre">assign</span> <span class="pre">out</span> <span class="pre">=</span> <span class="pre">a</span> <span class="pre">&amp;</span> <span class="pre">b;</span></code> is clearer than case statements</p></li>
+<li><p><strong>Binary structure</strong>: Each neuron has exactly 2 inputs → perfect for direct gates</p></li>
+</ol>
+</section>
+<section id="comparison-direct-verilog-vs-chls">
+<h3>Comparison: Direct Verilog vs C→HLS<a class="headerlink" href="#comparison-direct-verilog-vs-chls" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Aspect</p></th>
+<th class="head"><p>Direct Verilog</p></th>
+<th class="head"><p>C→HLS→RTL</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Generation</strong></p></td>
+<td><p>Direct from model</p></td>
+<td><p>Compile C, then HLS</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Intermediate</strong></p></td>
+<td><p>None</p></td>
+<td><p>C code + HLS directives</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Control</strong></p></td>
+<td><p>Full RTL control</p></td>
+<td><p>HLS tool dependent</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Readability</strong></p></td>
+<td><p>Gate-level, explicit</p></td>
+<td><p>High-level C abstractions</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Use Case</strong></p></td>
+<td><p>FPGA-specific deployment</p></td>
+<td><p>Cross-platform (CPU + FPGA)</p></td>
+</tr>
+</tbody>
+</table>
+<p>Both approaches are supported by TorchLogix. Use direct Verilog for FPGA-specific optimization and C→HLS for flexibility.</p>
+</section>
+<section id="supported-layer-types">
+<h3>Supported Layer Types<a class="headerlink" href="#supported-layer-types" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer Type</p></th>
+<th class="head"><p>Verilog Support</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>LogicDense</strong></p></td>
+<td><p>✅ Fully Supported</p></td>
+<td><p>Direct gate synthesis</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>LogicConv2d</strong></p></td>
+<td><p>✅ Fully Supported</p></td>
+<td><p>Binary tree structure</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>LogicConv3d</strong></p></td>
+<td><p>✅ Fully Supported</p></td>
+<td><p>Binary tree with 3D indexing</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Flatten</strong></p></td>
+<td><p>✅ Supported</p></td>
+<td><p>Wire passthrough</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>OrPooling</strong></p></td>
+<td><p>⚠️ TODO</p></td>
+<td><p>Recognized but not yet generated</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>GroupSum</strong></p></td>
+<td><p>⚠️ TODO</p></td>
+<td><p>Recognized but not yet generated</p></td>
+</tr>
+</tbody>
+</table>
+<p>Models using unsupported layers can still generate Verilog for supported portions, or use C code generation as an alternative.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="basic-verilog-export">
+<h2>Basic Verilog Export<a class="headerlink" href="#basic-verilog-export" title="Link to this heading"></a></h2>
+<section id="quick-start">
+<h3>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h3>
+<p>Generate Verilog from any trained TorchLogix model:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span><span class="p">,</span> <span class="n">GroupSum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+
+<span class="c1"># Create or load your model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">GroupSum</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="c1"># Compile the model</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,),</span>
+    <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+
+<span class="c1"># Generate Verilog code</span>
+<span class="n">verilog_code</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;my_logic_net&quot;</span><span class="p">)</span>
+
+<span class="c1"># Export to file</span>
+<span class="n">compiled</span><span class="o">.</span><span class="n">export_hdl</span><span class="p">(</span>
+    <span class="n">output_dir</span><span class="o">=</span><span class="s2">&quot;./verilog_output&quot;</span><span class="p">,</span>
+    <span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;my_logic_net&quot;</span><span class="p">,</span>
+    <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;verilog&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="api-reference">
+<h3>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading"></a></h3>
+<section id="get-verilog-code-module-name-pipeline-stages">
+<h4><code class="docutils literal notranslate"><span class="pre">get_verilog_code(module_name,</span> <span class="pre">pipeline_stages)</span></code><a class="headerlink" href="#get-verilog-code-module-name-pipeline-stages" title="Link to this heading"></a></h4>
+<p>Generates complete Verilog module as a string.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">module_name</span></code> (str): Name of the top-level Verilog module (default: <code class="docutils literal notranslate"><span class="pre">&quot;torchlogix_net&quot;</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages</span></code> (int): Number of pipeline stages (default: <code class="docutils literal notranslate"><span class="pre">0</span></code>)</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">0</span></code>: Fully combinational (no registers, 1 cycle latency)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">1</span></code>: Single output register (helps synthesis)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">N</span></code>: Divide layers into N pipeline stages (N cycle latency)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">len(layers)</span></code>: Full layer-level pipelining (highest fmax)</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Returns</strong>: Complete Verilog code as string</p>
+</section>
+<section id="export-hdl-output-dir-module-name-format-pipeline-stages">
+<h4><code class="docutils literal notranslate"><span class="pre">export_hdl(output_dir,</span> <span class="pre">module_name,</span> <span class="pre">format,</span> <span class="pre">pipeline_stages)</span></code><a class="headerlink" href="#export-hdl-output-dir-module-name-format-pipeline-stages" title="Link to this heading"></a></h4>
+<p>Exports Verilog to a file.</p>
+<p><strong>Parameters</strong>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">output_dir</span></code> (str): Directory to write Verilog file</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">module_name</span></code> (str): Module name (default: <code class="docutils literal notranslate"><span class="pre">&quot;torchlogix_net&quot;</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">format</span></code> (str): HDL format, currently only <code class="docutils literal notranslate"><span class="pre">&quot;verilog&quot;</span></code> supported (default: <code class="docutils literal notranslate"><span class="pre">&quot;verilog&quot;</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages</span></code> (int): Pipeline configuration (default: <code class="docutils literal notranslate"><span class="pre">0</span></code>)</p></li>
+</ul>
+<p><strong>Creates</strong>: <code class="docutils literal notranslate"><span class="pre">{output_dir}/{module_name}.v</span></code></p>
+</section>
+</section>
+<section id="understanding-generated-verilog">
+<h3>Understanding Generated Verilog<a class="headerlink" href="#understanding-generated-verilog" title="Link to this heading"></a></h3>
+<section id="combinational-design-pipeline-stages-0">
+<h4>Combinational Design (pipeline_stages=0)<a class="headerlink" href="#combinational-design-pipeline-stages-0" title="Link to this heading"></a></h4>
+<p>For a simple 2-layer network:</p>
+<div class="highlight-verilog notranslate"><div class="highlight"><pre><span></span><span class="k">module</span><span class="w"> </span><span class="n">logic_net</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">input</span><span class="w"> </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">7</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">inp</span><span class="p">,</span>
+<span class="w">    </span><span class="k">output</span><span class="w"> </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">3</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">out</span>
+<span class="p">);</span>
+<span class="w">    </span><span class="c1">// No clock or reset needed</span>
+
+<span class="w">    </span><span class="c1">// Layer 0: LogicDense (4 neurons)</span>
+<span class="w">    </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">3</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">;</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">2</span><span class="p">]);</span><span class="w">  </span><span class="c1">// AND gate</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">1</span><span class="p">]</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">3</span><span class="p">]);</span><span class="w">  </span><span class="c1">// OR gate</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">4</span><span class="p">]</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">5</span><span class="p">]);</span><span class="w">  </span><span class="c1">// XOR gate</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">~</span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">6</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">7</span><span class="p">]);</span><span class="w"> </span><span class="c1">// NAND gate</span>
+
+<span class="w">    </span><span class="c1">// Layer 1: LogicDense (2 neurons)</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">out</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">1</span><span class="p">]);</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">out</span><span class="p">[</span><span class="mh">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">2</span><span class="p">]</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">3</span><span class="p">]);</span>
+
+<span class="k">endmodule</span>
+</pre></div>
+</div>
+<p><strong>Characteristics</strong>:</p>
+<ul class="simple">
+<li><p>Pure combinational logic (no state)</p></li>
+<li><p>No clock or reset signals</p></li>
+<li><p>1 cycle latency (output available same cycle as input)</p></li>
+<li><p>Critical path spans entire network</p></li>
+</ul>
+</section>
+<section id="pipelined-design-pipeline-stages-2">
+<h4>Pipelined Design (pipeline_stages=2)<a class="headerlink" href="#pipelined-design-pipeline-stages-2" title="Link to this heading"></a></h4>
+<p>With pipeline registers:</p>
+<div class="highlight-verilog notranslate"><div class="highlight"><pre><span></span><span class="k">module</span><span class="w"> </span><span class="n">logic_net</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="k">input</span><span class="w"> </span><span class="kt">wire</span><span class="w"> </span><span class="n">clk</span><span class="p">,</span>
+<span class="w">    </span><span class="k">input</span><span class="w"> </span><span class="kt">wire</span><span class="w"> </span><span class="n">rst</span><span class="p">,</span>
+<span class="w">    </span><span class="k">input</span><span class="w"> </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">7</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">inp</span><span class="p">,</span>
+<span class="w">    </span><span class="k">output</span><span class="w"> </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="mh">3</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">out</span>
+<span class="p">);</span>
+<span class="w">    </span><span class="c1">// Combinational wires</span>
+<span class="w">    </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">3</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">layer_0_comb</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">3</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">out_comb</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Pipeline register</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="mh">3</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Layer 0: Combinational logic</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_comb</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">2</span><span class="p">]);</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_comb</span><span class="p">[</span><span class="mh">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">1</span><span class="p">]</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">3</span><span class="p">]);</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_comb</span><span class="p">[</span><span class="mh">2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">4</span><span class="p">]</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">5</span><span class="p">]);</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">layer_0_comb</span><span class="p">[</span><span class="mh">3</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">~</span><span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="mh">6</span><span class="p">]</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">inp</span><span class="p">[</span><span class="mh">7</span><span class="p">]);</span>
+
+<span class="w">    </span><span class="c1">// Pipeline register after Layer 0</span>
+<span class="w">    </span><span class="k">always</span><span class="w"> </span><span class="p">@(</span><span class="k">posedge</span><span class="w"> </span><span class="n">clk</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rst</span><span class="p">)</span>
+<span class="w">            </span><span class="n">layer_0_out</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mh">4</span><span class="mi">&#39;d0</span><span class="p">;</span>
+<span class="w">        </span><span class="k">else</span>
+<span class="w">            </span><span class="n">layer_0_out</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">layer_0_comb</span><span class="p">;</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="c1">// Layer 1: Combinational logic</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">out_comb</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">1</span><span class="p">]);</span>
+<span class="w">    </span><span class="k">assign</span><span class="w"> </span><span class="n">out_comb</span><span class="p">[</span><span class="mh">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">2</span><span class="p">]</span><span class="w"> </span><span class="o">^</span><span class="w"> </span><span class="n">layer_0_out</span><span class="p">[</span><span class="mh">3</span><span class="p">]);</span>
+
+<span class="w">    </span><span class="c1">// Output register</span>
+<span class="w">    </span><span class="k">always</span><span class="w"> </span><span class="p">@(</span><span class="k">posedge</span><span class="w"> </span><span class="n">clk</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rst</span><span class="p">)</span>
+<span class="w">            </span><span class="n">out</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mh">4</span><span class="mi">&#39;d0</span><span class="p">;</span>
+<span class="w">        </span><span class="k">else</span>
+<span class="w">            </span><span class="n">out</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">out_comb</span><span class="p">;</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="k">endmodule</span>
+</pre></div>
+</div>
+<p><strong>Characteristics</strong>:</p>
+<ul class="simple">
+<li><p>Synchronous design with clock and reset</p></li>
+<li><p>Registers break up long combinational paths</p></li>
+<li><p>N cycle latency (where N = pipeline_stages)</p></li>
+<li><p>Higher maximum frequency (fmax)</p></li>
+</ul>
+</section>
+<section id="gate-operations-supported">
+<h4>Gate Operations Supported<a class="headerlink" href="#gate-operations-supported" title="Link to this heading"></a></h4>
+<p>All 16 two-input Boolean operations are supported:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Gate ID</p></th>
+<th class="head"><p>Operation</p></th>
+<th class="head"><p>Verilog Expression</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Zero (constant)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1'b0</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>AND</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(a</span> <span class="pre">&amp;</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>A AND NOT B</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(a</span> <span class="pre">&amp;</span> <span class="pre">~b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>A (passthrough)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">a</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>NOT A AND B</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(~a</span> <span class="pre">&amp;</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p>B (passthrough)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">b</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>XOR</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(a</span> <span class="pre">^</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p>OR</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(a</span> <span class="pre">|</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>8</p></td>
+<td><p>NOR</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~(a</span> <span class="pre">|</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>9</p></td>
+<td><p>XNOR</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~(a</span> <span class="pre">^</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>10</p></td>
+<td><p>NOT B</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~b</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>11</p></td>
+<td><p>B IMPLIES A</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(~b</span> <span class="pre">|</span> <span class="pre">a)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>12</p></td>
+<td><p>NOT A</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~a</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>13</p></td>
+<td><p>A IMPLIES B</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(~a</span> <span class="pre">|</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>14</p></td>
+<td><p>NAND</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">~(a</span> <span class="pre">&amp;</span> <span class="pre">b)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>15</p></td>
+<td><p>One (constant)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1'b1</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="pipelining-for-large-models">
+<h2>Pipelining for Large Models<a class="headerlink" href="#pipelining-for-large-models" title="Link to this heading"></a></h2>
+<section id="the-problem-large-combinational-designs">
+<h3>The Problem: Large Combinational Designs<a class="headerlink" href="#the-problem-large-combinational-designs" title="Link to this heading"></a></h3>
+<p>By default, TorchLogix generates <strong>fully combinational</strong> Verilog where all logic executes in a single clock cycle. This works well for small models but causes serious problems for larger ones:</p>
+<section id="symptoms-of-combinational-overload">
+<h4>Symptoms of Combinational Overload<a class="headerlink" href="#symptoms-of-combinational-overload" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Synthesis fails or runs for hours without completing</p></li>
+<li><p>Verilog files &gt;1M lines take forever to process</p></li>
+<li><p>Very low maximum frequency (fmax &lt; 50 MHz)</p></li>
+<li><p>Timing closure failures (negative WNS)</p></li>
+<li><p>“Design too large” errors from Vivado</p></li>
+</ul>
+</section>
+<section id="why-this-happens">
+<h4>Why This Happens<a class="headerlink" href="#why-this-happens" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Deep combinational paths through many layers</p></li>
+<li><p>Synthesis tools struggle to optimize very large logic cones</p></li>
+<li><p>Critical path delay grows with model depth</p></li>
+<li><p>No natural break points for timing optimization</p></li>
+</ul>
+</section>
+</section>
+<section id="the-solution-pipeline-stages">
+<h3>The Solution: Pipeline Stages<a class="headerlink" href="#the-solution-pipeline-stages" title="Link to this heading"></a></h3>
+<p><strong>Pipelining</strong> inserts registers between layers to break up long combinational paths:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Combinational (pipeline_stages=0):
+  Input → [Layer0 → Layer1 → Layer2 → Layer3] → Output
+  All in 1 cycle, huge critical path
+
+Pipelined (pipeline_stages=4):
+  Input → [Layer0] → REG → [Layer1] → REG → [Layer2] → REG → [Layer3] → REG → Output
+  4 cycles latency, short critical paths
+</pre></div>
+</div>
+<section id="benefits">
+<h4>Benefits<a class="headerlink" href="#benefits" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Synthesis succeeds even for very large models</p></li>
+<li><p>Much faster synthesis time (minutes vs hours)</p></li>
+<li><p>Higher maximum frequency (200+ MHz vs &lt;50 MHz)</p></li>
+<li><p>Predictable timing closure</p></li>
+<li><p>Better resource utilization</p></li>
+</ul>
+</section>
+<section id="trade-offs">
+<h4>Trade-offs<a class="headerlink" href="#trade-offs" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>Increased latency (N cycles instead of 1)</p></li>
+<li><p>More flip-flops (registers consume area)</p></li>
+<li><p>Need to handle clock and reset signals</p></li>
+</ul>
+</section>
+</section>
+<section id="pipeline-stage-options">
+<h3>Pipeline Stage Options<a class="headerlink" href="#pipeline-stage-options" title="Link to this heading"></a></h3>
+<section id="pipeline-stages-0-fully-combinational-default">
+<h4><code class="docutils literal notranslate"><span class="pre">pipeline_stages=0</span></code> - Fully Combinational (Default)<a class="headerlink" href="#pipeline-stages-0-fully-combinational-default" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>No registers, no clock required</p></li>
+<li><p>1 cycle latency</p></li>
+<li><p><strong>Use for:</strong> Small models (&lt;10 layers), initial prototyping</p></li>
+<li><p><strong>Avoid for:</strong> Large models (synthesis will fail)</p></li>
+</ul>
+</section>
+<section id="pipeline-stages-1-output-register-only">
+<h4><code class="docutils literal notranslate"><span class="pre">pipeline_stages=1</span></code> - Output Register Only<a class="headerlink" href="#pipeline-stages-1-output-register-only" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Single register at output</p></li>
+<li><p>1 cycle latency</p></li>
+<li><p><strong>Use for:</strong> Medium models where synthesis struggles but you need low latency</p></li>
+<li><p><strong>Best for:</strong> 10-30 layer models</p></li>
+</ul>
+</section>
+<section id="pipeline-stages-n-n-pipeline-stages">
+<h4><code class="docutils literal notranslate"><span class="pre">pipeline_stages=N</span></code> - N Pipeline Stages<a class="headerlink" href="#pipeline-stages-n-n-pipeline-stages" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># 4 pipeline stages</span>
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Layers divided into N groups, register after each group</p></li>
+<li><p>N cycle latency</p></li>
+<li><p><strong>Use for:</strong> Large models (50-200 layers)</p></li>
+<li><p><strong>Best for:</strong> Balancing latency vs synthesis speed</p></li>
+</ul>
+</section>
+<section id="full-layer-level-pipelining">
+<h4>Full Layer-Level Pipelining<a class="headerlink" href="#full-layer-level-pipelining" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Register between every layer</span>
+<span class="n">num_layers</span> <span class="o">=</span> <span class="nb">len</span><span class="p">([</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">modules</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="p">(</span><span class="n">LogicDense</span><span class="p">,</span> <span class="n">LogicConv2d</span><span class="p">))])</span>
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="n">num_layers</span><span class="p">)</span>
+
+<span class="c1"># Or just use a large number</span>
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">999</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Register after every single layer</p></li>
+<li><p>Maximum possible fmax</p></li>
+<li><p>Highest latency (= number of layers)</p></li>
+<li><p><strong>Use for:</strong> Very large models (&gt;200 layers) or maximum throughput applications</p></li>
+</ul>
+</section>
+</section>
+<section id="choosing-the-right-pipeline-configuration">
+<h3>Choosing the Right Pipeline Configuration<a class="headerlink" href="#choosing-the-right-pipeline-configuration" title="Link to this heading"></a></h3>
+<section id="decision-tree">
+<h4>Decision Tree<a class="headerlink" href="#decision-tree" title="Link to this heading"></a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Is synthesis failing or very slow?
+│
+├─ NO → Use pipeline_stages=0 (fully combinational)
+│        Lowest latency, simplest design
+│
+└─ YES → How many layers in your model?
+         │
+         ├─ &lt;20 layers → pipeline_stages=1
+         │               (Output register only)
+         │
+         ├─ 20-100 layers → pipeline_stages=4 to 8
+         │                  (Balanced approach)
+         │
+         └─ &gt;100 layers → pipeline_stages=N/4 to N
+                          (N = number of layers)
+</pre></div>
+</div>
+</section>
+<section id="size-guidelines">
+<h4>Size Guidelines<a class="headerlink" href="#size-guidelines" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model Characteristics</p></th>
+<th class="head"><p>Recommended Config</p></th>
+<th class="head"><p>Latency</p></th>
+<th class="head"><p>Benefits</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>&lt;10 layers, &lt;100K Verilog lines</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages=0</span></code></p></td>
+<td><p>1 cycle</p></td>
+<td><p>Simple, low latency</p></td>
+</tr>
+<tr class="row-odd"><td><p>10-30 layers, synthesis slow</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages=1</span></code></p></td>
+<td><p>1 cycle</p></td>
+<td><p>Helps synthesis</p></td>
+</tr>
+<tr class="row-even"><td><p>30-100 layers</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages=4</span></code></p></td>
+<td><p>4 cycles</p></td>
+<td><p>Good balance</p></td>
+</tr>
+<tr class="row-odd"><td><p>100-200 layers</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages=8-16</span></code></p></td>
+<td><p>8-16 cycles</p></td>
+<td><p>Reliable synthesis</p></td>
+</tr>
+<tr class="row-even"><td><p>&gt;200 layers</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages=N/4</span></code></p></td>
+<td><p>N/4 cycles</p></td>
+<td><p>Fast synthesis</p></td>
+</tr>
+<tr class="row-odd"><td><p>Maximum throughput needed</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pipeline_stages=999</span></code></p></td>
+<td><p>N cycles</p></td>
+<td><p>Highest fmax</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="empirical-testing">
+<h4>Empirical Testing<a class="headerlink" href="#empirical-testing" title="Link to this heading"></a></h4>
+<p>Start conservative and increase pipelining if needed:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Step 1: Try combinational</span>
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="c1"># Try to synthesize... if it fails or is very slow:</span>
+
+<span class="c1"># Step 2: Add output register</span>
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># Try to synthesize... if still slow:</span>
+
+<span class="c1"># Step 3: Increase stages</span>
+<span class="k">for</span> <span class="n">stages</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">]:</span>
+    <span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="n">stages</span><span class="p">)</span>
+    <span class="c1"># Synthesize and check timing/area trade-off</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="performance-optimization">
+<h3>Performance Optimization<a class="headerlink" href="#performance-optimization" title="Link to this heading"></a></h3>
+<section id="finding-optimal-pipeline-depth">
+<h4>Finding Optimal Pipeline Depth<a class="headerlink" href="#finding-optimal-pipeline-depth" title="Link to this heading"></a></h4>
+<p>Run synthesis with different configurations and compare:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">stages</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">]:</span>
+    <span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span>
+        <span class="n">module_name</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;design_p</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="n">pipeline_stages</span><span class="o">=</span><span class="n">stages</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Save Verilog</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;design_p</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s1">.v&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">verilog</span><span class="p">)</span>
+
+    <span class="c1"># Synthesize (see Synthesis section for details)</span>
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span>
+        <span class="s1">&#39;vivado&#39;</span><span class="p">,</span> <span class="s1">&#39;-mode&#39;</span><span class="p">,</span> <span class="s1">&#39;batch&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;-source&#39;</span><span class="p">,</span> <span class="s1">&#39;synthesize.tcl&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;-tclargs&#39;</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;design_p</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s1">.v&#39;</span><span class="p">,</span> <span class="s1">&#39;xc7z020clg400-1&#39;</span>
+    <span class="p">])</span>
+
+    <span class="c1"># Parse and compare results</span>
+    <span class="c1"># results.append((stages, luts, ffs, fmax, synthesis_time))</span>
+
+<span class="c1"># Find optimal trade-off based on your requirements</span>
+</pre></div>
+</div>
+</section>
+<section id="common-issues">
+<h4>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h4>
+<p><strong>Issue: Pipelined design has lower fmax than expected</strong></p>
+<ul class="simple">
+<li><p><strong>Cause:</strong> Not enough pipeline stages, or uneven distribution</p></li>
+<li><p><strong>Solution:</strong> Increase <code class="docutils literal notranslate"><span class="pre">pipeline_stages</span></code> or try full layer-level pipelining</p></li>
+</ul>
+<p><strong>Issue: Too much area consumed by registers</strong></p>
+<ul class="simple">
+<li><p><strong>Cause:</strong> Too many pipeline stages for the model size</p></li>
+<li><p><strong>Solution:</strong> Reduce <code class="docutils literal notranslate"><span class="pre">pipeline_stages</span></code> to find balance</p></li>
+</ul>
+<p><strong>Issue: Synthesis still slow with pipelining</strong></p>
+<ul class="simple">
+<li><p><strong>Cause:</strong> Individual layers may still be very large</p></li>
+<li><p><strong>Solution:</strong></p>
+<ul>
+<li><p>Check if conv layers with large receptive fields need breaking up</p></li>
+<li><p>Use more pipeline stages</p></li>
+<li><p>Consider model architecture changes</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="testing-generated-verilog">
+<h2>Testing Generated Verilog<a class="headerlink" href="#testing-generated-verilog" title="Link to this heading"></a></h2>
+<p>Functional testing and verification ensures your generated Verilog matches the expected behavior from the trained model.</p>
+<section id="prerequisites">
+<h3>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h3>
+<p>You’ll need one of the following simulators:</p>
+<ul class="simple">
+<li><p><strong>Vivado Simulator (xsim)</strong> - Included with Vivado</p></li>
+<li><p><strong>ModelSim/QuestaSim</strong> - Commercial simulator from Mentor/Siemens</p></li>
+<li><p><strong>Icarus Verilog</strong> - Open-source, free (<code class="docutils literal notranslate"><span class="pre">apt</span> <span class="pre">install</span> <span class="pre">iverilog</span></code> or <code class="docutils literal notranslate"><span class="pre">brew</span> <span class="pre">install</span> <span class="pre">icarus-verilog</span></code>)</p></li>
+<li><p><strong>Verilator</strong> - Fast open-source simulator (<code class="docutils literal notranslate"><span class="pre">apt</span> <span class="pre">install</span> <span class="pre">verilator</span></code> or <code class="docutils literal notranslate"><span class="pre">brew</span> <span class="pre">install</span> <span class="pre">verilator</span></code>)</p></li>
+</ul>
+</section>
+<section id="step-1-generate-test-vectors">
+<h3>Step 1: Generate Test Vectors<a class="headerlink" href="#step-1-generate-test-vectors" title="Link to this heading"></a></h3>
+<p>Export test vectors from your trained model using Python:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+
+<span class="c1"># Load your trained model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># Your trained TorchLogix model</span>
+
+<span class="c1"># Generate test vectors</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,),</span> <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">compiled</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+
+<span class="c1"># Generate random binary test cases</span>
+<span class="n">num_tests</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="n">input_size</span> <span class="o">=</span> <span class="mi">8</span>  <span class="c1"># Match your model&#39;s input size</span>
+<span class="n">test_inputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="n">num_tests</span><span class="p">,</span> <span class="n">input_size</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">)</span>
+
+<span class="c1"># Get expected outputs</span>
+<span class="n">test_outputs</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">test_inputs</span><span class="p">:</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">test_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Save to files for testbench</span>
+<span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="s1">&#39;test_vectors_input.txt&#39;</span><span class="p">,</span> <span class="n">test_inputs</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="s1">&#39;test_vectors_output.txt&#39;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">test_outputs</span><span class="p">),</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generated </span><span class="si">{</span><span class="n">num_tests</span><span class="si">}</span><span class="s2"> test vectors&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="step-2-create-a-verilog-testbench">
+<h3>Step 2: Create a Verilog Testbench<a class="headerlink" href="#step-2-create-a-verilog-testbench" title="Link to this heading"></a></h3>
+<p>Create a testbench file <code class="docutils literal notranslate"><span class="pre">tb_logic_net.v</span></code> for combinational designs:</p>
+<div class="highlight-verilog notranslate"><div class="highlight"><pre><span></span><span class="no">`timescale</span><span class="w"> </span><span class="mh">1</span><span class="n">ns</span><span class="o">/</span><span class="mh">1</span><span class="n">ps</span>
+
+<span class="k">module</span><span class="w"> </span><span class="n">tb_logic_net</span><span class="p">;</span>
+<span class="w">    </span><span class="c1">// Parameters</span>
+<span class="w">    </span><span class="k">parameter</span><span class="w"> </span><span class="n">INPUT_WIDTH</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">8</span><span class="p">;</span>
+<span class="w">    </span><span class="k">parameter</span><span class="w"> </span><span class="n">OUTPUT_WIDTH</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">2</span><span class="p">;</span>
+<span class="w">    </span><span class="k">parameter</span><span class="w"> </span><span class="n">NUM_TESTS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">100</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Signals</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="n">INPUT_WIDTH</span><span class="o">-</span><span class="mh">1</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">inp</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="n">OUTPUT_WIDTH</span><span class="o">-</span><span class="mh">1</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">out</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Expected output</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="n">OUTPUT_WIDTH</span><span class="o">-</span><span class="mh">1</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">expected_out</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Test vectors</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="n">INPUT_WIDTH</span><span class="o">-</span><span class="mh">1</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">test_inputs</span><span class="w"> </span><span class="p">[</span><span class="mh">0</span><span class="o">:</span><span class="n">NUM_TESTS</span><span class="o">-</span><span class="mh">1</span><span class="p">];</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="n">OUTPUT_WIDTH</span><span class="o">-</span><span class="mh">1</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">test_outputs</span><span class="w"> </span><span class="p">[</span><span class="mh">0</span><span class="o">:</span><span class="n">NUM_TESTS</span><span class="o">-</span><span class="mh">1</span><span class="p">];</span>
+
+<span class="w">    </span><span class="k">integer</span><span class="w"> </span><span class="n">i</span><span class="p">;</span>
+<span class="w">    </span><span class="k">integer</span><span class="w"> </span><span class="n">errors</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Instantiate the DUT (Device Under Test)</span>
+<span class="w">    </span><span class="n">logic_net</span><span class="w"> </span><span class="n">dut</span><span class="w"> </span><span class="p">(</span>
+<span class="w">        </span><span class="p">.</span><span class="n">inp</span><span class="p">(</span><span class="n">inp</span><span class="p">),</span>
+<span class="w">        </span><span class="p">.</span><span class="n">out</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="w">    </span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// Load test vectors</span>
+<span class="w">    </span><span class="k">initial</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="nb">$readmemb</span><span class="p">(</span><span class="s">&quot;test_vectors_input.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">test_inputs</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$readmemb</span><span class="p">(</span><span class="s">&quot;test_vectors_output.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">test_outputs</span><span class="p">);</span>
+<span class="w">        </span><span class="n">errors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="c1">// Test stimulus</span>
+<span class="w">    </span><span class="k">initial</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;Starting testbench...&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;Time</span><span class="se">\t\t</span><span class="s">Input</span><span class="se">\t\t</span><span class="s">Output</span><span class="se">\t\t</span><span class="s">Expected</span><span class="se">\t</span><span class="s">Status&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;----</span><span class="se">\t\t</span><span class="s">-----</span><span class="se">\t\t</span><span class="s">------</span><span class="se">\t\t</span><span class="s">--------</span><span class="se">\t</span><span class="s">------&quot;</span><span class="p">);</span>
+
+<span class="w">        </span><span class="c1">// Run through all test vectors</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">NUM_TESTS</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mh">1</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">            </span><span class="n">inp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">test_inputs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">            </span><span class="n">expected_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">test_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="w">            </span><span class="p">#</span><span class="mh">10</span><span class="p">;</span><span class="w">  </span><span class="c1">// Wait 10ns for combinational logic to settle</span>
+
+<span class="w">            </span><span class="c1">// Check output</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">out</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="n">expected_out</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">                </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;%0t</span><span class="se">\t</span><span class="s">%b</span><span class="se">\t</span><span class="s">%b</span><span class="se">\t</span><span class="s">%b</span><span class="se">\t\t</span><span class="s">FAIL&quot;</span><span class="p">,</span><span class="w"> </span><span class="nb">$time</span><span class="p">,</span><span class="w"> </span><span class="n">inp</span><span class="p">,</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="n">expected_out</span><span class="p">);</span>
+<span class="w">                </span><span class="n">errors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errors</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mh">1</span><span class="p">;</span>
+<span class="w">            </span><span class="k">end</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">                </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;%0t</span><span class="se">\t</span><span class="s">%b</span><span class="se">\t</span><span class="s">%b</span><span class="se">\t</span><span class="s">%b</span><span class="se">\t\t</span><span class="s">PASS&quot;</span><span class="p">,</span><span class="w"> </span><span class="nb">$time</span><span class="p">,</span><span class="w"> </span><span class="n">inp</span><span class="p">,</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="n">expected_out</span><span class="p">);</span>
+<span class="w">            </span><span class="k">end</span>
+<span class="w">        </span><span class="k">end</span>
+
+<span class="w">        </span><span class="c1">// Summary</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">========================================&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;Test Summary&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;========================================&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;Total tests: %0d&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">NUM_TESTS</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;Passed:      %0d&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">NUM_TESTS</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">errors</span><span class="p">);</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;Failed:      %0d&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">errors</span><span class="p">);</span>
+
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">errors</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">            </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">ALL TESTS PASSED!&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="k">end</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">            </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;</span><span class="se">\n</span><span class="s">SOME TESTS FAILED!&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="k">end</span>
+
+<span class="w">        </span><span class="nb">$finish</span><span class="p">;</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="w">    </span><span class="c1">// Optional: Generate VCD waveform dump</span>
+<span class="w">    </span><span class="k">initial</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="n">$dumpfile</span><span class="p">(</span><span class="s">&quot;tb_logic_net.vcd&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="n">$dumpvars</span><span class="p">(</span><span class="mh">0</span><span class="p">,</span><span class="w"> </span><span class="n">tb_logic_net</span><span class="p">);</span>
+<span class="w">    </span><span class="k">end</span>
+
+<span class="k">endmodule</span>
+</pre></div>
+</div>
+<section id="testbench-for-pipelined-designs">
+<h4>Testbench for Pipelined Designs<a class="headerlink" href="#testbench-for-pipelined-designs" title="Link to this heading"></a></h4>
+<p>For pipelined designs, you need to account for latency:</p>
+<div class="highlight-verilog notranslate"><div class="highlight"><pre><span></span><span class="k">module</span><span class="w"> </span><span class="n">tb_pipelined_logic_net</span><span class="p">;</span>
+<span class="w">    </span><span class="k">parameter</span><span class="w"> </span><span class="n">PIPELINE_LATENCY</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">4</span><span class="p">;</span><span class="w">  </span><span class="c1">// Match your pipeline_stages</span>
+
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="n">clk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="n">rst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">1</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">reg</span><span class="w"> </span><span class="p">[</span><span class="mh">7</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">inp</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">wire</span><span class="w"> </span><span class="p">[</span><span class="mh">1</span><span class="o">:</span><span class="mh">0</span><span class="p">]</span><span class="w"> </span><span class="n">out</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// Generate clock (100 MHz)</span>
+<span class="w">    </span><span class="k">always</span><span class="w"> </span><span class="p">#</span><span class="mh">5</span><span class="w"> </span><span class="n">clk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">~</span><span class="n">clk</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">logic_net</span><span class="w"> </span><span class="n">dut</span><span class="w"> </span><span class="p">(</span>
+<span class="w">        </span><span class="p">.</span><span class="n">clk</span><span class="p">(</span><span class="n">clk</span><span class="p">),</span>
+<span class="w">        </span><span class="p">.</span><span class="n">rst</span><span class="p">(</span><span class="n">rst</span><span class="p">),</span>
+<span class="w">        </span><span class="p">.</span><span class="n">inp</span><span class="p">(</span><span class="n">inp</span><span class="p">),</span>
+<span class="w">        </span><span class="p">.</span><span class="n">out</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<span class="w">    </span><span class="p">);</span>
+
+<span class="w">    </span><span class="k">initial</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="c1">// Reset sequence</span>
+<span class="w">        </span><span class="n">rst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">1</span><span class="p">;</span>
+<span class="w">        </span><span class="p">#</span><span class="mh">20</span><span class="w"> </span><span class="n">rst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0</span><span class="p">;</span><span class="w">  </span><span class="c1">// Release reset after 2 cycles</span>
+
+<span class="w">        </span><span class="c1">// Run tests with pipeline latency</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">NUM_TESTS</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mh">1</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">            </span><span class="n">inp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">test_inputs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+
+<span class="w">            </span><span class="c1">// Wait for pipeline to fill</span>
+<span class="w">            </span><span class="k">repeat</span><span class="p">(</span><span class="n">PIPELINE_LATENCY</span><span class="p">)</span><span class="w"> </span><span class="p">@(</span><span class="k">posedge</span><span class="w"> </span><span class="n">clk</span><span class="p">);</span>
+
+<span class="w">            </span><span class="n">expected_out</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">test_outputs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+
+<span class="w">            </span><span class="c1">// Check output</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">out</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="n">expected_out</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">                </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;FAIL: Input %b -&gt; Output %b (expected %b)&quot;</span><span class="p">,</span>
+<span class="w">                         </span><span class="n">test_inputs</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">out</span><span class="p">,</span><span class="w"> </span><span class="n">expected_out</span><span class="p">);</span>
+<span class="w">                </span><span class="n">errors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">errors</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mh">1</span><span class="p">;</span>
+<span class="w">            </span><span class="k">end</span>
+<span class="w">        </span><span class="k">end</span>
+
+<span class="w">        </span><span class="c1">// Summary...</span>
+<span class="w">        </span><span class="nb">$finish</span><span class="p">;</span>
+<span class="w">    </span><span class="k">end</span>
+<span class="k">endmodule</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-3-simulate-with-different-tools">
+<h3>Step 3: Simulate with Different Tools<a class="headerlink" href="#step-3-simulate-with-different-tools" title="Link to this heading"></a></h3>
+<section id="option-a-vivado-simulator-xsim">
+<h4>Option A: Vivado Simulator (xsim)<a class="headerlink" href="#option-a-vivado-simulator-xsim" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compile the design</span>
+xvlog<span class="w"> </span>logic_net.v
+xvlog<span class="w"> </span>tb_logic_net.v
+
+<span class="c1"># Elaborate</span>
+xelab<span class="w"> </span>-debug<span class="w"> </span>typical<span class="w"> </span>tb_logic_net<span class="w"> </span>-s<span class="w"> </span>tb_logic_net_sim
+
+<span class="c1"># Run simulation</span>
+xsim<span class="w"> </span>tb_logic_net_sim<span class="w"> </span>-runall
+
+<span class="c1"># View waveforms (GUI mode)</span>
+xsim<span class="w"> </span>tb_logic_net_sim<span class="w"> </span>-gui
+</pre></div>
+</div>
+</section>
+<section id="option-b-icarus-verilog">
+<h4>Option B: Icarus Verilog<a class="headerlink" href="#option-b-icarus-verilog" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compile and run in one step</span>
+iverilog<span class="w"> </span>-o<span class="w"> </span>sim.out<span class="w"> </span>logic_net.v<span class="w"> </span>tb_logic_net.v
+vvp<span class="w"> </span>sim.out
+
+<span class="c1"># View waveforms with GTKWave</span>
+gtkwave<span class="w"> </span>tb_logic_net.vcd
+</pre></div>
+</div>
+</section>
+<section id="option-c-modelsim-questasim">
+<h4>Option C: ModelSim/QuestaSim<a class="headerlink" href="#option-c-modelsim-questasim" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create work library</span>
+vlib<span class="w"> </span>work
+
+<span class="c1"># Compile sources</span>
+vlog<span class="w"> </span>logic_net.v
+vlog<span class="w"> </span>tb_logic_net.v
+
+<span class="c1"># Simulate</span>
+vsim<span class="w"> </span>-c<span class="w"> </span>tb_logic_net<span class="w"> </span>-do<span class="w"> </span><span class="s2">&quot;run -all; quit&quot;</span>
+
+<span class="c1"># Or run with GUI</span>
+vsim<span class="w"> </span>tb_logic_net
+<span class="c1"># In ModelSim GUI: run -all</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="step-4-analyze-results">
+<h3>Step 4: Analyze Results<a class="headerlink" href="#step-4-analyze-results" title="Link to this heading"></a></h3>
+<section id="success-criteria">
+<h4>Success Criteria<a class="headerlink" href="#success-criteria" title="Link to this heading"></a></h4>
+<ul class="simple">
+<li><p>All test vectors should produce matching outputs</p></li>
+<li><p>No ‘X’ or ‘Z’ values in outputs (indicates uninitialized or high-impedance states)</p></li>
+<li><p>Combinational delay should be minimal (typically &lt; 1ns for simple gates)</p></li>
+</ul>
+</section>
+<section id="id1">
+<h4>Common Issues<a class="headerlink" href="#id1" title="Link to this heading"></a></h4>
+<p><strong>Mismatched outputs:</strong></p>
+<ul class="simple">
+<li><p>Verify test vector format (binary vs decimal)</p></li>
+<li><p>Check that Verilog module name matches instantiation in testbench</p></li>
+<li><p>Ensure input/output widths match</p></li>
+</ul>
+<p><strong>X or Z values:</strong></p>
+<ul class="simple">
+<li><p>Usually indicates undriven wires</p></li>
+<li><p>Check all wires in generated Verilog have assignments</p></li>
+</ul>
+<p><strong>Compilation errors:</strong></p>
+<ul class="simple">
+<li><p>Verify Verilog syntax</p></li>
+<li><p>Check for Verilog-1995 vs Verilog-2001 compatibility issues</p></li>
+</ul>
+</section>
+</section>
+<section id="self-checking-testbench">
+<h3>Self-Checking Testbench<a class="headerlink" href="#self-checking-testbench" title="Link to this heading"></a></h3>
+<p>For automated testing, create a self-checking testbench that exits with an error code:</p>
+<div class="highlight-verilog notranslate"><div class="highlight"><pre><span></span><span class="k">initial</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">    </span><span class="c1">// ... run tests ...</span>
+
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">errors</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mh">0</span><span class="p">)</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;FAIL: %0d errors detected&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">errors</span><span class="p">);</span>
+<span class="w">        </span><span class="n">$fatal</span><span class="p">(</span><span class="mh">1</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Test failed&quot;</span><span class="p">);</span><span class="w">  </span><span class="c1">// Exit with error</span>
+<span class="w">    </span><span class="k">end</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">        </span><span class="nb">$display</span><span class="p">(</span><span class="s">&quot;PASS: All tests passed&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">end</span>
+<span class="w">    </span><span class="nb">$finish</span><span class="p">;</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Then use in scripts:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+iverilog<span class="w"> </span>-o<span class="w"> </span>sim.out<span class="w"> </span>logic_net.v<span class="w"> </span>tb_logic_net.v<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>vvp<span class="w"> </span>sim.out
+<span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="nv">$?</span><span class="w"> </span>-eq<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+<span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Simulation PASSED&quot;</span>
+<span class="k">else</span>
+<span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Simulation FAILED&quot;</span>
+<span class="w">    </span><span class="nb">exit</span><span class="w"> </span><span class="m">1</span>
+<span class="k">fi</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="synthesis-with-vivado">
+<h2>Synthesis with Vivado<a class="headerlink" href="#synthesis-with-vivado" title="Link to this heading"></a></h2>
+<p>Synthesis converts Verilog RTL code into gate-level netlists optimized for specific FPGA parts, providing resource estimates, timing analysis, and power consumption data.</p>
+<section id="id2">
+<h3>Overview<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<p>Synthesis provides:</p>
+<ul class="simple">
+<li><p><strong>Resource Estimates</strong>: LUTs, FFs, DSPs, BRAM usage</p></li>
+<li><p><strong>Timing Analysis</strong>: Maximum frequency (fmax), Worst Negative Slack (WNS), critical paths</p></li>
+<li><p><strong>Power Estimates</strong>: Static and dynamic power consumption</p></li>
+</ul>
+</section>
+<section id="id3">
+<h3>Prerequisites<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Vivado Design Suite</strong> installed (tested with 2019.1+)</p></li>
+<li><p>Generated Verilog file from TorchLogix (e.g., <code class="docutils literal notranslate"><span class="pre">logic_net.v</span></code>)</p></li>
+<li><p>Target FPGA part number (e.g., <code class="docutils literal notranslate"><span class="pre">xc7z020clg400-1</span></code> for Pynq-Z2)</p></li>
+</ul>
+</section>
+<section id="id4">
+<h3>Quick Start<a class="headerlink" href="#id4" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Navigate to your Verilog output directory</span>
+<span class="nb">cd</span><span class="w"> </span>verilog_output/
+
+<span class="c1"># Run synthesis with TCL script</span>
+vivado<span class="w"> </span>-mode<span class="w"> </span>batch<span class="w"> </span>-source<span class="w"> </span>synthesize.tcl<span class="w"> </span>-tclargs<span class="w"> </span>logic_net.v<span class="w"> </span>xc7z020clg400-1
+
+<span class="c1"># Results will be in synthesis_reports/</span>
+ls<span class="w"> </span>synthesis_reports/
+<span class="c1"># utilization.txt  timing.txt  power.txt</span>
+</pre></div>
+</div>
+</section>
+<section id="synthesis-methods">
+<h3>Synthesis Methods<a class="headerlink" href="#synthesis-methods" title="Link to this heading"></a></h3>
+<section id="method-1-batch-mode-with-tcl-script-recommended">
+<h4>Method 1: Batch Mode with TCL Script (Recommended)<a class="headerlink" href="#method-1-batch-mode-with-tcl-script-recommended" title="Link to this heading"></a></h4>
+<p>Create <code class="docutils literal notranslate"><span class="pre">synthesize.tcl</span></code>:</p>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="c"># Parse arguments</span>
+<span class="k">set</span><span class="w"> </span>verilog_file<span class="w"> </span><span class="k">[</span><span class="nb">lindex</span><span class="w"> </span><span class="nv">$argv</span><span class="w"> </span><span class="mi">0</span><span class="k">]</span>
+<span class="k">set</span><span class="w"> </span>part_number<span class="w"> </span><span class="k">[</span><span class="nb">lindex</span><span class="w"> </span><span class="nv">$argv</span><span class="w"> </span><span class="mi">1</span><span class="k">]</span>
+<span class="k">set</span><span class="w"> </span>report_dir<span class="w"> </span><span class="k">[</span><span class="nb">lindex</span><span class="w"> </span><span class="nv">$argv</span><span class="w"> </span><span class="mi">2</span><span class="k">]</span>
+
+<span class="k">if</span><span class="w"> </span><span class="k">{</span><span class="nv">$report_dir</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="k">}</span><span class="w"> </span><span class="k">{</span>
+<span class="w">    </span><span class="k">set</span><span class="w"> </span>report_dir<span class="w"> </span><span class="s2">&quot;synthesis_reports&quot;</span>
+<span class="k">}</span>
+
+<span class="c"># Create output directory</span>
+<span class="nb">file</span><span class="w"> </span>mkdir<span class="w"> </span><span class="nv">$report_dir</span>
+
+<span class="c"># Create in-memory project</span>
+<span class="nv">create_project</span><span class="w"> </span><span class="o">-</span>in_memory<span class="w"> </span><span class="o">-</span>part<span class="w"> </span><span class="nv">$part_number</span>
+
+<span class="c"># Read Verilog source</span>
+<span class="nv">read_verilog</span><span class="w"> </span><span class="nv">$verilog_file</span>
+
+<span class="c"># Detect if design has clock port</span>
+<span class="k">set</span><span class="w"> </span>has_clock<span class="w"> </span><span class="k">[expr</span><span class="w"> </span><span class="k">{[</span><span class="nb">llength</span><span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span><span class="o">-</span>quiet<span class="w"> </span>clk<span class="k">]]</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="nv">0</span><span class="k">}]</span>
+
+<span class="k">if</span><span class="w"> </span><span class="k">{</span><span class="nv">$has_clock</span><span class="k">}</span><span class="w"> </span><span class="k">{</span>
+<span class="w">    </span><span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;INFO: Detected clocked design, applying timing constraints&quot;</span>
+
+<span class="w">    </span><span class="c"># Create clock constraint (10ns period = 100 MHz)</span>
+<span class="w">    </span><span class="nv">create_clock</span><span class="w"> </span><span class="o">-</span>period<span class="w"> </span><span class="mf">10.0</span><span class="w"> </span><span class="o">-</span>name<span class="w"> </span>clk<span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span>clk<span class="k">]</span>
+
+<span class="w">    </span><span class="c"># Input/output delays</span>
+<span class="w">    </span><span class="nv">set_input_delay</span><span class="w"> </span><span class="o">-</span>clock<span class="w"> </span>clk<span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span><span class="o">-</span>filter<span class="w"> </span><span class="k">{</span><span class="nv">NAME</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span>clk<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>DIRECTION<span class="w"> </span><span class="o">==</span><span class="w"> </span>IN<span class="k">}]</span>
+<span class="w">    </span><span class="nv">set_output_delay</span><span class="w"> </span><span class="o">-</span>clock<span class="w"> </span>clk<span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span><span class="o">-</span>filter<span class="w"> </span><span class="k">{</span><span class="nv">DIRECTION</span><span class="w"> </span><span class="o">==</span><span class="w"> </span>OUT<span class="k">}]</span>
+
+<span class="w">    </span><span class="c"># Run synthesis</span>
+<span class="w">    </span><span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span><span class="k">[</span><span class="nv">get_property</span><span class="w"> </span>TOP<span class="w"> </span><span class="k">[</span><span class="nv">current_fileset</span><span class="k">]]</span>
+<span class="k">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="k">{</span>
+<span class="w">    </span><span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;INFO: Detected combinational design&quot;</span>
+
+<span class="w">    </span><span class="c"># Run synthesis in out-of-context mode</span>
+<span class="w">    </span><span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span><span class="k">[</span><span class="nv">get_property</span><span class="w"> </span>TOP<span class="w"> </span><span class="k">[</span><span class="nv">current_fileset</span><span class="k">]]</span><span class="w"> </span><span class="o">-</span>mode<span class="w"> </span>out_of_context
+<span class="k">}</span>
+
+<span class="c"># Generate reports</span>
+<span class="nv">report_utilization</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span><span class="nv">${report_dir}</span><span class="o">/</span>utilization.txt
+<span class="nv">report_timing_summary</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span><span class="nv">${report_dir}</span><span class="o">/</span>timing.txt
+<span class="nv">report_power</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span><span class="nv">${report_dir}</span><span class="o">/</span>power.txt
+
+<span class="c"># Extract key metrics</span>
+<span class="k">set</span><span class="w"> </span>lut_count<span class="w"> </span><span class="k">[</span><span class="nv">get_property</span><span class="w"> </span>LUT_AS_LOGIC<span class="w"> </span><span class="k">[</span><span class="nv">get_cells</span><span class="w"> </span><span class="o">-</span>hierarchical<span class="w"> </span><span class="o">-</span>filter<span class="w"> </span><span class="k">{</span><span class="nv">PRIMITIVE_TYPE</span><span class="w"> </span><span class="err">=</span><span class="o">~</span><span class="w"> </span>LUT<span class="o">*</span><span class="k">}]</span><span class="w"> </span><span class="o">|</span><span class="w"> </span>llength<span class="k">]</span>
+<span class="k">set</span><span class="w"> </span>ff_count<span class="w"> </span><span class="k">[</span><span class="nv">get_property</span><span class="w"> </span>PRIMITIVE_COUNT<span class="w"> </span><span class="k">[</span><span class="nv">get_cells</span><span class="w"> </span><span class="o">-</span>hierarchical<span class="w"> </span><span class="o">-</span>filter<span class="w"> </span><span class="k">{</span><span class="nv">PRIMITIVE_TYPE</span><span class="w"> </span><span class="err">=</span><span class="o">~</span><span class="w"> </span>REGISTER<span class="o">*</span><span class="k">}]]</span>
+
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;\n========================================&quot;</span>
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;Synthesis Summary&quot;</span>
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;========================================&quot;</span>
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;LUTs:  $lut_count&quot;</span>
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;FFs:   $ff_count&quot;</span>
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;========================================&quot;</span>
+
+<span class="c"># Save summary</span>
+<span class="k">set</span><span class="w"> </span>summary_file<span class="w"> </span><span class="k">[</span><span class="nb">open</span><span class="w"> </span><span class="s2">&quot;${report_dir}/summary.txt&quot;</span><span class="w"> </span>w<span class="k">]</span>
+<span class="nb">puts</span><span class="w"> </span><span class="nv">$summary_file</span><span class="w"> </span><span class="s2">&quot;LUTs: $lut_count&quot;</span>
+<span class="nb">puts</span><span class="w"> </span><span class="nv">$summary_file</span><span class="w"> </span><span class="s2">&quot;FFs: $ff_count&quot;</span>
+<span class="nb">close</span><span class="w"> </span><span class="nv">$summary_file</span>
+
+<span class="nb">puts</span><span class="w"> </span><span class="s2">&quot;Reports saved to: $report_dir/&quot;</span>
+<span class="nb">exit</span>
+</pre></div>
+</div>
+<p>Run synthesis:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vivado<span class="w"> </span>-mode<span class="w"> </span>batch<span class="w"> </span>-source<span class="w"> </span>synthesize.tcl<span class="w"> </span>-tclargs<span class="w"> </span>logic_net.v<span class="w"> </span>xc7z020clg400-1<span class="w"> </span>reports/
+</pre></div>
+</div>
+</section>
+<section id="method-2-vivado-gui">
+<h4>Method 2: Vivado GUI<a class="headerlink" href="#method-2-vivado-gui" title="Link to this heading"></a></h4>
+<ol class="arabic simple">
+<li><p>Launch Vivado: <code class="docutils literal notranslate"><span class="pre">vivado</span></code></p></li>
+<li><p>Create New Project</p>
+<ul class="simple">
+<li><p>Click “Create Project”</p></li>
+<li><p>Choose project location</p></li>
+<li><p>Select “RTL Project”</p></li>
+</ul>
+</li>
+<li><p>Add Verilog Source</p>
+<ul class="simple">
+<li><p>In Flow Navigator: “Add Sources”</p></li>
+<li><p>“Add or create design sources”</p></li>
+<li><p>Add your <code class="docutils literal notranslate"><span class="pre">logic_net.v</span></code> file</p></li>
+</ul>
+</li>
+<li><p>Select Target Part</p>
+<ul class="simple">
+<li><p>Common parts:</p>
+<ul>
+<li><p>Pynq-Z2: <code class="docutils literal notranslate"><span class="pre">xc7z020clg400-1</span></code></p></li>
+<li><p>ZCU104: <code class="docutils literal notranslate"><span class="pre">xczu7ev-ffvc1156-2-e</span></code></p></li>
+<li><p>Artix-7: <code class="docutils literal notranslate"><span class="pre">xc7a35tcpg236-1</span></code></p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Run Synthesis</p>
+<ul class="simple">
+<li><p>In Flow Navigator: “Run Synthesis”</p></li>
+</ul>
+</li>
+<li><p>View Reports</p>
+<ul class="simple">
+<li><p>After synthesis: “Open Synthesized Design”</p></li>
+<li><p>Reports → Utilization, Timing Summary</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="method-3-vivado-tcl-console">
+<h4>Method 3: Vivado Tcl Console<a class="headerlink" href="#method-3-vivado-tcl-console" title="Link to this heading"></a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vivado<span class="w"> </span>-mode<span class="w"> </span>tcl
+</pre></div>
+</div>
+<p>Then in Tcl console:</p>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="c"># Create in-memory project</span>
+<span class="nv">create_project</span><span class="w"> </span><span class="o">-</span>in_memory<span class="w"> </span><span class="o">-</span>part<span class="w"> </span>xc7z020clg400-1
+
+<span class="c"># Read Verilog</span>
+<span class="nv">read_verilog</span><span class="w"> </span>logic_net.v
+
+<span class="c"># Run synthesis</span>
+<span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span>logic_net<span class="w"> </span><span class="o">-</span>mode<span class="w"> </span>out_of_context
+
+<span class="c"># Generate reports</span>
+<span class="nv">report_utilization</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span>utilization.txt
+<span class="nv">report_timing_summary</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span>timing.txt
+<span class="nv">report_power</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span>power.txt
+
+<span class="nb">exit</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="understanding-the-reports">
+<h3>Understanding the Reports<a class="headerlink" href="#understanding-the-reports" title="Link to this heading"></a></h3>
+<section id="utilization-report">
+<h4>Utilization Report<a class="headerlink" href="#utilization-report" title="Link to this heading"></a></h4>
+<p>Shows FPGA resource usage:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">+-------------------------+------+-------+-----------+-------+</span>
+<span class="o">|</span>        <span class="n">Site</span> <span class="n">Type</span>        <span class="o">|</span> <span class="n">Used</span> <span class="o">|</span> <span class="n">Fixed</span> <span class="o">|</span> <span class="n">Available</span> <span class="o">|</span> <span class="n">Util</span><span class="o">%</span> <span class="o">|</span>
+<span class="o">+-------------------------+------+-------+-----------+-------+</span>
+<span class="o">|</span> <span class="n">Slice</span> <span class="n">LUTs</span>              <span class="o">|</span>  <span class="mi">147</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>     <span class="mi">53200</span> <span class="o">|</span>  <span class="mf">0.28</span> <span class="o">|</span>
+<span class="o">|</span>   <span class="n">LUT</span> <span class="k">as</span> <span class="n">Logic</span>          <span class="o">|</span>  <span class="mi">147</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>     <span class="mi">53200</span> <span class="o">|</span>  <span class="mf">0.28</span> <span class="o">|</span>
+<span class="o">|</span>   <span class="n">LUT</span> <span class="k">as</span> <span class="n">Memory</span>         <span class="o">|</span>    <span class="mi">0</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>     <span class="mi">17400</span> <span class="o">|</span>  <span class="mf">0.00</span> <span class="o">|</span>
+<span class="o">|</span> <span class="n">Slice</span> <span class="n">Registers</span>         <span class="o">|</span>    <span class="mi">0</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>    <span class="mi">106400</span> <span class="o">|</span>  <span class="mf">0.00</span> <span class="o">|</span>
+<span class="o">|</span>   <span class="n">Register</span> <span class="k">as</span> <span class="n">Flip</span> <span class="n">Flop</span> <span class="o">|</span>    <span class="mi">0</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>    <span class="mi">106400</span> <span class="o">|</span>  <span class="mf">0.00</span> <span class="o">|</span>
+<span class="o">|</span>   <span class="n">Register</span> <span class="k">as</span> <span class="n">Latch</span>     <span class="o">|</span>    <span class="mi">0</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>    <span class="mi">106400</span> <span class="o">|</span>  <span class="mf">0.00</span> <span class="o">|</span>
+<span class="o">|</span> <span class="n">F7</span> <span class="n">Muxes</span>                <span class="o">|</span>    <span class="mi">8</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>     <span class="mi">26600</span> <span class="o">|</span>  <span class="mf">0.03</span> <span class="o">|</span>
+<span class="o">|</span> <span class="n">F8</span> <span class="n">Muxes</span>                <span class="o">|</span>    <span class="mi">2</span> <span class="o">|</span>     <span class="mi">0</span> <span class="o">|</span>     <span class="mi">13300</span> <span class="o">|</span>  <span class="mf">0.02</span> <span class="o">|</span>
+<span class="o">+-------------------------+------+-------+-----------+-------+</span>
+</pre></div>
+</div>
+<p><strong>Key Metrics:</strong></p>
+<ul class="simple">
+<li><p><strong>Slice LUTs</strong>: Primary logic resource. Each LUT can implement any 6-input Boolean function.</p></li>
+<li><p><strong>Slice Registers</strong>: Flip-flops for sequential logic (0 for purely combinational designs)</p></li>
+<li><p><strong>F7/F8 Muxes</strong>: Larger multiplexers for wide logic functions</p></li>
+<li><p><strong>DSPs</strong>: Digital Signal Processing blocks (typically 0 for logic gate networks)</p></li>
+<li><p><strong>BRAM</strong>: Block RAM (typically 0 for logic gate networks)</p></li>
+</ul>
+</section>
+<section id="timing-report">
+<h4>Timing Report<a class="headerlink" href="#timing-report" title="Link to this heading"></a></h4>
+<p>Shows timing analysis:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Timing</span> <span class="n">Summary</span> <span class="p">(</span><span class="n">ns</span><span class="p">)</span>
+<span class="o">-------------------</span>
+<span class="n">WNS</span><span class="p">(</span><span class="n">ns</span><span class="p">)</span>      <span class="n">TNS</span><span class="p">(</span><span class="n">ns</span><span class="p">)</span>      <span class="n">WHS</span><span class="p">(</span><span class="n">ns</span><span class="p">)</span>      <span class="n">THS</span><span class="p">(</span><span class="n">ns</span><span class="p">)</span>      <span class="n">WPWS</span><span class="p">(</span><span class="n">ns</span><span class="p">)</span>     <span class="n">TPWS</span><span class="p">(</span><span class="n">ns</span><span class="p">)</span>
+<span class="o">-------</span>      <span class="o">-------</span>      <span class="o">-------</span>      <span class="o">-------</span>      <span class="o">--------</span>     <span class="o">--------</span>
+  <span class="mf">7.500</span>        <span class="mf">0.000</span>        <span class="mf">0.300</span>        <span class="mf">0.000</span>         <span class="mf">3.500</span>        <span class="mf">0.000</span>
+</pre></div>
+</div>
+<p><strong>Key Metrics:</strong></p>
+<ul class="simple">
+<li><p><strong>WNS (Worst Negative Slack)</strong>: Most critical timing margin</p>
+<ul>
+<li><p>Positive = timing met</p></li>
+<li><p>Negative = timing violation</p></li>
+</ul>
+</li>
+<li><p><strong>Critical Path Delay</strong>: Longest combinational path through the design</p></li>
+</ul>
+<p><strong>For combinational designs:</strong></p>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="c"># Get maximum delay through the design</span>
+<span class="nv">report_timing</span><span class="w"> </span><span class="o">-</span>delay_type<span class="w"> </span>min_max<span class="w"> </span><span class="o">-</span>max_paths<span class="w"> </span><span class="mi">10</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span>timing_paths.txt
+</pre></div>
+</div>
+<p>Example output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Critical</span> <span class="n">Path</span> <span class="n">Delay</span><span class="p">:</span> <span class="mf">4.832</span> <span class="n">ns</span>
+<span class="n">Maximum</span> <span class="n">Frequency</span><span class="p">:</span> <span class="mf">206.95</span> <span class="n">MHz</span> <span class="p">(</span><span class="k">if</span> <span class="n">this</span> <span class="n">were</span> <span class="ow">in</span> <span class="n">a</span> <span class="n">clocked</span> <span class="n">design</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="power-report">
+<h4>Power Report<a class="headerlink" href="#power-report" title="Link to this heading"></a></h4>
+<p>Shows estimated power consumption:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Total</span> <span class="n">On</span><span class="o">-</span><span class="n">Chip</span> <span class="n">Power</span> <span class="p">(</span><span class="n">W</span><span class="p">)</span>  <span class="p">:</span> <span class="mf">0.082</span>
+<span class="n">Dynamic</span> <span class="p">(</span><span class="n">W</span><span class="p">)</span>              <span class="p">:</span> <span class="mf">0.012</span>
+<span class="n">Device</span> <span class="n">Static</span> <span class="p">(</span><span class="n">W</span><span class="p">)</span>        <span class="p">:</span> <span class="mf">0.070</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="interpreting-results-for-torchlogix-models">
+<h3>Interpreting Results for TorchLogix Models<a class="headerlink" href="#interpreting-results-for-torchlogix-models" title="Link to this heading"></a></h3>
+<section id="resource-estimates">
+<h4>Resource Estimates<a class="headerlink" href="#resource-estimates" title="Link to this heading"></a></h4>
+<p><strong>LUT Count Interpretation:</strong></p>
+<ul class="simple">
+<li><p>Each logic gate (AND, OR, XOR, etc.) typically maps to a fractional LUT</p></li>
+<li><p>Expect roughly 0.5-1 LUT per gate operation</p></li>
+<li><p>Tree structures may share LUTs efficiently</p></li>
+<li><p>A 1000-gate network might use 500-800 LUTs</p></li>
+</ul>
+<p><strong>Resource Scaling:</strong></p>
+<ul class="simple">
+<li><p>Linear layers: O(neurons) LUTs</p></li>
+<li><p>Convolutional layers: O(kernels × receptive_field²) LUTs</p></li>
+<li><p>Deeper trees → more efficient LUT packing</p></li>
+</ul>
+<p><strong>Pipelining Impact:</strong></p>
+<ul class="simple">
+<li><p>Adds flip-flops (FFs) for registers</p></li>
+<li><p>May actually <strong>reduce</strong> LUTs through better optimization</p></li>
+<li><p>Example: 50-layer model with 4 pipeline stages might use 20% fewer LUTs</p></li>
+</ul>
+</section>
+<section id="latency-estimates">
+<h4>Latency Estimates<a class="headerlink" href="#latency-estimates" title="Link to this heading"></a></h4>
+<p><strong>Combinational Delay:</strong></p>
+<ul class="simple">
+<li><p>Total latency = critical path delay</p></li>
+<li><p>Typical delays:</p>
+<ul>
+<li><p>Simple AND/OR/XOR: 0.1-0.2 ns per gate</p></li>
+<li><p>Deep trees (10 levels): 2-4 ns total</p></li>
+<li><p>Very deep networks: 5-10 ns</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>Maximum Frequency:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">fmax</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">critical_path_delay</span>
+</pre></div>
+</div>
+<p>Example: 4.5 ns critical path → fmax ≈ 222 MHz</p>
+</section>
+</section>
+<section id="pipelined-vs-combinational-designs">
+<h3>Pipelined vs Combinational Designs<a class="headerlink" href="#pipelined-vs-combinational-designs" title="Link to this heading"></a></h3>
+<section id="combinational-pipeline-stages-0">
+<h4>Combinational (pipeline_stages=0)<a class="headerlink" href="#combinational-pipeline-stages-0" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># Default</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>No clock or reset signals</p></li>
+<li><p>All logic in single cycle</p></li>
+<li><p>Synthesis uses <code class="docutils literal notranslate"><span class="pre">-mode</span> <span class="pre">out_of_context</span></code></p></li>
+<li><p><strong>Problem:</strong> May fail for large models (&gt;1M Verilog lines)</p></li>
+</ul>
+<p><strong>Timing Analysis:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Combinational</span> <span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+  <span class="n">Critical</span> <span class="n">path</span><span class="p">:</span> <span class="mi">25</span> <span class="n">ns</span>
+  <span class="n">fmax</span><span class="p">:</span> <span class="mi">40</span> <span class="n">MHz</span>
+</pre></div>
+</div>
+</section>
+<section id="pipelined-pipeline-stages-0">
+<h4>Pipelined (pipeline_stages&gt;0)<a class="headerlink" href="#pipelined-pipeline-stages-0" title="Link to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># 4 stages</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Has clock (clk) and reset (rst) signals</p></li>
+<li><p>Logic divided into N pipeline stages</p></li>
+<li><p>Synthesis auto-detects and applies clock constraints</p></li>
+<li><p><strong>Solution:</strong> Enables synthesis of very large models</p></li>
+</ul>
+<p><strong>Timing Analysis:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Pipelined</span> <span class="p">(</span><span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
+  <span class="n">Critical</span> <span class="n">path</span><span class="p">:</span> <span class="mi">6</span> <span class="n">ns</span>
+  <span class="n">fmax</span><span class="p">:</span> <span class="mi">166</span> <span class="n">MHz</span>
+  <span class="n">Latency</span><span class="p">:</span> <span class="mi">4</span> <span class="n">cycles</span> <span class="o">=</span> <span class="mi">24</span> <span class="n">ns</span> <span class="o">@</span> <span class="mi">166</span> <span class="n">MHz</span>
+</pre></div>
+</div>
+<p><strong>When to use pipelining:</strong></p>
+<ul class="simple">
+<li><p>Synthesis fails or runs for hours → Use <code class="docutils literal notranslate"><span class="pre">pipeline_stages=1</span></code> or more</p></li>
+<li><p>Model &gt;20 layers → Consider <code class="docutils literal notranslate"><span class="pre">pipeline_stages=4-8</span></code></p></li>
+<li><p>Model &gt;100 layers → Use <code class="docutils literal notranslate"><span class="pre">pipeline_stages=16</span></code> or higher</p></li>
+</ul>
+</section>
+</section>
+<section id="synthesis-strategies">
+<h3>Synthesis Strategies<a class="headerlink" href="#synthesis-strategies" title="Link to this heading"></a></h3>
+<section id="for-minimum-latency">
+<h4>For Minimum Latency<a class="headerlink" href="#for-minimum-latency" title="Link to this heading"></a></h4>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span>logic_net<span class="w"> </span><span class="o">-</span>mode<span class="w"> </span>out_of_context<span class="w"> </span><span class="err">\</span>
+<span class="w">    </span><span class="nv">-directive</span><span class="w"> </span>PerformanceOptimized<span class="w"> </span><span class="err">\</span>
+<span class="w">    </span><span class="nv">-no_lc</span><span class="w">  </span><span class="err">#</span><span class="w"> </span>Disable<span class="w"> </span>logic<span class="w"> </span>combining<span class="w"> </span>for<span class="w"> </span>speed
+</pre></div>
+</div>
+</section>
+<section id="for-minimum-area">
+<h4>For Minimum Area<a class="headerlink" href="#for-minimum-area" title="Link to this heading"></a></h4>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span>logic_net<span class="w"> </span><span class="o">-</span>mode<span class="w"> </span>out_of_context<span class="w"> </span><span class="err">\</span>
+<span class="w">    </span><span class="nv">-directive</span><span class="w"> </span>AreaOptimized_high<span class="w"> </span><span class="err">\</span>
+<span class="w">    </span><span class="nv">-shreg_min_size</span><span class="w"> </span><span class="mi">5</span><span class="w">  </span><span class="err">#</span><span class="w"> </span>Aggressive<span class="w"> </span>resource<span class="w"> </span>sharing
+</pre></div>
+</div>
+</section>
+<section id="for-balanced-results">
+<h4>For Balanced Results<a class="headerlink" href="#for-balanced-results" title="Link to this heading"></a></h4>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span>logic_net<span class="w"> </span><span class="o">-</span>mode<span class="w"> </span>out_of_context<span class="w"> </span><span class="err">\</span>
+<span class="w">    </span><span class="nv">-directive</span><span class="w"> </span>Default
+</pre></div>
+</div>
+</section>
+</section>
+<section id="common-issues-and-solutions">
+<h3>Common Issues and Solutions<a class="headerlink" href="#common-issues-and-solutions" title="Link to this heading"></a></h3>
+<section id="issue-multi-driven-net-error">
+<h4>Issue: “Multi-driven net” Error<a class="headerlink" href="#issue-multi-driven-net-error" title="Link to this heading"></a></h4>
+<p><strong>Cause:</strong> Multiple assign statements to the same wire.
+<strong>Solution:</strong> Check generated Verilog for duplicate assignments.</p>
+</section>
+<section id="issue-unrealistically-high-fmax">
+<h4>Issue: Unrealistically High fmax<a class="headerlink" href="#issue-unrealistically-high-fmax" title="Link to this heading"></a></h4>
+<p><strong>Cause:</strong> No input/output delays specified.
+<strong>Solution:</strong> Add timing constraints with realistic I/O delays.</p>
+</section>
+<section id="issue-very-high-lut-count">
+<h4>Issue: Very High LUT Count<a class="headerlink" href="#issue-very-high-lut-count" title="Link to this heading"></a></h4>
+<p><strong>Cause:</strong> Unoptimized gate structure or deep logic trees.
+<strong>Solution:</strong></p>
+<ul class="simple">
+<li><p>Check for constant propagation opportunities</p></li>
+<li><p>Verify gate operations are using optimal Boolean functions</p></li>
+<li><p>Consider factoring logic differently in training</p></li>
+</ul>
+</section>
+</section>
+<section id="next-steps-after-synthesis">
+<h3>Next Steps After Synthesis<a class="headerlink" href="#next-steps-after-synthesis" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Implementation</strong>: Run place &amp; route for final timing/resource numbers</p></li>
+</ol>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="nv">opt_design</span>
+<span class="nv">place_design</span>
+<span class="nv">route_design</span>
+<span class="nv">report_timing_summary</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span>post_route_timing.txt
+<span class="nv">report_utilization</span><span class="w"> </span><span class="o">-</span>file<span class="w"> </span>post_route_utilization.txt
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Bitstream Generation</strong>: Create FPGA configuration file</p></li>
+</ol>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="nv">write_bitstream</span><span class="w"> </span><span class="o">-</span>force<span class="w"> </span>logic_net.bit
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Hardware Testing</strong>: Deploy to actual FPGA and validate</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="complete-workflow-examples">
+<h2>Complete Workflow Examples<a class="headerlink" href="#complete-workflow-examples" title="Link to this heading"></a></h2>
+<section id="example-1-small-model-full-workflow">
+<h3>Example 1: Small Model - Full Workflow<a class="headerlink" href="#example-1-small-model-full-workflow" title="Link to this heading"></a></h3>
+<p>Train, export, test, and synthesize a small MNIST classifier:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicDense</span><span class="p">,</span> <span class="n">GroupSum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+
+<span class="c1"># 1. Create and train model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">784</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">GroupSum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="c1"># Train your model here...</span>
+<span class="c1"># model.load_state_dict(torch.load(&#39;trained_model.pt&#39;))</span>
+
+<span class="c1"># 2. Compile and export Verilog</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">784</span><span class="p">,),</span>
+    <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+
+<span class="c1"># Small model: fully combinational</span>
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span>
+    <span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;mnist_classifier&quot;</span><span class="p">,</span>
+    <span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">0</span>
+<span class="p">)</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;mnist_classifier.v&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">verilog</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Generated mnist_classifier.v&quot;</span><span class="p">)</span>
+
+<span class="c1"># 3. Generate test vectors</span>
+<span class="n">num_tests</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="n">test_inputs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="n">num_tests</span><span class="p">,</span> <span class="mi">784</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">)</span>
+<span class="n">test_outputs</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="n">compiled</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">test_inputs</span><span class="p">:</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">test_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="s1">&#39;test_vectors_input.txt&#39;</span><span class="p">,</span> <span class="n">test_inputs</span><span class="p">,</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="n">np</span><span class="o">.</span><span class="n">savetxt</span><span class="p">(</span><span class="s1">&#39;test_vectors_output.txt&#39;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">test_outputs</span><span class="p">),</span> <span class="n">fmt</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">%d</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Generated </span><span class="si">{</span><span class="n">num_tests</span><span class="si">}</span><span class="s2"> test vectors&quot;</span><span class="p">)</span>
+
+<span class="c1"># 4. Run simulation (using Icarus Verilog)</span>
+<span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span>
+    <span class="s1">&#39;iverilog&#39;</span><span class="p">,</span> <span class="s1">&#39;-o&#39;</span><span class="p">,</span> <span class="s1">&#39;sim.out&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;mnist_classifier.v&#39;</span><span class="p">,</span> <span class="s1">&#39;tb_mnist_classifier.v&#39;</span>
+<span class="p">])</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s1">&#39;vvp&#39;</span><span class="p">,</span> <span class="s1">&#39;sim.out&#39;</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="s2">&quot;ALL TESTS PASSED&quot;</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">stdout</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Simulation passed&quot;</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✗ Simulation failed&quot;</span><span class="p">)</span>
+    <span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># 5. Run synthesis</span>
+<span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span>
+    <span class="s1">&#39;vivado&#39;</span><span class="p">,</span> <span class="s1">&#39;-mode&#39;</span><span class="p">,</span> <span class="s1">&#39;batch&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;-source&#39;</span><span class="p">,</span> <span class="s1">&#39;synthesize.tcl&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;-tclargs&#39;</span><span class="p">,</span> <span class="s1">&#39;mnist_classifier.v&#39;</span><span class="p">,</span> <span class="s1">&#39;xc7z020clg400-1&#39;</span><span class="p">,</span> <span class="s1">&#39;reports/&#39;</span>
+<span class="p">])</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Synthesis complete - check reports/ directory&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="example-2-large-model-with-pipelining">
+<h3>Example 2: Large Model with Pipelining<a class="headerlink" href="#example-2-large-model-with-pipelining" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+
+<span class="c1"># Load large pre-trained model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="o">...</span>  <span class="c1"># 50+ layers</span>
+
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">784</span><span class="p">,),</span> <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Try different pipeline configurations</span>
+<span class="n">configs</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Fully combinational&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Single output register&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;4 pipeline stages&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="s2">&quot;8 pipeline stages&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+
+<span class="k">for</span> <span class="n">pipeline_stages</span><span class="p">,</span> <span class="n">description</span> <span class="ow">in</span> <span class="n">configs</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Testing: </span><span class="si">{</span><span class="n">description</span><span class="si">}</span><span class="s2"> (pipeline_stages=</span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">60</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Generate Verilog</span>
+    <span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span>
+        <span class="n">module_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;large_model_p</span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">pipeline_stages</span><span class="o">=</span><span class="n">pipeline_stages</span>
+    <span class="p">)</span>
+
+    <span class="n">filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;large_model_p</span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s2">.v&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">verilog</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Generated </span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">verilog</span><span class="p">)</span><span class="si">}</span><span class="s2"> bytes)&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Synthesize</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span>
+        <span class="s1">&#39;vivado&#39;</span><span class="p">,</span> <span class="s1">&#39;-mode&#39;</span><span class="p">,</span> <span class="s1">&#39;batch&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;-source&#39;</span><span class="p">,</span> <span class="s1">&#39;synthesize.tcl&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;-tclargs&#39;</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;xc7z020clg400-1&#39;</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;reports_p</span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s1">/&#39;</span>
+    <span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">600</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">returncode</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✓ Synthesis succeeded&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Parse results</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;reports_p</span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s1">/summary.txt&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;✗ Synthesis failed or timed out&quot;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Compare results in reports_p*/ directories&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="example-3-convolutional-model">
+<h3>Example 3: Convolutional Model<a class="headerlink" href="#example-3-convolutional-model" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.layers</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogicConv2d</span><span class="p">,</span> <span class="n">OrPooling</span><span class="p">,</span> <span class="n">LogicDense</span><span class="p">,</span> <span class="n">GroupSum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+
+<span class="c1"># Create convolutional model</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">LogicConv2d</span><span class="p">(</span>
+        <span class="n">in_dim</span><span class="o">=</span><span class="p">(</span><span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">),</span>
+        <span class="n">channels</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">num_kernels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+        <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+        <span class="n">padding</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span>
+    <span class="p">),</span>
+    <span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+
+    <span class="n">LogicConv2d</span><span class="p">(</span>
+        <span class="n">in_dim</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">14</span><span class="p">),</span>
+        <span class="n">channels</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+        <span class="n">num_kernels</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+        <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span>
+    <span class="p">),</span>
+    <span class="n">OrPooling</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+
+    <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">(),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">32</span><span class="o">*</span><span class="mi">7</span><span class="o">*</span><span class="mi">7</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">LogicDense</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="n">connections</span><span class="o">=</span><span class="s2">&quot;fixed&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">),</span>
+    <span class="n">GroupSum</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">10.0</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="c1"># Train model...</span>
+
+<span class="c1"># Export with pipelining (medium-sized model)</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">),</span>
+    <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+
+<span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span>
+    <span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;conv_classifier&quot;</span><span class="p">,</span>
+    <span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">4</span>  <span class="c1"># 4 stages for medium conv model</span>
+<span class="p">)</span>
+
+<span class="n">compiled</span><span class="o">.</span><span class="n">export_hdl</span><span class="p">(</span>
+    <span class="s2">&quot;./conv_verilog_output&quot;</span><span class="p">,</span>
+    <span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;conv_classifier&quot;</span><span class="p">,</span>
+    <span class="n">pipeline_stages</span><span class="o">=</span><span class="mi">4</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;✓ Exported convolutional model to conv_verilog_output/&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="example-4-python-driven-synthesis-loop">
+<h3>Example 4: Python-Driven Synthesis Loop<a class="headerlink" href="#example-4-python-driven-synthesis-loop" title="Link to this heading"></a></h3>
+<p>Automate synthesis and collect metrics:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">synthesize_and_extract_metrics</span><span class="p">(</span><span class="n">verilog_file</span><span class="p">,</span> <span class="n">part</span><span class="p">,</span> <span class="n">report_dir</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run Vivado synthesis and extract key metrics.&quot;&quot;&quot;</span>
+
+    <span class="c1"># Run synthesis</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span>
+        <span class="s1">&#39;vivado&#39;</span><span class="p">,</span> <span class="s1">&#39;-mode&#39;</span><span class="p">,</span> <span class="s1">&#39;batch&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;-source&#39;</span><span class="p">,</span> <span class="s1">&#39;synthesize.tcl&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;-tclargs&#39;</span><span class="p">,</span> <span class="n">verilog_file</span><span class="p">,</span> <span class="n">part</span><span class="p">,</span> <span class="n">report_dir</span>
+    <span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">600</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">returncode</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="c1"># Parse summary</span>
+    <span class="n">metrics</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">report_dir</span><span class="si">}</span><span class="s1">/summary.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s1">&#39;LUTs:&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;luts&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;\d+&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">group</span><span class="p">())</span>
+            <span class="k">elif</span> <span class="s1">&#39;FFs:&#39;</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;ffs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;\d+&#39;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span><span class="o">.</span><span class="n">group</span><span class="p">())</span>
+
+    <span class="c1"># Parse timing</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">report_dir</span><span class="si">}</span><span class="s1">/timing.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="n">wns_match</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;WNS\(ns\)\s+([-\d.]+)&#39;</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">wns_match</span><span class="p">:</span>
+            <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;wns_ns&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">wns_match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">metrics</span>
+
+<span class="c1"># Run experiments</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">784</span><span class="p">,),</span> <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">stages</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Synthesizing with pipeline_stages=</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+
+    <span class="n">verilog</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span>
+        <span class="n">module_name</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;model_p</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="n">pipeline_stages</span><span class="o">=</span><span class="n">stages</span>
+    <span class="p">)</span>
+
+    <span class="n">filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;model_p</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s1">.v&#39;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">verilog</span><span class="p">)</span>
+
+    <span class="n">metrics</span> <span class="o">=</span> <span class="n">synthesize_and_extract_metrics</span><span class="p">(</span>
+        <span class="n">filename</span><span class="p">,</span>
+        <span class="s1">&#39;xc7z020clg400-1&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;reports_p</span><span class="si">{</span><span class="n">stages</span><span class="si">}</span><span class="s1">&#39;</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">metrics</span><span class="p">:</span>
+        <span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;pipeline_stages&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">stages</span>
+        <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">metrics</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  LUTs: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;luts&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">, FFs: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;ffs&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">, WNS: </span><span class="si">{</span><span class="n">metrics</span><span class="p">[</span><span class="s1">&#39;wns_ns&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> ns&quot;</span><span class="p">)</span>
+
+<span class="c1"># Create summary DataFrame</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="s1">&#39;synthesis_comparison.csv&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Synthesis Comparison&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="advanced-topics">
+<h2>Advanced Topics<a class="headerlink" href="#advanced-topics" title="Link to this heading"></a></h2>
+<section id="custom-timing-constraints">
+<h3>Custom Timing Constraints<a class="headerlink" href="#custom-timing-constraints" title="Link to this heading"></a></h3>
+<p>For more accurate timing analysis, create custom constraints in <code class="docutils literal notranslate"><span class="pre">constraints.xdc</span></code>:</p>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="c"># Virtual clock for timing analysis (10ns = 100 MHz)</span>
+<span class="nv">create_clock</span><span class="w"> </span><span class="o">-</span>period<span class="w"> </span><span class="mf">10.000</span><span class="w"> </span><span class="o">-</span>name<span class="w"> </span>virtual_clk
+
+<span class="c"># Input delay (assume inputs arrive 2ns after clock edge)</span>
+<span class="nv">set_input_delay</span><span class="w"> </span><span class="o">-</span>clock<span class="w"> </span>virtual_clk<span class="w"> </span><span class="mf">2.000</span><span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span>inp<span class="o">*</span><span class="k">]</span>
+
+<span class="c"># Output delay (assume outputs must be stable 2ns before next clock edge)</span>
+<span class="nv">set_output_delay</span><span class="w"> </span><span class="o">-</span>clock<span class="w"> </span>virtual_clk<span class="w"> </span><span class="mf">2.000</span><span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span>out<span class="o">*</span><span class="k">]</span>
+
+<span class="c"># For pipelined designs with actual clock</span>
+<span class="nv">create_clock</span><span class="w"> </span><span class="o">-</span>period<span class="w"> </span><span class="mf">5.000</span><span class="w"> </span><span class="o">-</span>name<span class="w"> </span>clk<span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span>clk<span class="k">]</span><span class="w">  </span><span class="err">#</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span>MHz
+
+<span class="c"># Relax timing on reset path</span>
+<span class="nv">set_false_path</span><span class="w"> </span><span class="o">-</span>from<span class="w"> </span><span class="k">[</span><span class="nv">get_ports</span><span class="w"> </span>rst<span class="k">]</span>
+</pre></div>
+</div>
+<p>Load in synthesis:</p>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="nv">read_xdc</span><span class="w"> </span>constraints.xdc
+<span class="nv">synth_design</span><span class="w"> </span><span class="o">-</span>top<span class="w"> </span>logic_net
+</pre></div>
+</div>
+</section>
+<section id="comparing-c-code-and-verilog-implementations">
+<h3>Comparing C Code and Verilog Implementations<a class="headerlink" href="#comparing-c-code-and-verilog-implementations" title="Link to this heading"></a></h3>
+<p>TorchLogix can generate both C code (for HLS or CPU) and Verilog:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">784</span><span class="p">,),</span> <span class="n">use_bitpacking</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">num_bits</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Generate C code</span>
+<span class="n">c_code</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_c_code</span><span class="p">()</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;model.c&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">c_code</span><span class="p">)</span>
+
+<span class="c1"># Generate Verilog</span>
+<span class="n">verilog_code</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">()</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;model.v&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">verilog_code</span><span class="p">)</span>
+
+<span class="c1"># Compile C for CPU execution</span>
+<span class="n">compiled</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">compiler</span><span class="o">=</span><span class="s1">&#39;gcc&#39;</span><span class="p">,</span> <span class="n">optimization_level</span><span class="o">=</span><span class="s1">&#39;-O3&#39;</span><span class="p">)</span>
+
+<span class="c1"># Now you can compare:</span>
+<span class="c1"># - C compiled to native CPU code</span>
+<span class="c1"># - C compiled through Vivado HLS to RTL</span>
+<span class="c1"># - Direct Verilog synthesis</span>
+
+<span class="c1"># All three should produce functionally identical results</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-with-chls-pipeline">
+<h3>Integration with C→HLS Pipeline<a class="headerlink" href="#integration-with-chls-pipeline" title="Link to this heading"></a></h3>
+<p>For users who want to explore the HLS route:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Generate optimized C code</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<span class="n">c_code</span> <span class="o">=</span> <span class="n">compiled</span><span class="o">.</span><span class="n">get_c_code</span><span class="p">()</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;model.c&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">c_code</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Then use Vivado HLS:</p>
+<div class="highlight-tcl notranslate"><div class="highlight"><pre><span></span><span class="c"># hls_script.tcl</span>
+<span class="nv">open_project</span><span class="w"> </span>hls_project
+<span class="nv">set_top</span><span class="w"> </span>model_top
+<span class="nv">add_files</span><span class="w"> </span>model.c
+<span class="nv">open_solution</span><span class="w"> </span><span class="s2">&quot;solution1&quot;</span>
+<span class="nv">set_part</span><span class="w"> </span><span class="k">{</span><span class="nv">xc7z020clg400-1</span><span class="k">}</span>
+<span class="nv">create_clock</span><span class="w"> </span><span class="o">-</span>period<span class="w"> </span><span class="mi">10</span>
+
+<span class="nv">csynth_design</span>
+<span class="nv">export_design</span><span class="w"> </span><span class="o">-</span>format<span class="w"> </span>ip_catalog
+<span class="nb">exit</span>
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vivado_hls<span class="w"> </span>-f<span class="w"> </span>hls_script.tcl
+</pre></div>
+</div>
+<p>This generates an IP core that can be integrated into larger FPGA designs.</p>
+</section>
+<section id="layer-support-status-and-future-work">
+<h3>Layer Support Status and Future Work<a class="headerlink" href="#layer-support-status-and-future-work" title="Link to this heading"></a></h3>
+<section id="currently-supported">
+<h4>Currently Supported<a class="headerlink" href="#currently-supported" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head"><p>Implementation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>LogicDense</p></td>
+<td><p>✅ Complete</p></td>
+<td><p>Direct gate synthesis</p></td>
+</tr>
+<tr class="row-odd"><td><p>LogicConv2d</p></td>
+<td><p>✅ Complete</p></td>
+<td><p>Binary tree structure</p></td>
+</tr>
+<tr class="row-even"><td><p>LogicConv3d</p></td>
+<td><p>✅ Complete</p></td>
+<td><p>Binary tree with 3D indexing</p></td>
+</tr>
+<tr class="row-odd"><td><p>Flatten</p></td>
+<td><p>✅ Complete</p></td>
+<td><p>Wire passthrough</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="in-progress-todo">
+<h4>In Progress / TODO<a class="headerlink" href="#in-progress-todo" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Layer</p></th>
+<th class="head"><p>Status</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>OrPooling</p></td>
+<td><p>⚠️ TODO</p></td>
+<td><p>OR reduction tree needed</p></td>
+</tr>
+<tr class="row-odd"><td><p>GroupSum</p></td>
+<td><p>⚠️ TODO</p></td>
+<td><p>Adder tree implementation needed</p></td>
+</tr>
+</tbody>
+</table>
+<p>Models using unsupported layers will generate placeholders in Verilog. For production use:</p>
+<ul class="simple">
+<li><p>Use C code generation for complete model support</p></li>
+<li><p>Wait for future releases with complete Verilog support</p></li>
+<li><p>Manually implement missing layers if needed</p></li>
+</ul>
+</section>
+</section>
+<section id="optimization-tips">
+<h3>Optimization Tips<a class="headerlink" href="#optimization-tips" title="Link to this heading"></a></h3>
+<p><strong>Model Architecture:</strong></p>
+<ul class="simple">
+<li><p>Prefer models with 20-100 layers for good synthesis results</p></li>
+<li><p>Very deep models (&gt;200 layers) require aggressive pipelining</p></li>
+<li><p>Conv layers with large receptive fields may need optimization</p></li>
+</ul>
+<p><strong>Pipeline Configuration:</strong></p>
+<ul class="simple">
+<li><p>Start with <code class="docutils literal notranslate"><span class="pre">pipeline_stages=0</span></code> for small models</p></li>
+<li><p>Increase incrementally if synthesis fails or is slow</p></li>
+<li><p>Use full pipelining (<code class="docutils literal notranslate"><span class="pre">pipeline_stages=999</span></code>) for maximum fmax</p></li>
+</ul>
+<p><strong>Synthesis Directives:</strong></p>
+<ul class="simple">
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">-directive</span> <span class="pre">PerformanceOptimized</span></code> for speed</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">-directive</span> <span class="pre">AreaOptimized_high</span></code> for small FPGAs</p></li>
+<li><p>Experiment with different strategies for your specific design</p></li>
+</ul>
+<p><strong>Resource Utilization:</strong></p>
+<ul class="simple">
+<li><p>Target &lt;70% LUT utilization for good place-and-route results</p></li>
+<li><p>Very high utilization (&gt;90%) may cause routing failures</p></li>
+<li><p>Consider model size vs available FPGA resources during training</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p>TorchLogix provides comprehensive support for deploying logic gate networks to FPGA hardware:</p>
+<ol class="arabic simple">
+<li><p><strong>Direct Verilog Generation</strong>: Export trained models to readable, synthesizable Verilog RTL</p></li>
+<li><p><strong>Configurable Pipelining</strong>: Balance latency and synthesis complexity with flexible pipeline stages</p></li>
+<li><p><strong>Testing Support</strong>: Generate test vectors and verify functionality with standard simulators</p></li>
+<li><p><strong>Synthesis Integration</strong>: Automate synthesis with Vivado to obtain resource and timing estimates</p></li>
+<li><p><strong>Complete Workflows</strong>: End-to-end examples from training to hardware deployment</p></li>
+</ol>
+<p><strong>Key Takeaways:</strong></p>
+<ul class="simple">
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">pipeline_stages=0</span></code> for small models, increase for larger ones</p></li>
+<li><p>Always test generated Verilog with simulations before synthesis</p></li>
+<li><p>Synthesis provides accurate resource and timing estimates before hardware deployment</p></li>
+<li><p>Both Verilog and C code generation are supported for maximum flexibility</p></li>
+</ul>
+<p>For questions or issues with hardware deployment, please refer to the <a class="reference external" href="https://github.com/your-org/torchlogix">TorchLogix repository</a> or open an issue.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="concepts.html" class="btn btn-neutral float-left" title="Core Concepts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api/torchlogix.html" class="btn btn-neutral float-right" title="TorchLogix Package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023-2024 Felix Petersen (original DiffLogic), Lino Gerlach (TorchLogix extensions).</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

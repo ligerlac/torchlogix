@@ -48,6 +48,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/quickstart.html">Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/concepts.html">Core Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -357,6 +358,25 @@
         <span class="k">return</span> <span class="n">res</span></div>
 
 
+<div class="viewcode-block" id="CompiledLogicNet.get_gate_verilog">
+<a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.CompiledLogicNet.get_gate_verilog">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_gate_verilog</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">var1</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">var2</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">gate_op</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate Verilog code for a logic gate operation.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            var1: Name of first input variable (Verilog syntax)</span>
+<span class="sd">            var2: Name of second input variable (Verilog syntax)</span>
+<span class="sd">            gate_op: Gate operation ID (0-15)</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Verilog expression string</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.hdl_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">gate_id_to_verilog</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;gate_op = </span><span class="si">{</span><span class="n">gate_op</span><span class="si">}</span><span class="s2">, var1=</span><span class="si">{</span><span class="n">var1</span><span class="si">}</span><span class="s2">, var2=</span><span class="si">{</span><span class="n">var2</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;type of gate_op: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">gate_op</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gate_id_to_verilog</span><span class="p">(</span><span class="n">gate_op</span><span class="p">,</span> <span class="n">var1</span><span class="p">,</span> <span class="n">var2</span><span class="p">)</span></div>
+
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_calculate_layer_output_sizes_and_shapes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Calculate output sizes and shapes for all layers in execution order.&quot;&quot;&quot;</span>
         <span class="n">layer_info</span> <span class="o">=</span> <span class="p">[]</span>
@@ -437,12 +457,116 @@
             <span class="n">current_shape</span> <span class="o">=</span> <span class="n">output_shape</span>
 
         <span class="k">return</span> <span class="n">layer_info</span>
+    
+    <span class="c1"># Helper function to check if coordinates are in padding region</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_padded</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coords</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if any coordinate is in the padding region.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">padding</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        
+        <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">h</span> <span class="o">&lt;</span> <span class="n">padding</span> <span class="ow">or</span> <span class="n">h</span> <span class="o">&gt;=</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span> <span class="ow">or</span>
+                    <span class="n">w</span> <span class="o">&lt;</span> <span class="n">padding</span> <span class="ow">or</span> <span class="n">w</span> <span class="o">&gt;=</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+            <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">coords</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">h</span> <span class="o">&lt;</span> <span class="n">padding</span> <span class="ow">or</span> <span class="n">h</span> <span class="o">&gt;=</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span> <span class="ow">or</span>
+                    <span class="n">w</span> <span class="o">&lt;</span> <span class="n">padding</span> <span class="ow">or</span> <span class="n">w</span> <span class="o">&gt;=</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span> <span class="ow">or</span>
+                    <span class="n">d</span> <span class="o">&lt;</span> <span class="n">padding</span> <span class="ow">or</span> <span class="n">d</span> <span class="o">&gt;=</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">padding</span><span class="p">)</span>
+        
+    <span class="c1"># Helper function to generate input variable reference</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_input_var</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coords</span><span class="p">,</span> <span class="n">channel</span><span class="p">,</span> <span class="n">source_name</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate input variable reference with padding handling.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            coords: tuple of (h, w) for 2D or (h, w, d) for 3D</span>
+<span class="sd">            channel: channel index</span>
+<span class="sd">            source_name: &quot;inp&quot; or &quot;layer_{prev_layer_name}_out&quot;</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            String representing the input variable (e.g., &quot;inp[idx]&quot; or &quot;0&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Check if in padding region</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_padded</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">):</span>
+            <span class="k">return</span> <span class="s2">&quot;0&quot;</span>  <span class="c1"># Padded values are zero</span>
+        
+        <span class="c1"># Adjust coordinates if padding is used</span>
+        <span class="k">if</span> <span class="n">padding</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="n">h_adj</span> <span class="o">=</span> <span class="n">h</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">w_adj</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">flat_idx</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
+                           <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">h_adj</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">w_adj</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="n">h_adj</span> <span class="o">=</span> <span class="n">h</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">w_adj</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">d_adj</span> <span class="o">=</span> <span class="n">d</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">flat_idx</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
+                           <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">h_adj</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
+                           <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">w_adj</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">d_adj</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># No padding, use coordinates directly</span>
+            <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="n">flat_idx</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
+                           <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="n">flat_idx</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
+                           <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
+                           <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">source_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">flat_idx</span><span class="si">}</span><span class="s2">]&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_flat_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coords</span><span class="p">,</span> <span class="n">channel</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compute flat index into input array with padding handling.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            coords: tuple of (h, w) for 2D or (h, w, d) for 3D</span>
+<span class="sd">            channel: channel index</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Integer flat index, or None if in padding region</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_padded</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>  <span class="c1"># Will be handled as constant 0</span>
+        
+        <span class="c1"># Adjust coordinates if padding is used</span>
+        <span class="k">if</span> <span class="n">padding</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="n">h_adj</span> <span class="o">=</span> <span class="n">h</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">w_adj</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="k">return</span> <span class="n">channel</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">h_adj</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w_adj</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="n">h_adj</span> <span class="o">=</span> <span class="n">h</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">w_adj</span> <span class="o">=</span> <span class="n">w</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="n">d_adj</span> <span class="o">=</span> <span class="n">d</span> <span class="o">-</span> <span class="n">padding</span>
+                <span class="k">return</span> <span class="p">(</span><span class="n">channel</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span>
+                       <span class="n">h_adj</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span>
+                       <span class="n">w_adj</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">d_adj</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># No padding, use coordinates directly</span>
+            <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="k">return</span> <span class="n">channel</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">h</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w</span>
+            <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+                <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">d</span> <span class="o">=</span> <span class="n">coords</span>
+                <span class="k">return</span> <span class="p">(</span><span class="n">channel</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span>
+                       <span class="n">h</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span>
+                       <span class="n">w</span> <span class="o">*</span> <span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">d</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_conv_layer_code</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conv_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">layer_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate C code for a convolutional layer.&quot;&quot;&quot;</span>
         <span class="n">code</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">indices</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;indices&#39;</span><span class="p">]</span>
         <span class="n">tree_ops</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_operations&#39;</span><span class="p">]</span>
+        <span class="n">padding</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span>
+        <span class="n">in_dim</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
             <span class="n">conv_dim</span> <span class="o">=</span> <span class="mi">2</span>
@@ -450,6 +574,7 @@
                     <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
             <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
                     <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">iter_range</span> <span class="o">=</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span>
         <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">])</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
             <span class="n">conv_dim</span> <span class="o">=</span> <span class="mi">3</span>
             <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
@@ -458,15 +583,13 @@
                     <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
             <span class="n">d_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">])</span>
                     <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">iter_range</span> <span class="o">=</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span> <span class="o">*</span> <span class="n">d_out</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Conv layer expects 3D or 4D input, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">// Convolutional layer </span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">kernel_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;num_kernels&#39;</span><span class="p">]):</span>
-            <span class="n">iter_range</span> <span class="o">=</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span>
-            <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-                <span class="n">iter_range</span> <span class="o">*=</span> <span class="n">d_out</span>
             <span class="k">for</span> <span class="n">pos_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">iter_range</span><span class="p">):</span>
                 <span class="c1"># First level: process receptive field positions</span>
                 <span class="n">level_0_indices</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -478,57 +601,26 @@
                     <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                         <span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_c</span> <span class="o">=</span> <span class="n">left_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
                         <span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_c</span> <span class="o">=</span> <span class="n">right_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">left_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">)</span>
+                        <span class="n">right_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">)</span>
                     <span class="k">else</span><span class="p">:</span>
                         <span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_d</span><span class="p">,</span> <span class="n">left_c</span> <span class="o">=</span> <span class="n">left_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
                         <span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_d</span><span class="p">,</span> <span class="n">right_c</span> <span class="o">=</span> <span class="n">right_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">left_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_d</span><span class="p">)</span>
+                        <span class="n">right_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_d</span><span class="p">)</span>
 
                     <span class="n">gate_op</span> <span class="o">=</span> <span class="n">tree_ops</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">gate_idx</span><span class="p">][</span><span class="n">kernel_idx</span><span class="p">]</span>
 
                     <span class="c1"># Determine input source</span>
                     <span class="n">prev_layer_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_previous_layer_name</span><span class="p">(</span><span class="n">layer_name</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">prev_layer_name</span> <span class="o">==</span> <span class="s2">&quot;inp&quot;</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="n">conv_dim</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span>
-                            <span class="n">left_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;inp[</span><span class="si">{</span><span class="n">left_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">left_w</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
-                            <span class="n">right_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;inp[</span><span class="si">{</span><span class="n">right_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">right_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">right_w</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
-                        <span class="k">else</span><span class="p">:</span>
-                            <span class="n">left_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;inp[</span><span class="si">{</span><span class="n">left_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left_w</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">left_d</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
-                            <span class="n">right_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;inp[</span><span class="si">{</span><span class="n">right_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">right_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">right_w</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">right_d</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
+                        <span class="n">source_name</span> <span class="o">=</span> <span class="s2">&quot;inp&quot;</span>
                     <span class="k">else</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
-                            <span class="n">left_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">prev_layer_name</span><span class="si">}</span><span class="s2">_out[</span><span class="si">{</span><span class="n">left_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">left_w</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
-                            <span class="n">right_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">prev_layer_name</span><span class="si">}</span><span class="s2">_out[</span><span class="si">{</span><span class="n">right_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">right_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">right_w</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
-                        <span class="k">else</span><span class="p">:</span>
-                            <span class="n">left_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">prev_layer_name</span><span class="si">}</span><span class="s2">_out[</span><span class="si">{</span><span class="n">left_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">left_w</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">left_d</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
-                            <span class="n">right_var</span> <span class="o">=</span> <span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">prev_layer_name</span><span class="si">}</span><span class="s2">_out[</span><span class="si">{</span><span class="n">right_c</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">right_h</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + &quot;</span>
-                                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">right_w</span><span class="si">}</span><span class="s2"> * </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2"> + </span><span class="si">{</span><span class="n">right_d</span><span class="si">}</span><span class="s2">]&quot;</span>
-                            <span class="p">)</span>
+                        <span class="n">source_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">prev_layer_name</span><span class="si">}</span><span class="s2">_out&quot;</span>
 
+                    <span class="c1"># Generate input variable references with padding handling</span>
+                    <span class="n">left_var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_input_var</span><span class="p">(</span><span class="n">left_coords</span><span class="p">,</span> <span class="n">left_c</span><span class="p">,</span> <span class="n">source_name</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">)</span>
+                    <span class="n">right_var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_input_var</span><span class="p">(</span><span class="n">right_coords</span><span class="p">,</span> <span class="n">right_c</span><span class="p">,</span> <span class="n">source_name</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">)</span>
 
                     <span class="n">var_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_</span><span class="si">{</span><span class="n">layer_name</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_l0_g</span><span class="si">{</span><span class="n">gate_idx</span><span class="si">}</span><span class="s2">&quot;</span>
                     <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
@@ -770,6 +862,175 @@
             <span class="n">a</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">input_var</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">gate_a</span><span class="si">}</span><span class="s2">]&quot;</span>
             <span class="n">b</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">input_var</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">gate_b</span><span class="si">}</span><span class="s2">]&quot;</span>
             <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\t</span><span class="si">{</span><span class="n">output_var</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">var_id</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_gate_code</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="n">gate_op</span><span class="p">)</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">code</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_linear_layer_verilog</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer_a</span><span class="p">,</span> <span class="n">layer_b</span><span class="p">,</span> <span class="n">layer_op</span><span class="p">,</span>
+                                   <span class="n">layer_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">input_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                                   <span class="n">output_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate Verilog code for a linear (LogicDense) layer.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            layer_a: Indices of first inputs for each neuron</span>
+<span class="sd">            layer_b: Indices of second inputs for each neuron</span>
+<span class="sd">            layer_op: Gate operations for each neuron (0-15)</span>
+<span class="sd">            layer_id: Layer index</span>
+<span class="sd">            input_name: Name of input wire/bus</span>
+<span class="sd">            output_name: Name of output wire/bus</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            List of Verilog code lines (wire declarations and assignments)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.hdl_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">format_verilog_comment</span>
+
+        <span class="n">code</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">: LogicDense (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">layer_op</span><span class="p">)</span><span class="si">}</span><span class="s2"> neurons)&quot;</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">neuron_id</span><span class="p">,</span> <span class="p">(</span><span class="n">gate_a</span><span class="p">,</span> <span class="n">gate_b</span><span class="p">,</span> <span class="n">gate_op</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">layer_a</span><span class="p">,</span> <span class="n">layer_b</span><span class="p">,</span> <span class="n">layer_op</span><span class="p">)):</span>
+            <span class="c1"># Input signal names</span>
+            <span class="n">a_signal</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">input_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">gate_a</span><span class="si">}</span><span class="s2">]&quot;</span>
+            <span class="n">b_signal</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">input_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">gate_b</span><span class="si">}</span><span class="s2">]&quot;</span>
+
+            <span class="c1"># Generate gate expression</span>
+            <span class="n">gate_expr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_gate_verilog</span><span class="p">(</span><span class="n">a_signal</span><span class="p">,</span> <span class="n">b_signal</span><span class="p">,</span> <span class="n">gate_op</span><span class="p">)</span>
+
+            <span class="c1"># Create assignment</span>
+            <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    assign </span><span class="si">{</span><span class="n">output_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">neuron_id</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="n">gate_expr</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">code</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_conv_layer_verilog</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conv_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">layer_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+                                 <span class="n">input_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">output_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate Verilog code for a convolutional (LogicConv2d/3d) layer.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            conv_info: Dictionary containing convolutional layer information</span>
+<span class="sd">            layer_id: Layer index</span>
+<span class="sd">            input_name: Name of input wire/bus</span>
+<span class="sd">            output_name: Name of output wire/bus</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            List of Verilog code lines (wire declarations and assignments)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.hdl_generator</span><span class="w"> </span><span class="kn">import</span> <span class="n">format_verilog_comment</span>
+
+        <span class="n">code</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">: LogicConv (tree_depth=</span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">))</span>
+
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;indices&#39;</span><span class="p">]</span>
+        <span class="n">tree_ops</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_operations&#39;</span><span class="p">]</span>
+        <span class="n">padding</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;padding&#39;</span><span class="p">]</span>
+        <span class="n">in_dim</span> <span class="o">=</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;in_dim&#39;</span><span class="p">]</span>
+
+        <span class="n">conv_dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">conv_dim</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="sa">f</span><span class="s2">&quot;Expected 2D or 3D conv, got </span><span class="si">{</span><span class="n">conv_dim</span><span class="si">}</span><span class="s2">D&quot;</span>
+
+        <span class="c1"># Calculate output dimensions</span>
+        <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;conv_info[&#39;in_dim&#39;] = </span><span class="si">{</span><span class="n">in_dim</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;conv_info[&#39;padding&#39;] = </span><span class="si">{</span><span class="n">padding</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;conv_info[&#39;receptive_field_size&#39;] = </span><span class="si">{</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">padding</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">padding</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+                    <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">iter_range</span> <span class="o">=</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+            <span class="n">h_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">padding</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">w_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">padding</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+                    <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">d_out</span> <span class="o">=</span> <span class="p">((</span><span class="n">in_dim</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">padding</span> <span class="o">-</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;receptive_field_size&#39;</span><span class="p">][</span><span class="mi">2</span><span class="p">])</span>
+                    <span class="o">//</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;stride&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="n">iter_range</span> <span class="o">=</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span> <span class="o">*</span> <span class="n">d_out</span>
+
+        <span class="c1"># Generate wire declarations for intermediate tree levels</span>
+        <span class="k">for</span> <span class="n">kernel_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;num_kernels&#39;</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">pos_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">iter_range</span><span class="p">):</span>
+                <span class="c1"># Wires for all tree levels (except final output)</span>
+                <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]):</span>
+                    <span class="n">num_gates</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">level</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">gate_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_gates</span><span class="p">):</span>
+                        <span class="n">wire_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_l</span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_lv</span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s2">_g</span><span class="si">{</span><span class="n">gate_idx</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    wire </span><span class="si">{</span><span class="n">wire_name</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+        <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Generate assignments for each kernel and position</span>
+        <span class="k">for</span> <span class="n">kernel_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;num_kernels&#39;</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">pos_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">iter_range</span><span class="p">):</span>
+                <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Kernel </span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">, Position </span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
+
+                <span class="c1"># Level 0: leaf gates (process receptive field)</span>
+                <span class="n">level_0_indices</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="n">left_indices</span> <span class="o">=</span> <span class="n">level_0_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">kernel_idx</span><span class="p">,</span> <span class="n">pos_idx</span><span class="p">]</span>
+                <span class="n">right_indices</span> <span class="o">=</span> <span class="n">level_0_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="n">kernel_idx</span><span class="p">,</span> <span class="n">pos_idx</span><span class="p">]</span>
+
+                <span class="k">for</span> <span class="n">gate_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="p">(</span><span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">)):</span>
+                    <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                        <span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_c</span> <span class="o">=</span> <span class="n">left_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_c</span> <span class="o">=</span> <span class="n">right_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">left_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">)</span>
+                        <span class="n">right_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>  <span class="c1"># conv_dim == 3</span>
+                        <span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_d</span><span class="p">,</span> <span class="n">left_c</span> <span class="o">=</span> <span class="n">left_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_d</span><span class="p">,</span> <span class="n">right_c</span> <span class="o">=</span> <span class="n">right_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">left_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">left_h</span><span class="p">,</span> <span class="n">left_w</span><span class="p">,</span> <span class="n">left_d</span><span class="p">)</span>
+                        <span class="n">right_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">right_h</span><span class="p">,</span> <span class="n">right_w</span><span class="p">,</span> <span class="n">right_d</span><span class="p">)</span>
+
+                    <span class="n">gate_op</span> <span class="o">=</span> <span class="n">tree_ops</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">gate_idx</span><span class="p">][</span><span class="n">kernel_idx</span><span class="p">]</span>
+
+                    <span class="c1"># Get input signals with padding handling</span>
+                    <span class="n">left_flat_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_flat_index</span><span class="p">(</span><span class="n">left_coords</span><span class="p">,</span> <span class="n">left_c</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">)</span>
+                    <span class="n">right_flat_idx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_flat_index</span><span class="p">(</span><span class="n">right_coords</span><span class="p">,</span> <span class="n">right_c</span><span class="p">,</span> <span class="n">conv_dim</span><span class="p">,</span> <span class="n">in_dim</span><span class="p">,</span> <span class="n">padding</span><span class="p">)</span>
+
+                    <span class="c1"># Generate input signal references</span>
+                    <span class="k">if</span> <span class="n">left_flat_idx</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">left_var</span> <span class="o">=</span> <span class="s2">&quot;1&#39;b0&quot;</span>  <span class="c1"># Padded region is zero</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">left_var</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">input_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">left_flat_idx</span><span class="si">}</span><span class="s2">]&quot;</span>
+                    <span class="k">if</span> <span class="n">right_flat_idx</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">right_var</span> <span class="o">=</span> <span class="s2">&quot;1&#39;b0&quot;</span>  <span class="c1"># Padded region is zero</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">right_var</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">input_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">right_flat_idx</span><span class="si">}</span><span class="s2">]&quot;</span>
+
+                    <span class="n">wire_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_l</span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_lv0_g</span><span class="si">{</span><span class="n">gate_idx</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="n">gate_expr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_gate_verilog</span><span class="p">(</span><span class="n">left_var</span><span class="p">,</span> <span class="n">right_var</span><span class="p">,</span> <span class="n">gate_op</span><span class="p">)</span>
+                    <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    assign </span><span class="si">{</span><span class="n">wire_name</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">gate_expr</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+                <span class="c1"># Process remaining tree levels</span>
+                <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]):</span>
+                    <span class="n">level_indices</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="n">level</span><span class="p">]</span>
+                    <span class="n">left_gate_indices</span> <span class="o">=</span> <span class="n">level_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                    <span class="n">right_gate_indices</span> <span class="o">=</span> <span class="n">level_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+                    <span class="n">num_gates</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">left_gate_indices</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">gate_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_gates</span><span class="p">):</span>
+                        <span class="n">left_idx</span> <span class="o">=</span> <span class="n">left_gate_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+                        <span class="n">right_idx</span> <span class="o">=</span> <span class="n">right_gate_indices</span><span class="p">[</span><span class="n">gate_idx</span><span class="p">]</span>
+
+                        <span class="n">gate_op</span> <span class="o">=</span> <span class="n">tree_ops</span><span class="p">[</span><span class="n">level</span><span class="p">][</span><span class="n">gate_idx</span><span class="p">][</span><span class="n">kernel_idx</span><span class="p">]</span>
+
+                        <span class="n">left_var</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_l</span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_lv</span><span class="si">{</span><span class="n">level</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">_g</span><span class="si">{</span><span class="n">left_idx</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="n">right_var</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_l</span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_lv</span><span class="si">{</span><span class="n">level</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">_g</span><span class="si">{</span><span class="n">right_idx</span><span class="si">}</span><span class="s2">&quot;</span>
+
+                        <span class="n">gate_expr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_gate_verilog</span><span class="p">(</span><span class="n">left_var</span><span class="p">,</span> <span class="n">right_var</span><span class="p">,</span> <span class="n">gate_op</span><span class="p">)</span>
+
+                        <span class="k">if</span> <span class="n">level</span> <span class="o">==</span> <span class="n">conv_info</span><span class="p">[</span><span class="s1">&#39;tree_depth&#39;</span><span class="p">]:</span>
+                            <span class="c1"># Final level: assign to output</span>
+                            <span class="k">if</span> <span class="n">conv_dim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                                <span class="n">output_idx</span> <span class="o">=</span> <span class="n">kernel_idx</span> <span class="o">*</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span> <span class="o">+</span> <span class="n">pos_idx</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">output_idx</span> <span class="o">=</span> <span class="n">kernel_idx</span> <span class="o">*</span> <span class="n">h_out</span> <span class="o">*</span> <span class="n">w_out</span> <span class="o">*</span> <span class="n">d_out</span> <span class="o">+</span> <span class="n">pos_idx</span>
+                            <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    assign </span><span class="si">{</span><span class="n">output_name</span><span class="si">}</span><span class="s2">[</span><span class="si">{</span><span class="n">output_idx</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="n">gate_expr</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="c1"># Intermediate level: assign to wire</span>
+                            <span class="n">wire_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;conv_l</span><span class="si">{</span><span class="n">layer_id</span><span class="si">}</span><span class="s2">_k</span><span class="si">{</span><span class="n">kernel_idx</span><span class="si">}</span><span class="s2">_p</span><span class="si">{</span><span class="n">pos_idx</span><span class="si">}</span><span class="s2">_lv</span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s2">_g</span><span class="si">{</span><span class="n">gate_idx</span><span class="si">}</span><span class="s2">&quot;</span>
+                            <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    assign </span><span class="si">{</span><span class="n">wire_name</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">gate_expr</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+                <span class="n">code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">code</span>
 
@@ -1211,6 +1472,233 @@
                 <span class="k">return</span> <span class="n">layer_info</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">3</span><span class="p">]</span>  <span class="c1"># output_size</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;No layers found&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CompiledLogicNet.get_verilog_code">
+<a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.CompiledLogicNet.get_verilog_code">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_verilog_code</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;torchlogix_net&quot;</span><span class="p">,</span>
+                        <span class="n">pipeline_stages</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate complete Verilog code for the network.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            module_name: Name of the top-level Verilog module</span>
+<span class="sd">            pipeline_stages: Number of pipeline stages to insert (0 = fully combinational)</span>
+<span class="sd">                           - 0: Fully combinational (no registers, 1 cycle latency, may not synthesize for large models)</span>
+<span class="sd">                           - 1: Single output register (1 cycle latency, helps synthesis)</span>
+<span class="sd">                           - N: Divide layers into N pipeline stages (N cycle latency)</span>
+<span class="sd">                           - Use len(layers) for full layer-level pipelining</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Complete Verilog code as a string with specified pipelining</span>
+
+<span class="sd">        Examples:</span>
+<span class="sd">            # Fully combinational (original behavior)</span>
+<span class="sd">            verilog = model.get_verilog_code(pipeline_stages=0)</span>
+
+<span class="sd">            # Output register only (helps with large designs)</span>
+<span class="sd">            verilog = model.get_verilog_code(pipeline_stages=1)</span>
+
+<span class="sd">            # 4 pipeline stages (divide layers into 4 groups)</span>
+<span class="sd">            verilog = model.get_verilog_code(pipeline_stages=4)</span>
+
+<span class="sd">            # Full layer-level pipelining (register between each layer)</span>
+<span class="sd">            verilog = model.get_verilog_code(pipeline_stages=999)  # or len(layers)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.hdl_generator</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span><span class="n">generate_verilog_module</span><span class="p">,</span> <span class="n">format_verilog_comment</span><span class="p">,</span>
+                                    <span class="n">generate_pipeline_register</span><span class="p">)</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+        <span class="c1"># Calculate layer sizes</span>
+        <span class="n">layer_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_calculate_layer_output_sizes_and_shapes</span><span class="p">()</span>
+        <span class="n">num_layers</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_info</span><span class="p">)</span>
+
+        <span class="c1"># Calculate input size from input_shape</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">input_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">input_shape</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Fallback: get from first layer&#39;s input</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">input_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># First linear layer input size</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">input_size</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="c1"># Calculate output size from final layer</span>
+        <span class="c1"># layer_info tuple is (layer_type, layer_idx, output_shape, output_size)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_info</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">output_size</span> <span class="o">=</span> <span class="n">layer_info</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">3</span><span class="p">]</span>  <span class="c1"># Last layer&#39;s output size (4th element)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">output_size</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="c1"># Determine pipelining strategy</span>
+        <span class="n">add_clock</span> <span class="o">=</span> <span class="n">pipeline_stages</span> <span class="o">&gt;</span> <span class="mi">0</span>
+        <span class="n">pipeline_positions</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">pipeline_stages</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c1"># Single output register only</span>
+            <span class="n">pipeline_positions</span> <span class="o">=</span> <span class="p">[</span><span class="n">num_layers</span><span class="p">]</span>  <span class="c1"># After all layers</span>
+        <span class="k">elif</span> <span class="n">pipeline_stages</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c1"># Distribute pipeline stages evenly across layers</span>
+            <span class="k">if</span> <span class="n">pipeline_stages</span> <span class="o">&gt;=</span> <span class="n">num_layers</span><span class="p">:</span>
+                <span class="c1"># Register after every layer</span>
+                <span class="n">pipeline_positions</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_layers</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Insert N-1 registers to create N stages</span>
+                <span class="c1"># Distribute evenly across layers</span>
+                <span class="n">step</span> <span class="o">=</span> <span class="n">num_layers</span> <span class="o">/</span> <span class="n">pipeline_stages</span>
+                <span class="n">pipeline_positions</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">((</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">step</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">pipeline_stages</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
+                <span class="n">pipeline_positions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">num_layers</span><span class="p">)</span>  <span class="c1"># Always register the output</span>
+
+        <span class="n">body_lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="s2">&quot;Generated by TorchLogix&quot;</span><span class="p">))</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input size: </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> bits&quot;</span><span class="p">))</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output size: </span><span class="si">{</span><span class="n">output_size</span><span class="si">}</span><span class="s2"> bits&quot;</span><span class="p">))</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Pipeline stages: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pipeline_positions</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Latency: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pipeline_positions</span><span class="p">)</span><span class="si">}</span><span class="s2"> clock cycles&quot;</span><span class="p">))</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Track current input/output names for each layer</span>
+        <span class="n">current_input</span> <span class="o">=</span> <span class="s2">&quot;inp&quot;</span>
+        <span class="n">layer_outputs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">wire_declarations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">register_code</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Generate wire/reg declarations for layer outputs</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="p">(</span><span class="n">layer_type</span><span class="p">,</span> <span class="n">layer_idx</span><span class="p">,</span> <span class="n">output_shape</span><span class="p">,</span> <span class="n">output_size</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layer_info</span><span class="p">):</span>
+            <span class="n">layer_num</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># Layer numbers are 1-indexed</span>
+
+            <span class="k">if</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># Not the final layer</span>
+                <span class="c1"># Check if this layer should have a pipeline register</span>
+                <span class="k">if</span> <span class="n">layer_num</span> <span class="ow">in</span> <span class="n">pipeline_positions</span><span class="p">:</span>
+                    <span class="c1"># This layer output needs a register</span>
+                    <span class="n">wire_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">_comb&quot;</span>  <span class="c1"># Combinational output</span>
+                    <span class="n">reg_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">_out&quot;</span>   <span class="c1"># Registered output</span>
+                    <span class="n">wire_declarations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    wire [</span><span class="si">{</span><span class="n">output_size</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">:0] </span><span class="si">{</span><span class="n">wire_name</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+                    <span class="n">register_code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">generate_pipeline_register</span><span class="p">(</span><span class="n">reg_name</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="n">wire_name</span><span class="p">))</span>
+                    <span class="n">layer_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">wire_name</span><span class="p">,</span> <span class="n">reg_name</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>  <span class="c1"># Has register</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Just a wire</span>
+                    <span class="n">wire_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;layer_</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">_out&quot;</span>
+                    <span class="n">wire_declarations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    wire [</span><span class="si">{</span><span class="n">output_size</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">:0] </span><span class="si">{</span><span class="n">wire_name</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+                    <span class="n">layer_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">wire_name</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>  <span class="c1"># No register</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Final layer</span>
+                <span class="k">if</span> <span class="n">layer_num</span> <span class="ow">in</span> <span class="n">pipeline_positions</span><span class="p">:</span>
+                    <span class="c1"># Output is registered</span>
+                    <span class="n">wire_name</span> <span class="o">=</span> <span class="s2">&quot;out_comb&quot;</span>
+                    <span class="n">wire_declarations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    wire [</span><span class="si">{</span><span class="n">output_size</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">:0] </span><span class="si">{</span><span class="n">wire_name</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+                    <span class="n">register_code</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">generate_pipeline_register</span><span class="p">(</span><span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="n">wire_name</span><span class="p">))</span>
+                    <span class="n">layer_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">wire_name</span><span class="p">,</span> <span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Output is combinational</span>
+                    <span class="n">layer_outputs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s2">&quot;out&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">output_size</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+
+        <span class="c1"># Add wire declarations</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">wire_declarations</span><span class="p">)</span>
+        <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Generate code for each layer</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="p">(</span><span class="n">layer_type</span><span class="p">,</span> <span class="n">layer_idx</span><span class="p">,</span> <span class="n">output_shape</span><span class="p">,</span> <span class="n">output_size</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layer_info</span><span class="p">):</span>
+            <span class="n">comb_output</span> <span class="o">=</span> <span class="n">layer_outputs</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Combinational output name</span>
+
+            <span class="k">if</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s1">&#39;linear&#39;</span><span class="p">:</span>
+                <span class="c1"># LogicDense layer</span>
+                <span class="n">layer_a</span><span class="p">,</span> <span class="n">layer_b</span><span class="p">,</span> <span class="n">layer_op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linear_layers</span><span class="p">[</span><span class="n">layer_idx</span><span class="p">]</span>
+                <span class="n">layer_code</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_linear_layer_verilog</span><span class="p">(</span>
+                    <span class="n">layer_a</span><span class="p">,</span> <span class="n">layer_b</span><span class="p">,</span> <span class="n">layer_op</span><span class="p">,</span>
+                    <span class="n">layer_id</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+                    <span class="n">input_name</span><span class="o">=</span><span class="n">current_input</span><span class="p">,</span>
+                    <span class="n">output_name</span><span class="o">=</span><span class="n">comb_output</span>
+                <span class="p">)</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">layer_code</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
+                <span class="c1"># LogicConv2d/3d layer</span>
+                <span class="n">conv_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv_layers</span><span class="p">[</span><span class="n">layer_idx</span><span class="p">]</span>
+                <span class="n">layer_code</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_conv_layer_verilog</span><span class="p">(</span>
+                    <span class="n">conv_info</span><span class="p">,</span>
+                    <span class="n">layer_id</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+                    <span class="n">input_name</span><span class="o">=</span><span class="n">current_input</span><span class="p">,</span>
+                    <span class="n">output_name</span><span class="o">=</span><span class="n">comb_output</span>
+                <span class="p">)</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">layer_code</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s1">&#39;pool&#39;</span><span class="p">:</span>
+                <span class="c1"># OrPooling layer - implement as OR reduction</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">: OrPooling (max pooling)&quot;</span><span class="p">))</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="s2">&quot;Note: Pooling not yet implemented in Verilog&quot;</span><span class="p">))</span>
+                <span class="c1"># TODO: Implement pooling layer verilog generation</span>
+
+            <span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s1">&#39;flatten&#39;</span><span class="p">:</span>
+                <span class="c1"># Flatten is a no-op in Verilog (just wire renaming)</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">: Flatten&quot;</span><span class="p">))</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    assign </span><span class="si">{</span><span class="n">comb_output</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">current_input</span><span class="si">}</span><span class="s2">;&quot;</span><span class="p">)</span>
+
+            <span class="k">elif</span> <span class="n">layer_type</span> <span class="o">==</span> <span class="s1">&#39;groupsum&#39;</span><span class="p">:</span>
+                <span class="c1"># GroupSum - implement as adder tree</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer </span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">: GroupSum&quot;</span><span class="p">))</span>
+                <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="s2">&quot;Note: GroupSum not yet implemented in Verilog&quot;</span><span class="p">))</span>
+                <span class="c1"># TODO: Implement GroupSum verilog generation</span>
+
+            <span class="c1"># Update current_input for next layer</span>
+            <span class="c1"># Use registered output if this layer has a register, otherwise use combinational</span>
+            <span class="k">if</span> <span class="n">layer_outputs</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">3</span><span class="p">]:</span>  <span class="c1"># Has register</span>
+                <span class="n">current_input</span> <span class="o">=</span> <span class="n">layer_outputs</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># Use registered name</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">current_input</span> <span class="o">=</span> <span class="n">layer_outputs</span><span class="p">[</span><span class="n">idx</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Use combinational name</span>
+
+        <span class="c1"># Add pipeline registers</span>
+        <span class="k">if</span> <span class="n">register_code</span><span class="p">:</span>
+            <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">body_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_verilog_comment</span><span class="p">(</span><span class="s2">&quot;Pipeline registers&quot;</span><span class="p">))</span>
+            <span class="n">body_lines</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">register_code</span><span class="p">)</span>
+
+        <span class="c1"># Generate complete module</span>
+        <span class="n">output_is_reg</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pipeline_positions</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">num_layers</span> <span class="ow">in</span> <span class="n">pipeline_positions</span>
+        <span class="n">module_code</span> <span class="o">=</span> <span class="n">generate_verilog_module</span><span class="p">(</span>
+            <span class="n">module_name</span><span class="o">=</span><span class="n">module_name</span><span class="p">,</span>
+            <span class="n">input_width</span><span class="o">=</span><span class="n">input_size</span><span class="p">,</span>
+            <span class="n">output_width</span><span class="o">=</span><span class="n">output_size</span><span class="p">,</span>
+            <span class="n">body</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">body_lines</span><span class="p">),</span>
+            <span class="n">add_clock</span><span class="o">=</span><span class="n">add_clock</span><span class="p">,</span>
+            <span class="n">output_registered</span><span class="o">=</span><span class="n">output_is_reg</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">module_code</span></div>
+
+
+<div class="viewcode-block" id="CompiledLogicNet.export_hdl">
+<a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.CompiledLogicNet.export_hdl">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">export_hdl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">module_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;torchlogix_net&quot;</span><span class="p">,</span>
+                   <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;verilog&quot;</span><span class="p">,</span> <span class="n">pipeline_stages</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Export the network as HDL files.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            output_dir: Directory to write HDL files</span>
+<span class="sd">            module_name: Name of the top-level module</span>
+<span class="sd">            format: HDL format - &quot;verilog&quot; or &quot;vhdl&quot; (only verilog supported currently)</span>
+<span class="sd">            pipeline_stages: Number of pipeline stages (0 = combinational, see get_verilog_code)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+        <span class="k">if</span> <span class="nb">format</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;verilog&quot;</span><span class="p">,</span> <span class="s2">&quot;v&quot;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Only &#39;verilog&#39; format is currently supported, got &#39;</span><span class="si">{</span><span class="nb">format</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Create output directory if it doesn&#39;t exist</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># Generate Verilog code</span>
+        <span class="n">verilog_code</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">(</span><span class="n">module_name</span><span class="o">=</span><span class="n">module_name</span><span class="p">,</span>
+                                             <span class="n">pipeline_stages</span><span class="o">=</span><span class="n">pipeline_stages</span><span class="p">)</span>
+
+        <span class="c1"># Write to file</span>
+        <span class="n">output_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">module_name</span><span class="si">}</span><span class="s2">.v&quot;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">verilog_code</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Verilog module written to: </span><span class="si">{</span><span class="n">output_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">pipeline_stages</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Pipeline stages: </span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Latency: </span><span class="si">{</span><span class="n">pipeline_stages</span><span class="si">}</span><span class="s2"> clock cycles&quot;</span><span class="p">)</span></div>
+
 
 <div class="viewcode-block" id="CompiledLogicNet.compile">
 <a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.CompiledLogicNet.compile">[docs]</a>

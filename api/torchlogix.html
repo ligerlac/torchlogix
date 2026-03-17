@@ -24,7 +24,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="torchlogix.CompiledLogicNet" href="generated/torchlogix.CompiledLogicNet.html" />
-    <link rel="prev" title="Core Concepts" href="../guides/concepts.html" /> 
+    <link rel="prev" title="Hardware Deployment Guide" href="../guides/hardware_deployment.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -51,6 +51,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/quickstart.html">Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/concepts.html">Core Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
@@ -63,7 +64,10 @@
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.CompiledLogicNet"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.__init__"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.__init__()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_gate_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_gate_code()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_gate_verilog"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_gate_verilog()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_c_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_c_code()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.get_verilog_code"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.get_verilog_code()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.export_hdl"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.export_hdl()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.compile"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.compile()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.forward"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.forward()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.CompiledLogicNet.load"><code class="docutils literal notranslate"><span class="pre">CompiledLogicNet.load()</span></code></a></li>
@@ -153,12 +157,85 @@
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_gate_verilog">
+<span class="sig-name descname"><span class="pre">get_gate_verilog</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">var1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">var2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gate_op</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_gate_verilog"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_gate_verilog" title="Link to this definition"></a></dt>
+<dd><p>Generate Verilog code for a logic gate operation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>var1</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Name of first input variable (Verilog syntax)</p></li>
+<li><p><strong>var2</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Name of second input variable (Verilog syntax)</p></li>
+<li><p><strong>gate_op</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – Gate operation ID (0-15)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Verilog expression string</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_c_code">
 <span class="sig-name descname"><span class="pre">get_c_code</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_c_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_c_code" title="Link to this definition"></a></dt>
 <dd><p>Generate the complete C code for the network.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.get_verilog_code">
+<span class="sig-name descname"><span class="pre">get_verilog_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'torchlogix_net'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipeline_stages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.get_verilog_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.get_verilog_code" title="Link to this definition"></a></dt>
+<dd><p>Generate complete Verilog code for the network.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>module_name</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Name of the top-level Verilog module</p></li>
+<li><p><strong>pipeline_stages</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – Number of pipeline stages to insert (0 = fully combinational)
+- 0: Fully combinational (no registers, 1 cycle latency, may not synthesize for large models)
+- 1: Single output register (1 cycle latency, helps synthesis)
+- N: Divide layers into N pipeline stages (N cycle latency)
+- Use len(layers) for full layer-level pipelining</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Complete Verilog code as a string with specified pipelining</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p># Fully combinational (original behavior)
+verilog = model.get_verilog_code(pipeline_stages=0)</p>
+<p># Output register only (helps with large designs)
+verilog = model.get_verilog_code(pipeline_stages=1)</p>
+<p># 4 pipeline stages (divide layers into 4 groups)
+verilog = model.get_verilog_code(pipeline_stages=4)</p>
+<p># Full layer-level pipelining (register between each layer)
+verilog = model.get_verilog_code(pipeline_stages=999)  # or len(layers)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.CompiledLogicNet.export_hdl">
+<span class="sig-name descname"><span class="pre">export_hdl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'torchlogix_net'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'verilog'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pipeline_stages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/compiled_model.html#CompiledLogicNet.export_hdl"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.CompiledLogicNet.export_hdl" title="Link to this definition"></a></dt>
+<dd><p>Export the network as HDL files.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>output_dir</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Directory to write HDL files</p></li>
+<li><p><strong>module_name</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Name of the top-level module</p></li>
+<li><p><strong>format</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – HDL format - “verilog” or “vhdl” (only verilog supported currently)</p></li>
+<li><p><strong>pipeline_stages</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – Number of pipeline stages (0 = combinational, see get_verilog_code)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
 </dd>
 </dl>
 </dd></dl>
@@ -230,7 +307,7 @@ Arguments are ignored.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="../guides/concepts.html" class="btn btn-neutral float-left" title="Core Concepts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../guides/hardware_deployment.html" class="btn btn-neutral float-left" title="Hardware Deployment Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="generated/torchlogix.CompiledLogicNet.html" class="btn btn-neutral float-right" title="torchlogix.CompiledLogicNet" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
