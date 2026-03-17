@@ -23,6 +23,7 @@ Documentation Contents
    guides/installation
    guides/quickstart
    guides/concepts
+   guides/hardware_deployment
 
 .. toctree::
    :maxdepth: 2

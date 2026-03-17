@@ -265,6 +265,22 @@ class CompiledLogicNet(torch.nn.Module):
 
         return res
 
+    def get_gate_verilog(self, var1: str, var2: str, gate_op: int) -> str:
+        """Generate Verilog code for a logic gate operation.
+
+        Args:
+            var1: Name of first input variable (Verilog syntax)
+            var2: Name of second input variable (Verilog syntax)
+            gate_op: Gate operation ID (0-15)
+
+        Returns:
+            Verilog expression string
+        """
+        from .hdl_generator import gate_id_to_verilog
+        print(f"gate_op = {gate_op}, var1={var1}, var2={var2}")
+        print(f"type of gate_op: {type(gate_op)}")
+        return gate_id_to_verilog(gate_op, var1, var2)
+
     def _calculate_layer_output_sizes_and_shapes(self) -> List[tuple]:
         """Calculate output sizes and shapes for all layers in execution order."""
         layer_info = []
@@ -345,12 +361,116 @@ class CompiledLogicNet(torch.nn.Module):
             current_shape = output_shape
 
         return layer_info
+    
+    # Helper function to check if coordinates are in padding region
+    def _is_padded(self, coords, conv_dim, in_dim, padding):
+        """Check if any coordinate is in the padding region."""
+        if padding == 0:
+            return False
+        
+        if conv_dim == 2:
+            h, w = coords[0], coords[1]
+            return (h < padding or h >= in_dim[0] + padding or
+                    w < padding or w >= in_dim[1] + padding)
+        else:  # conv_dim == 3
+            h, w, d = coords[0], coords[1], coords[2]
+            return (h < padding or h >= in_dim[0] + padding or
+                    w < padding or w >= in_dim[1] + padding or
+                    d < padding or d >= in_dim[2] + padding)
+        
+    # Helper function to generate input variable reference
+    def _get_input_var(self, coords, channel, source_name, conv_dim, in_dim, padding):
+        """Generate input variable reference with padding handling.
+        
+        Args:
+            coords: tuple of (h, w) for 2D or (h, w, d) for 3D
+            channel: channel index
+            source_name: "inp" or "layer_{prev_layer_name}_out"
+        
+        Returns:
+            String representing the input variable (e.g., "inp[idx]" or "0")
+        """
+        # Check if in padding region
+        if self._is_padded(coords, conv_dim, in_dim, padding):
+            return "0"  # Padded values are zero
+        
+        # Adjust coordinates if padding is used
+        if padding > 0:
+            if conv_dim == 2:
+                h, w = coords
+                h_adj = h - padding
+                w_adj = w - padding
+                flat_idx = (f"{channel} * {in_dim[0]} * {in_dim[1]} + "
+                           f"{h_adj} * {in_dim[1]} + {w_adj}")
+            else:  # conv_dim == 3
+                h, w, d = coords
+                h_adj = h - padding
+                w_adj = w - padding
+                d_adj = d - padding
+                flat_idx = (f"{channel} * {in_dim[0]} * {in_dim[1]} * {in_dim[2]} + "
+                           f"{h_adj} * {in_dim[1]} * {in_dim[2]} + "
+                           f"{w_adj} * {in_dim[2]} + {d_adj}")
+        else:
+            # No padding, use coordinates directly
+            if conv_dim == 2:
+                h, w = coords
+                flat_idx = (f"{channel} * {in_dim[0]} * {in_dim[1]} + "
+                           f"{h} * {in_dim[1]} + {w}")
+            else:  # conv_dim == 3
+                h, w, d = coords
+                flat_idx = (f"{channel} * {in_dim[0]} * {in_dim[1]} * {in_dim[2]} + "
+                           f"{h} * {in_dim[1]} * {in_dim[2]} + "
+                           f"{w} * {in_dim[2]} + {d}")
+        
+        return f"{source_name}[{flat_idx}]"
+
+    def _get_flat_index(self, coords, channel, conv_dim, in_dim, padding):
+        """Compute flat index into input array with padding handling.
+        
+        Args:
+            coords: tuple of (h, w) for 2D or (h, w, d) for 3D
+            channel: channel index
+        
+        Returns:
+            Integer flat index, or None if in padding region
+        """
+
+        if self._is_padded(coords, conv_dim, in_dim, padding):
+            return None  # Will be handled as constant 0
+        
+        # Adjust coordinates if padding is used
+        if padding > 0:
+            if conv_dim == 2:
+                h, w = coords
+                h_adj = h - padding
+                w_adj = w - padding
+                return channel * in_dim[0] * in_dim[1] + h_adj * in_dim[1] + w_adj
+            else:  # conv_dim == 3
+                h, w, d = coords
+                h_adj = h - padding
+                w_adj = w - padding
+                d_adj = d - padding
+                return (channel * in_dim[0] * in_dim[1] * in_dim[2] +
+                       h_adj * in_dim[1] * in_dim[2] +
+                       w_adj * in_dim[2] + d_adj)
+        else:
+            # No padding, use coordinates directly
+            if conv_dim == 2:
+                h, w = coords
+                return channel * in_dim[0] * in_dim[1] + h * in_dim[1] + w
+            else:  # conv_dim == 3
+                h, w, d = coords
+                return (channel * in_dim[0] * in_dim[1] * in_dim[2] +
+                       h * in_dim[1] * in_dim[2] +
+                       w * in_dim[2] + d)
 
     def _get_conv_layer_code(self, conv_info: Dict[str, Any], layer_name: str) -> List[str]:
         """Generate C code for a convolutional layer."""
         code = []
         indices = conv_info['indices']
         tree_ops = conv_info['tree_operations']
+        padding = conv_info['padding']
+        in_dim = conv_info['in_dim']
 
         if len(conv_info['in_dim']) == 2:
             conv_dim = 2
@@ -358,6 +478,7 @@ class CompiledLogicNet(torch.nn.Module):
                     // conv_info['stride']) + 1
             w_out = ((conv_info['in_dim'][1] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][1])
                     // conv_info['stride']) + 1
+            iter_range = h_out * w_out
         elif len(conv_info['in_dim']) == 3:
             conv_dim = 3
             h_out = ((conv_info['in_dim'][0] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][0])
@@ -366,15 +487,13 @@ class CompiledLogicNet(torch.nn.Module):
                     // conv_info['stride']) + 1
             d_out = ((conv_info['in_dim'][2] + 2 * conv_info['padding'] - conv_info['receptive_field_size'][2])
                     // conv_info['stride']) + 1
+            iter_range = h_out * w_out * d_out
         else:
             raise ValueError(f"Conv layer expects 3D or 4D input, got {len(conv_info['in_dim'])}")
 
         code.append(f"\t// Convolutional layer {layer_name}")
 
         for kernel_idx in range(conv_info['num_kernels']):
-            iter_range = h_out * w_out
-            if conv_dim == 3:
-                iter_range *= d_out
             for pos_idx in range(iter_range):
                 # First level: process receptive field positions
                 level_0_indices = indices[0]
@@ -386,57 +505,26 @@ class CompiledLogicNet(torch.nn.Module):
                     if conv_dim == 2:
                         left_h, left_w, left_c = left_indices[gate_idx]
                         right_h, right_w, right_c = right_indices[gate_idx]
+                        left_coords = (left_h, left_w)
+                        right_coords = (right_h, right_w)
                     else:
                         left_h, left_w, left_d, left_c = left_indices[gate_idx]
                         right_h, right_w, right_d, right_c = right_indices[gate_idx]
+                        left_coords = (left_h, left_w, left_d)
+                        right_coords = (right_h, right_w, right_d)
 
                     gate_op = tree_ops[0][gate_idx][kernel_idx]
 
                     # Determine input source
                     prev_layer_name = self._get_previous_layer_name(layer_name)
                     if prev_layer_name == "inp":
-                        if conv_dim==2:
-                            left_var = (
-                                f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
-                                f"{left_h} * {conv_info['in_dim'][1]} + {left_w}]"
-                            )
-                            right_var = (
-                                f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
-                                f"{right_h} * {conv_info['in_dim'][1]} + {right_w}]"
-                            )
-                        else:
-                            left_var = (
-                                f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
-                            )
-                            right_var = (
-                                f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
-                            )
+                        source_name = "inp"
                     else:
-                        if conv_dim == 2:
-                            left_var = (
-                                f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
-                                f"{left_h} * {conv_info['in_dim'][1]} + {left_w}]"
-                            )
-                            right_var = (
-                                f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} + "
-                                f"{right_h} * {conv_info['in_dim'][1]} + {right_w}]"
-                            )
-                        else:
-                            left_var = (
-                                f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
-                            )
-                            right_var = (
-                                f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
-                            )
+                        source_name = f"layer_{prev_layer_name}_out"
 
+                    # Generate input variable references with padding handling
+                    left_var = self._get_input_var(left_coords, left_c, source_name, conv_dim, in_dim, padding)
+                    right_var = self._get_input_var(right_coords, right_c, source_name, conv_dim, in_dim, padding)
 
                     var_name = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l0_g{gate_idx}"
                     code.append(
@@ -678,6 +766,175 @@ class CompiledLogicNet(torch.nn.Module):
             a = f"{input_var}[{gate_a}]"
             b = f"{input_var}[{gate_b}]"
             code.append(f"\t{output_var}[{var_id}] = {self.get_gate_code(a, b, gate_op)};")
+
+        return code
+
+    def _get_linear_layer_verilog(self, layer_a, layer_b, layer_op,
+                                   layer_id: int, input_name: str,
+                                   output_name: str) -> List[str]:
+        """Generate Verilog code for a linear (LogicDense) layer.
+
+        Args:
+            layer_a: Indices of first inputs for each neuron
+            layer_b: Indices of second inputs for each neuron
+            layer_op: Gate operations for each neuron (0-15)
+            layer_id: Layer index
+            input_name: Name of input wire/bus
+            output_name: Name of output wire/bus
+
+        Returns:
+            List of Verilog code lines (wire declarations and assignments)
+        """
+        from .hdl_generator import format_verilog_comment
+
+        code = []
+        code.append("")
+        code.append(format_verilog_comment(f"Layer {layer_id}: LogicDense ({len(layer_op)} neurons)"))
+
+        for neuron_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
+            # Input signal names
+            a_signal = f"{input_name}[{gate_a}]"
+            b_signal = f"{input_name}[{gate_b}]"
+
+            # Generate gate expression
+            gate_expr = self.get_gate_verilog(a_signal, b_signal, gate_op)
+
+            # Create assignment
+            code.append(f"    assign {output_name}[{neuron_id}] = {gate_expr};")
+
+        return code
+
+    def _get_conv_layer_verilog(self, conv_info: Dict[str, Any], layer_id: int,
+                                 input_name: str, output_name: str) -> List[str]:
+        """Generate Verilog code for a convolutional (LogicConv2d/3d) layer.
+
+        Args:
+            conv_info: Dictionary containing convolutional layer information
+            layer_id: Layer index
+            input_name: Name of input wire/bus
+            output_name: Name of output wire/bus
+
+        Returns:
+            List of Verilog code lines (wire declarations and assignments)
+        """
+        from .hdl_generator import format_verilog_comment
+
+        code = []
+        code.append("")
+        code.append(format_verilog_comment(f"Layer {layer_id}: LogicConv (tree_depth={conv_info['tree_depth']})"))
+
+        indices = conv_info['indices']
+        tree_ops = conv_info['tree_operations']
+        padding = conv_info['padding']
+        in_dim = conv_info['in_dim']
+
+        conv_dim = len(in_dim)
+        assert conv_dim in [2, 3], f"Expected 2D or 3D conv, got {conv_dim}D"
+
+        # Calculate output dimensions
+        if conv_dim == 2:
+            print(f"conv_info['in_dim'] = {in_dim}")
+            print(f"conv_info['padding'] = {padding}")
+            print(f"conv_info['receptive_field_size'] = {conv_info['receptive_field_size']}")
+            h_out = ((in_dim[0] + 2 * padding - conv_info['receptive_field_size'][0])
+                    // conv_info['stride']) + 1
+            w_out = ((in_dim[1] + 2 * padding - conv_info['receptive_field_size'][1])
+                    // conv_info['stride']) + 1
+            iter_range = h_out * w_out
+        else:  # conv_dim == 3
+            h_out = ((in_dim[0] + 2 * padding - conv_info['receptive_field_size'][0])
+                    // conv_info['stride']) + 1
+            w_out = ((in_dim[1] + 2 * padding - conv_info['receptive_field_size'][1])
+                    // conv_info['stride']) + 1
+            d_out = ((in_dim[2] + 2 * padding - conv_info['receptive_field_size'][2])
+                    // conv_info['stride']) + 1
+            iter_range = h_out * w_out * d_out
+
+        # Generate wire declarations for intermediate tree levels
+        for kernel_idx in range(conv_info['num_kernels']):
+            for pos_idx in range(iter_range):
+                # Wires for all tree levels (except final output)
+                for level in range(conv_info['tree_depth']):
+                    num_gates = 2 ** (conv_info['tree_depth'] - level)
+                    for gate_idx in range(num_gates):
+                        wire_name = f"conv_l{layer_id}_k{kernel_idx}_p{pos_idx}_lv{level}_g{gate_idx}"
+                        code.append(f"    wire {wire_name};")
+
+        code.append("")
+
+        # Generate assignments for each kernel and position
+        for kernel_idx in range(conv_info['num_kernels']):
+            for pos_idx in range(iter_range):
+                code.append(format_verilog_comment(f"Kernel {kernel_idx}, Position {pos_idx}"))
+
+                # Level 0: leaf gates (process receptive field)
+                level_0_indices = indices[0]
+                left_indices = level_0_indices[0][kernel_idx, pos_idx]
+                right_indices = level_0_indices[1][kernel_idx, pos_idx]
+
+                for gate_idx in range(2**(conv_info['tree_depth']-1)):
+                    if conv_dim == 2:
+                        left_h, left_w, left_c = left_indices[gate_idx]
+                        right_h, right_w, right_c = right_indices[gate_idx]
+                        left_coords = (left_h, left_w)
+                        right_coords = (right_h, right_w)
+                    else:  # conv_dim == 3
+                        left_h, left_w, left_d, left_c = left_indices[gate_idx]
+                        right_h, right_w, right_d, right_c = right_indices[gate_idx]
+                        left_coords = (left_h, left_w, left_d)
+                        right_coords = (right_h, right_w, right_d)
+
+                    gate_op = tree_ops[0][gate_idx][kernel_idx]
+
+                    # Get input signals with padding handling
+                    left_flat_idx = self._get_flat_index(left_coords, left_c, conv_dim, in_dim, padding)
+                    right_flat_idx = self._get_flat_index(right_coords, right_c, conv_dim, in_dim, padding)
+
+                    # Generate input signal references
+                    if left_flat_idx is None:
+                        left_var = "1'b0"  # Padded region is zero
+                    else:
+                        left_var = f"{input_name}[{left_flat_idx}]"
+                    if right_flat_idx is None:
+                        right_var = "1'b0"  # Padded region is zero
+                    else:
+                        right_var = f"{input_name}[{right_flat_idx}]"
+
+                    wire_name = f"conv_l{layer_id}_k{kernel_idx}_p{pos_idx}_lv0_g{gate_idx}"
+                    gate_expr = self.get_gate_verilog(left_var, right_var, gate_op)
+                    code.append(f"    assign {wire_name} = {gate_expr};")
+
+                # Process remaining tree levels
+                for level in range(1, conv_info['tree_depth']):
+                    level_indices = indices[level]
+                    left_gate_indices = level_indices[0]
+                    right_gate_indices = level_indices[1]
+
+                    num_gates = len(left_gate_indices)
+                    for gate_idx in range(num_gates):
+                        left_idx = left_gate_indices[gate_idx]
+                        right_idx = right_gate_indices[gate_idx]
+
+                        gate_op = tree_ops[level][gate_idx][kernel_idx]
+
+                        left_var = f"conv_l{layer_id}_k{kernel_idx}_p{pos_idx}_lv{level-1}_g{left_idx}"
+                        right_var = f"conv_l{layer_id}_k{kernel_idx}_p{pos_idx}_lv{level-1}_g{right_idx}"
+
+                        gate_expr = self.get_gate_verilog(left_var, right_var, gate_op)
+
+                        if level == conv_info['tree_depth']:
+                            # Final level: assign to output
+                            if conv_dim == 2:
+                                output_idx = kernel_idx * h_out * w_out + pos_idx
+                            else:
+                                output_idx = kernel_idx * h_out * w_out * d_out + pos_idx
+                            code.append(f"    assign {output_name}[{output_idx}] = {gate_expr};")
+                        else:
+                            # Intermediate level: assign to wire
+                            wire_name = f"conv_l{layer_id}_k{kernel_idx}_p{pos_idx}_lv{level}_g{gate_idx}"
+                            code.append(f"    assign {wire_name} = {gate_expr};")
+
+                code.append("")
 
         return code
 
@@ -1116,6 +1373,227 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
                 return layer_info[-1][3]  # output_size
             else:
                 raise ValueError("No layers found")
+
+    def get_verilog_code(self, module_name: str = "torchlogix_net",
+                        pipeline_stages: int = 0) -> str:
+        """Generate complete Verilog code for the network.
+
+        Args:
+            module_name: Name of the top-level Verilog module
+            pipeline_stages: Number of pipeline stages to insert (0 = fully combinational)
+                           - 0: Fully combinational (no registers, 1 cycle latency, may not synthesize for large models)
+                           - 1: Single output register (1 cycle latency, helps synthesis)
+                           - N: Divide layers into N pipeline stages (N cycle latency)
+                           - Use len(layers) for full layer-level pipelining
+
+        Returns:
+            Complete Verilog code as a string with specified pipelining
+
+        Examples:
+            # Fully combinational (original behavior)
+            verilog = model.get_verilog_code(pipeline_stages=0)
+
+            # Output register only (helps with large designs)
+            verilog = model.get_verilog_code(pipeline_stages=1)
+
+            # 4 pipeline stages (divide layers into 4 groups)
+            verilog = model.get_verilog_code(pipeline_stages=4)
+
+            # Full layer-level pipelining (register between each layer)
+            verilog = model.get_verilog_code(pipeline_stages=999)  # or len(layers)
+        """
+        from .hdl_generator import (generate_verilog_module, format_verilog_comment,
+                                    generate_pipeline_register)
+        import numpy as np
+
+        # Calculate layer sizes
+        layer_info = self._calculate_layer_output_sizes_and_shapes()
+        num_layers = len(layer_info)
+
+        # Calculate input size from input_shape
+        if self.input_shape is not None:
+            input_size = int(np.prod(self.input_shape))
+        else:
+            # Fallback: get from first layer's input
+            if len(self.linear_layers) > 0:
+                input_size = len(self.linear_layers[0][0])  # First linear layer input size
+            else:
+                input_size = 1
+
+        # Calculate output size from final layer
+        # layer_info tuple is (layer_type, layer_idx, output_shape, output_size)
+        if len(layer_info) > 0:
+            output_size = layer_info[-1][3]  # Last layer's output size (4th element)
+        else:
+            output_size = 1
+
+        # Determine pipelining strategy
+        add_clock = pipeline_stages > 0
+        pipeline_positions = []
+
+        if pipeline_stages == 1:
+            # Single output register only
+            pipeline_positions = [num_layers]  # After all layers
+        elif pipeline_stages > 1:
+            # Distribute pipeline stages evenly across layers
+            if pipeline_stages >= num_layers:
+                # Register after every layer
+                pipeline_positions = list(range(1, num_layers + 1))
+            else:
+                # Insert N-1 registers to create N stages
+                # Distribute evenly across layers
+                step = num_layers / pipeline_stages
+                pipeline_positions = [int((i + 1) * step) for i in range(pipeline_stages - 1)]
+                pipeline_positions.append(num_layers)  # Always register the output
+
+        body_lines = []
+        body_lines.append(format_verilog_comment("Generated by TorchLogix"))
+        body_lines.append(format_verilog_comment(f"Input size: {input_size} bits"))
+        body_lines.append(format_verilog_comment(f"Output size: {output_size} bits"))
+        body_lines.append(format_verilog_comment(f"Pipeline stages: {len(pipeline_positions)}"))
+        body_lines.append(format_verilog_comment(f"Latency: {len(pipeline_positions)} clock cycles"))
+        body_lines.append("")
+
+        # Track current input/output names for each layer
+        current_input = "inp"
+        layer_outputs = []
+        wire_declarations = []
+        register_code = []
+
+        # Generate wire/reg declarations for layer outputs
+        for idx, (layer_type, layer_idx, output_shape, output_size) in enumerate(layer_info):
+            layer_num = idx + 1  # Layer numbers are 1-indexed
+
+            if idx < len(layer_info) - 1:  # Not the final layer
+                # Check if this layer should have a pipeline register
+                if layer_num in pipeline_positions:
+                    # This layer output needs a register
+                    wire_name = f"layer_{idx}_comb"  # Combinational output
+                    reg_name = f"layer_{idx}_out"   # Registered output
+                    wire_declarations.append(f"    wire [{output_size-1}:0] {wire_name};")
+                    register_code.append(generate_pipeline_register(reg_name, output_size, wire_name))
+                    layer_outputs.append((wire_name, reg_name, output_size, True))  # Has register
+                else:
+                    # Just a wire
+                    wire_name = f"layer_{idx}_out"
+                    wire_declarations.append(f"    wire [{output_size-1}:0] {wire_name};")
+                    layer_outputs.append((wire_name, None, output_size, False))  # No register
+            else:
+                # Final layer
+                if layer_num in pipeline_positions:
+                    # Output is registered
+                    wire_name = "out_comb"
+                    wire_declarations.append(f"    wire [{output_size-1}:0] {wire_name};")
+                    register_code.append(generate_pipeline_register("out", output_size, wire_name))
+                    layer_outputs.append((wire_name, "out", output_size, True))
+                else:
+                    # Output is combinational
+                    layer_outputs.append(("out", None, output_size, False))
+
+        # Add wire declarations
+        body_lines.extend(wire_declarations)
+        body_lines.append("")
+
+        # Generate code for each layer
+        for idx, (layer_type, layer_idx, output_shape, output_size) in enumerate(layer_info):
+            comb_output = layer_outputs[idx][0]  # Combinational output name
+
+            if layer_type == 'linear':
+                # LogicDense layer
+                layer_a, layer_b, layer_op = self.linear_layers[layer_idx]
+                layer_code = self._get_linear_layer_verilog(
+                    layer_a, layer_b, layer_op,
+                    layer_id=idx,
+                    input_name=current_input,
+                    output_name=comb_output
+                )
+                body_lines.extend(layer_code)
+
+            elif layer_type == 'conv':
+                # LogicConv2d/3d layer
+                conv_info = self.conv_layers[layer_idx]
+                layer_code = self._get_conv_layer_verilog(
+                    conv_info,
+                    layer_id=idx,
+                    input_name=current_input,
+                    output_name=comb_output
+                )
+                body_lines.extend(layer_code)
+
+            elif layer_type == 'pool':
+                # OrPooling layer - implement as OR reduction
+                body_lines.append(format_verilog_comment(f"Layer {idx}: OrPooling (max pooling)"))
+                body_lines.append(format_verilog_comment("Note: Pooling not yet implemented in Verilog"))
+                # TODO: Implement pooling layer verilog generation
+
+            elif layer_type == 'flatten':
+                # Flatten is a no-op in Verilog (just wire renaming)
+                body_lines.append(format_verilog_comment(f"Layer {idx}: Flatten"))
+                body_lines.append(f"    assign {comb_output} = {current_input};")
+
+            elif layer_type == 'groupsum':
+                # GroupSum - implement as adder tree
+                body_lines.append(format_verilog_comment(f"Layer {idx}: GroupSum"))
+                body_lines.append(format_verilog_comment("Note: GroupSum not yet implemented in Verilog"))
+                # TODO: Implement GroupSum verilog generation
+
+            # Update current_input for next layer
+            # Use registered output if this layer has a register, otherwise use combinational
+            if layer_outputs[idx][3]:  # Has register
+                current_input = layer_outputs[idx][1]  # Use registered name
+            else:
+                current_input = layer_outputs[idx][0]  # Use combinational name
+
+        # Add pipeline registers
+        if register_code:
+            body_lines.append("")
+            body_lines.append(format_verilog_comment("Pipeline registers"))
+            body_lines.extend(register_code)
+
+        # Generate complete module
+        output_is_reg = len(pipeline_positions) > 0 and num_layers in pipeline_positions
+        module_code = generate_verilog_module(
+            module_name=module_name,
+            input_width=input_size,
+            output_width=output_size,
+            body='\n'.join(body_lines),
+            add_clock=add_clock,
+            output_registered=output_is_reg
+        )
+
+        return module_code
+
+    def export_hdl(self, output_dir: str, module_name: str = "torchlogix_net",
+                   format: str = "verilog", pipeline_stages: int = 0) -> None:
+        """Export the network as HDL files.
+
+        Args:
+            output_dir: Directory to write HDL files
+            module_name: Name of the top-level module
+            format: HDL format - "verilog" or "vhdl" (only verilog supported currently)
+            pipeline_stages: Number of pipeline stages (0 = combinational, see get_verilog_code)
+        """
+        import os
+
+        if format.lower() not in ["verilog", "v"]:
+            raise ValueError(f"Only 'verilog' format is currently supported, got '{format}'")
+
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Generate Verilog code
+        verilog_code = self.get_verilog_code(module_name=module_name,
+                                             pipeline_stages=pipeline_stages)
+
+        # Write to file
+        output_path = os.path.join(output_dir, f"{module_name}.v")
+        with open(output_path, 'w') as f:
+            f.write(verilog_code)
+
+        print(f"Verilog module written to: {output_path}")
+        if pipeline_stages > 0:
+            print(f"  Pipeline stages: {pipeline_stages}")
+            print(f"  Latency: {pipeline_stages} clock cycles")
 
     def compile(self, opt_level: int = 1, save_lib_path: str = None, verbose: bool = False):
         """Compile the network to a shared library."""

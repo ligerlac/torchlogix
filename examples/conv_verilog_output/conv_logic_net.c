@@ -1,0 +1,147 @@
+#include <stddef.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+
+void logic_net(long long const *inp, long long *out);
+
+void logic_net(long long const *inp, long long *out) {
+	long long layer_conv_0_out[18];
+	long long linear_input[18];
+
+	// Convolutional layer conv_0
+	const long long conv_conv_0_k0_p0_l0_g0 = inp[0 * 8 * 8 + 2 * 8 + 0];
+	const long long conv_conv_0_k0_p0_l0_g1 = inp[0 * 8 * 8 + 0 * 8 + 0];
+	const long long conv_conv_0_k0_p0_l0_g2 = inp[0 * 8 * 8 + 2 * 8 + 0];
+	const long long conv_conv_0_k0_p0_l0_g3 = inp[0 * 8 * 8 + 2 * 8 + 1];
+	const long long conv_conv_0_k0_p0_l1_g0 = conv_conv_0_k0_p0_l0_g0;
+	const long long conv_conv_0_k0_p0_l1_g1 = conv_conv_0_k0_p0_l0_g2;
+	layer_conv_0_out[0] = conv_conv_0_k0_p0_l1_g0;
+	const long long conv_conv_0_k0_p1_l0_g0 = inp[0 * 8 * 8 + 2 * 8 + 2];
+	const long long conv_conv_0_k0_p1_l0_g1 = inp[0 * 8 * 8 + 0 * 8 + 2];
+	const long long conv_conv_0_k0_p1_l0_g2 = inp[0 * 8 * 8 + 2 * 8 + 2];
+	const long long conv_conv_0_k0_p1_l0_g3 = inp[0 * 8 * 8 + 2 * 8 + 3];
+	const long long conv_conv_0_k0_p1_l1_g0 = conv_conv_0_k0_p1_l0_g0;
+	const long long conv_conv_0_k0_p1_l1_g1 = conv_conv_0_k0_p1_l0_g2;
+	layer_conv_0_out[1] = conv_conv_0_k0_p1_l1_g0;
+	const long long conv_conv_0_k0_p2_l0_g0 = inp[0 * 8 * 8 + 2 * 8 + 4];
+	const long long conv_conv_0_k0_p2_l0_g1 = inp[0 * 8 * 8 + 0 * 8 + 4];
+	const long long conv_conv_0_k0_p2_l0_g2 = inp[0 * 8 * 8 + 2 * 8 + 4];
+	const long long conv_conv_0_k0_p2_l0_g3 = inp[0 * 8 * 8 + 2 * 8 + 5];
+	const long long conv_conv_0_k0_p2_l1_g0 = conv_conv_0_k0_p2_l0_g0;
+	const long long conv_conv_0_k0_p2_l1_g1 = conv_conv_0_k0_p2_l0_g2;
+	layer_conv_0_out[2] = conv_conv_0_k0_p2_l1_g0;
+	const long long conv_conv_0_k0_p3_l0_g0 = inp[0 * 8 * 8 + 4 * 8 + 0];
+	const long long conv_conv_0_k0_p3_l0_g1 = inp[0 * 8 * 8 + 2 * 8 + 0];
+	const long long conv_conv_0_k0_p3_l0_g2 = inp[0 * 8 * 8 + 4 * 8 + 0];
+	const long long conv_conv_0_k0_p3_l0_g3 = inp[0 * 8 * 8 + 4 * 8 + 1];
+	const long long conv_conv_0_k0_p3_l1_g0 = conv_conv_0_k0_p3_l0_g0;
+	const long long conv_conv_0_k0_p3_l1_g1 = conv_conv_0_k0_p3_l0_g2;
+	layer_conv_0_out[3] = conv_conv_0_k0_p3_l1_g0;
+	const long long conv_conv_0_k0_p4_l0_g0 = inp[0 * 8 * 8 + 4 * 8 + 2];
+	const long long conv_conv_0_k0_p4_l0_g1 = inp[0 * 8 * 8 + 2 * 8 + 2];
+	const long long conv_conv_0_k0_p4_l0_g2 = inp[0 * 8 * 8 + 4 * 8 + 2];
+	const long long conv_conv_0_k0_p4_l0_g3 = inp[0 * 8 * 8 + 4 * 8 + 3];
+	const long long conv_conv_0_k0_p4_l1_g0 = conv_conv_0_k0_p4_l0_g0;
+	const long long conv_conv_0_k0_p4_l1_g1 = conv_conv_0_k0_p4_l0_g2;
+	layer_conv_0_out[4] = conv_conv_0_k0_p4_l1_g0;
+	const long long conv_conv_0_k0_p5_l0_g0 = inp[0 * 8 * 8 + 4 * 8 + 4];
+	const long long conv_conv_0_k0_p5_l0_g1 = inp[0 * 8 * 8 + 2 * 8 + 4];
+	const long long conv_conv_0_k0_p5_l0_g2 = inp[0 * 8 * 8 + 4 * 8 + 4];
+	const long long conv_conv_0_k0_p5_l0_g3 = inp[0 * 8 * 8 + 4 * 8 + 5];
+	const long long conv_conv_0_k0_p5_l1_g0 = conv_conv_0_k0_p5_l0_g0;
+	const long long conv_conv_0_k0_p5_l1_g1 = conv_conv_0_k0_p5_l0_g2;
+	layer_conv_0_out[5] = conv_conv_0_k0_p5_l1_g0;
+	const long long conv_conv_0_k0_p6_l0_g0 = inp[0 * 8 * 8 + 6 * 8 + 0];
+	const long long conv_conv_0_k0_p6_l0_g1 = inp[0 * 8 * 8 + 4 * 8 + 0];
+	const long long conv_conv_0_k0_p6_l0_g2 = inp[0 * 8 * 8 + 6 * 8 + 0];
+	const long long conv_conv_0_k0_p6_l0_g3 = inp[0 * 8 * 8 + 6 * 8 + 1];
+	const long long conv_conv_0_k0_p6_l1_g0 = conv_conv_0_k0_p6_l0_g0;
+	const long long conv_conv_0_k0_p6_l1_g1 = conv_conv_0_k0_p6_l0_g2;
+	layer_conv_0_out[6] = conv_conv_0_k0_p6_l1_g0;
+	const long long conv_conv_0_k0_p7_l0_g0 = inp[0 * 8 * 8 + 6 * 8 + 2];
+	const long long conv_conv_0_k0_p7_l0_g1 = inp[0 * 8 * 8 + 4 * 8 + 2];
+	const long long conv_conv_0_k0_p7_l0_g2 = inp[0 * 8 * 8 + 6 * 8 + 2];
+	const long long conv_conv_0_k0_p7_l0_g3 = inp[0 * 8 * 8 + 6 * 8 + 3];
+	const long long conv_conv_0_k0_p7_l1_g0 = conv_conv_0_k0_p7_l0_g0;
+	const long long conv_conv_0_k0_p7_l1_g1 = conv_conv_0_k0_p7_l0_g2;
+	layer_conv_0_out[7] = conv_conv_0_k0_p7_l1_g0;
+	const long long conv_conv_0_k0_p8_l0_g0 = inp[0 * 8 * 8 + 6 * 8 + 4];
+	const long long conv_conv_0_k0_p8_l0_g1 = inp[0 * 8 * 8 + 4 * 8 + 4];
+	const long long conv_conv_0_k0_p8_l0_g2 = inp[0 * 8 * 8 + 6 * 8 + 4];
+	const long long conv_conv_0_k0_p8_l0_g3 = inp[0 * 8 * 8 + 6 * 8 + 5];
+	const long long conv_conv_0_k0_p8_l1_g0 = conv_conv_0_k0_p8_l0_g0;
+	const long long conv_conv_0_k0_p8_l1_g1 = conv_conv_0_k0_p8_l0_g2;
+	layer_conv_0_out[8] = conv_conv_0_k0_p8_l1_g0;
+	const long long conv_conv_0_k1_p0_l0_g0 = inp[0 * 8 * 8 + 0 * 8 + 0];
+	const long long conv_conv_0_k1_p0_l0_g1 = inp[0 * 8 * 8 + 1 * 8 + 1];
+	const long long conv_conv_0_k1_p0_l0_g2 = inp[0 * 8 * 8 + 0 * 8 + 0];
+	const long long conv_conv_0_k1_p0_l0_g3 = inp[0 * 8 * 8 + 2 * 8 + 2];
+	const long long conv_conv_0_k1_p0_l1_g0 = conv_conv_0_k1_p0_l0_g0;
+	const long long conv_conv_0_k1_p0_l1_g1 = conv_conv_0_k1_p0_l0_g2;
+	layer_conv_0_out[9] = conv_conv_0_k1_p0_l1_g0;
+	const long long conv_conv_0_k1_p1_l0_g0 = inp[0 * 8 * 8 + 0 * 8 + 2];
+	const long long conv_conv_0_k1_p1_l0_g1 = inp[0 * 8 * 8 + 1 * 8 + 3];
+	const long long conv_conv_0_k1_p1_l0_g2 = inp[0 * 8 * 8 + 0 * 8 + 2];
+	const long long conv_conv_0_k1_p1_l0_g3 = inp[0 * 8 * 8 + 2 * 8 + 4];
+	const long long conv_conv_0_k1_p1_l1_g0 = conv_conv_0_k1_p1_l0_g0;
+	const long long conv_conv_0_k1_p1_l1_g1 = conv_conv_0_k1_p1_l0_g2;
+	layer_conv_0_out[10] = conv_conv_0_k1_p1_l1_g0;
+	const long long conv_conv_0_k1_p2_l0_g0 = inp[0 * 8 * 8 + 0 * 8 + 4];
+	const long long conv_conv_0_k1_p2_l0_g1 = inp[0 * 8 * 8 + 1 * 8 + 5];
+	const long long conv_conv_0_k1_p2_l0_g2 = inp[0 * 8 * 8 + 0 * 8 + 4];
+	const long long conv_conv_0_k1_p2_l0_g3 = inp[0 * 8 * 8 + 2 * 8 + 6];
+	const long long conv_conv_0_k1_p2_l1_g0 = conv_conv_0_k1_p2_l0_g0;
+	const long long conv_conv_0_k1_p2_l1_g1 = conv_conv_0_k1_p2_l0_g2;
+	layer_conv_0_out[11] = conv_conv_0_k1_p2_l1_g0;
+	const long long conv_conv_0_k1_p3_l0_g0 = inp[0 * 8 * 8 + 2 * 8 + 0];
+	const long long conv_conv_0_k1_p3_l0_g1 = inp[0 * 8 * 8 + 3 * 8 + 1];
+	const long long conv_conv_0_k1_p3_l0_g2 = inp[0 * 8 * 8 + 2 * 8 + 0];
+	const long long conv_conv_0_k1_p3_l0_g3 = inp[0 * 8 * 8 + 4 * 8 + 2];
+	const long long conv_conv_0_k1_p3_l1_g0 = conv_conv_0_k1_p3_l0_g0;
+	const long long conv_conv_0_k1_p3_l1_g1 = conv_conv_0_k1_p3_l0_g2;
+	layer_conv_0_out[12] = conv_conv_0_k1_p3_l1_g0;
+	const long long conv_conv_0_k1_p4_l0_g0 = inp[0 * 8 * 8 + 2 * 8 + 2];
+	const long long conv_conv_0_k1_p4_l0_g1 = inp[0 * 8 * 8 + 3 * 8 + 3];
+	const long long conv_conv_0_k1_p4_l0_g2 = inp[0 * 8 * 8 + 2 * 8 + 2];
+	const long long conv_conv_0_k1_p4_l0_g3 = inp[0 * 8 * 8 + 4 * 8 + 4];
+	const long long conv_conv_0_k1_p4_l1_g0 = conv_conv_0_k1_p4_l0_g0;
+	const long long conv_conv_0_k1_p4_l1_g1 = conv_conv_0_k1_p4_l0_g2;
+	layer_conv_0_out[13] = conv_conv_0_k1_p4_l1_g0;
+	const long long conv_conv_0_k1_p5_l0_g0 = inp[0 * 8 * 8 + 2 * 8 + 4];
+	const long long conv_conv_0_k1_p5_l0_g1 = inp[0 * 8 * 8 + 3 * 8 + 5];
+	const long long conv_conv_0_k1_p5_l0_g2 = inp[0 * 8 * 8 + 2 * 8 + 4];
+	const long long conv_conv_0_k1_p5_l0_g3 = inp[0 * 8 * 8 + 4 * 8 + 6];
+	const long long conv_conv_0_k1_p5_l1_g0 = conv_conv_0_k1_p5_l0_g0;
+	const long long conv_conv_0_k1_p5_l1_g1 = conv_conv_0_k1_p5_l0_g2;
+	layer_conv_0_out[14] = conv_conv_0_k1_p5_l1_g0;
+	const long long conv_conv_0_k1_p6_l0_g0 = inp[0 * 8 * 8 + 4 * 8 + 0];
+	const long long conv_conv_0_k1_p6_l0_g1 = inp[0 * 8 * 8 + 5 * 8 + 1];
+	const long long conv_conv_0_k1_p6_l0_g2 = inp[0 * 8 * 8 + 4 * 8 + 0];
+	const long long conv_conv_0_k1_p6_l0_g3 = inp[0 * 8 * 8 + 6 * 8 + 2];
+	const long long conv_conv_0_k1_p6_l1_g0 = conv_conv_0_k1_p6_l0_g0;
+	const long long conv_conv_0_k1_p6_l1_g1 = conv_conv_0_k1_p6_l0_g2;
+	layer_conv_0_out[15] = conv_conv_0_k1_p6_l1_g0;
+	const long long conv_conv_0_k1_p7_l0_g0 = inp[0 * 8 * 8 + 4 * 8 + 2];
+	const long long conv_conv_0_k1_p7_l0_g1 = inp[0 * 8 * 8 + 5 * 8 + 3];
+	const long long conv_conv_0_k1_p7_l0_g2 = inp[0 * 8 * 8 + 4 * 8 + 2];
+	const long long conv_conv_0_k1_p7_l0_g3 = inp[0 * 8 * 8 + 6 * 8 + 4];
+	const long long conv_conv_0_k1_p7_l1_g0 = conv_conv_0_k1_p7_l0_g0;
+	const long long conv_conv_0_k1_p7_l1_g1 = conv_conv_0_k1_p7_l0_g2;
+	layer_conv_0_out[16] = conv_conv_0_k1_p7_l1_g0;
+	const long long conv_conv_0_k1_p8_l0_g0 = inp[0 * 8 * 8 + 4 * 8 + 4];
+	const long long conv_conv_0_k1_p8_l0_g1 = inp[0 * 8 * 8 + 5 * 8 + 5];
+	const long long conv_conv_0_k1_p8_l0_g2 = inp[0 * 8 * 8 + 4 * 8 + 4];
+	const long long conv_conv_0_k1_p8_l0_g3 = inp[0 * 8 * 8 + 6 * 8 + 6];
+	const long long conv_conv_0_k1_p8_l1_g0 = conv_conv_0_k1_p8_l0_g0;
+	const long long conv_conv_0_k1_p8_l1_g1 = conv_conv_0_k1_p8_l0_g2;
+	layer_conv_0_out[17] = conv_conv_0_k1_p8_l1_g0;
+
+	// Flatten layer: copy from layer_conv_0_out to linear_input
+	memcpy(linear_input, layer_conv_0_out, 18 * sizeof(long long));
+
+	out[0] = linear_input[13];
+	out[1] = linear_input[12];
+	out[2] = linear_input[11];
+	out[3] = linear_input[10];
+}
