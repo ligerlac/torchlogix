@@ -65,12 +65,14 @@ class LogicDense(LogicBase):
     def forward(self, x):
         """Applies the LogicDense transformation to the input.
 
+        Works with torch.Tensor (train/eval) and numpy (eval only).
+
         For each neuron, the layer:
         1. Selects ``lut_rank`` input features according to the connection
            pattern in ``self.indices``.
-        2. Samples (or selects) LUT weights based on ``self.weight`` and
+        2. In training: Samples LUT weights based on ``self.weight`` and
            the sampler strategy.
-        3. Evaluates the resulting binary operation.
+        3. In eval: Applies discrete LUTs using boolean operations.
 
         Args:
             x: Input tensor of shape ``(..., in_dim)``. The last dimension must
@@ -79,21 +81,34 @@ class LogicDense(LogicBase):
         Returns:
             A tensor of shape ``(..., out_dim)`` containing the neuron outputs.
         """
-        assert x.ndim >= 2, x.ndim
+        assert x.ndim >= 1, x.ndim
         assert x.shape[-1] == self.in_dim, (x.shape[-1], self.in_dim)
 
         if self.grad_factor != 1.0:
             x = GradFactor.apply(x, self.grad_factor)
 
-        # Extract inputs according to connection pattern
-        x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
+        # Extract inputs according to connection pattern (type-agnostic!)
+        selected = self.connections(x)  # Shape: (..., lut_rank, out_dim)
 
-        # Delegate to parametrization with einsum contraction
-        # b=batch, n=neurons, k=num_basis
-        return self.parametrization.forward(
-            x, self.weight, self.training,
-            contraction='n,bn->bn'
-        )
+        if self.training:
+            # Training path - uses torch-specific parametrization
+            return self.parametrization.forward(
+                selected, self.weight, True,
+                contraction='n,bn->bn'
+            )
+        else:
+            # Eval path - uses array-generic operations
+            a = selected[..., 0, :]  # (..., out_dim)
+            b = selected[..., 1, :]  # (..., out_dim)
+
+            # Get discrete LUT IDs (configuration data, not traced)
+            _, lut_ids = self.get_luts_and_ids()
+            if hasattr(lut_ids, 'cpu'):
+                lut_ids = lut_ids.cpu().detach().numpy()
+
+            # Apply LUTs using type-generic boolean operations
+            from torchlogix.utils import apply_luts_vectorized
+            return apply_luts_vectorized(a, b, lut_ids)
 
     def extra_repr(self):
         weight_repr = f"Parameter containing: [{self.weight.dtype} of size {tuple(self.weight.shape)}"

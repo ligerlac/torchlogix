@@ -141,7 +141,8 @@ class FixedDenseConnections(Connections):
         return c
     
     def forward(self, x):
-        return x[:, self.indices]
+        # Type-agnostic indexing (...): works for torch & numpy
+        return x[..., self.indices]
     
 
 class LearnableConnectionFunction(torch.autograd.Function):
