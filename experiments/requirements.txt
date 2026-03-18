@@ -1,5 +1,4 @@
-torch>=1.6
-numpy>=1.26
+-e ..
 torchvision
 tqdm>=4.0
 pandas>=2.0
