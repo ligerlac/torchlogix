@@ -80,7 +80,7 @@ def test_learnable_gradients(lut_rank):
 def test_fixed_conv_connections(channel_group_size):
     """
     indices: (lut_rank, num_kernels, kernel_position, sample_size, 3)
-        where the last dim is (h, w, c)
+        where the last dim is (c, h, w)
         for each tree level
     """
     num_kernels = 3
@@ -93,7 +93,7 @@ def test_fixed_conv_connections(channel_group_size):
     fow_indices = conn.indices[0]
 
     for kernel_idx in range(num_kernels):
-        considered_channels = fow_indices[:, kernel_idx, :, :, 2].unique()
+        considered_channels = fow_indices[:, kernel_idx, :, :, 0].unique()
         if channel_group_size is not None:
             assert len(considered_channels) <= channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"

@@ -409,8 +409,8 @@ class FixedConvConnections(Connections):
             if g is None:
                 c_rf = torch.arange(0, c, device=device)
 
-                # full 3D position space
-                grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
+                # full 3D position space - channel first, then spatial (c, h, w)
+                grid = torch.meshgrid(c_rf, *rf_axes, indexing="ij")
                 all_positions = torch.stack(
                     [grid_i.flatten() for grid_i in grid], dim=1
                 )
@@ -452,7 +452,7 @@ class FixedConvConnections(Connections):
                     )
 
                     channel_chunks.append(
-                        torch.cat([chosen, ch_col], dim=1)
+                        torch.cat([ch_col, chosen], dim=1)
                     )
 
                 coords_k = torch.cat(channel_chunks, dim=0)
@@ -515,7 +515,8 @@ class FixedConvConnections(Connections):
             if g is None:
                 c_rf = torch.arange(0, c, device=device)
 
-                grid = torch.meshgrid(*rf_axes, c_rf, indexing="ij")
+                # Channel first, then spatial (c, h, w)
+                grid = torch.meshgrid(c_rf, *rf_axes, indexing="ij")
                 all_positions = torch.stack(
                     [grid_i.flatten() for grid_i in grid], dim=1
                 )
@@ -577,7 +578,7 @@ class FixedConvConnections(Connections):
                     )
 
                     channel_chunks.append(
-                        torch.cat([chosen, ch_col], dim=1)
+                        torch.cat([ch_col, chosen], dim=1)
                     )
 
                 coords_k = torch.cat(channel_chunks, dim=0)
@@ -600,7 +601,7 @@ class FixedConvConnections(Connections):
 
         Args:
             tensor: torch.Tensor of shape (lut_rank, num_kernels, sample_size, 3)
-                where last dim is (h, w, c).
+                where last dim is (c, h, w).
 
         Returns:
             out: torch.Tensor of shape (lut_rank, num_kernels, num_positions, sample_size, 3),
@@ -634,19 +635,19 @@ class FixedConvConnections(Connections):
         pairs_all = tensor.permute(1, 0, 2, 3)
         # K, L, S, _ = pairs_all.shape
 
-        # Split h, w, c coordinates: (K, L, S)
-        base = [pairs_all[..., i] for i in range(len(offsets))]
-        #h_base = pairs_all[..., 0]
-        #w_base = pairs_all[..., 1]
-        c_base = pairs_all[..., -1]
+        # Split c, h, w coordinates: (K, L, S)
+        c_base = pairs_all[..., 0]
+        base = [pairs_all[..., i] for i in range(1, len(offsets) + 1)]
+        #h_base = pairs_all[..., 1]
+        #w_base = pairs_all[..., 2]
 
         # Add sliding-window offsets (broadcasted) → (K, P, L, S)
-        idx = [b.unsqueeze(1) + o.view(1, num_positions[0], 1, 1) 
+        idx = [b.unsqueeze(1) + o.view(1, num_positions[0], 1, 1)
                for b, o in zip(base, offsets)]
         c_idx = c_base.unsqueeze(1).expand(-1, num_positions[0], -1, -1)
 
-        # Combine back into indices: (K, P, L, S, 3)
-        all_indices = torch.stack([*idx, c_idx], dim=-1)
+        # Combine back into indices: (K, P, L, S, 3) - channel first
+        all_indices = torch.stack([c_idx, *idx], dim=-1)
 
         # Reorder so first axis is L: (L, K, P, S, 3)
         out = all_indices.permute(2, 0, 1, 3, 4)
@@ -666,7 +667,7 @@ class FixedConvConnections(Connections):
     
     def forward(self, x, tree_level):
         if tree_level == 0:
-            return x[(slice(None), self.indices[0][..., -1], 
-              *self.indices[0][..., :-1].moveaxis(-1, 0))]
+            return x[(slice(None), self.indices[0][..., 0],
+              *self.indices[0][..., 1:].moveaxis(-1, 0))]
         else:
             return x[..., self.indices[tree_level]]

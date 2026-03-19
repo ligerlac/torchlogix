@@ -114,9 +114,9 @@ class TestIndeces:
         Width, height and channel indices should be within specified input dimensions.
         """
         indices = layer.connections.indices[0][side]
-        assert torch.all(indices[..., 0] < layer.in_dim[0])
-        assert torch.all(indices[..., 1] < layer.in_dim[1])
-        assert torch.all(indices[..., 2] < layer.channels)
+        assert torch.all(indices[..., 0] < layer.channels)  # channel
+        assert torch.all(indices[..., 1] < layer.in_dim[0])  # height
+        assert torch.all(indices[..., 2] < layer.in_dim[1])  # width
 
     
     @pytest.mark.parametrize("side", [0, 1], ids=["left", "right"])
@@ -298,8 +298,8 @@ def test_and_model():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0], [1, 0, 0]]],
-        [[[0, 1, 0], [1, 1, 0]]]
+        [[[0, 0, 0], [0, 1, 0]]],  # (c, h, w)
+        [[[0, 0, 1], [0, 1, 1]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
@@ -361,8 +361,8 @@ def test_get_luts_and_ids():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0], [1, 0, 0]]],
-        [[[0, 1, 0], [1, 1, 0]]]
+        [[[0, 0, 0], [0, 1, 0]]],  # (c, h, w)
+        [[[0, 0, 1], [0, 1, 1]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
@@ -406,8 +406,8 @@ def test_get_luts_and_ids_and_warp():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0], [1, 0, 0]]],
-        [[[0, 1, 0], [1, 1, 0]]]
+        [[[0, 0, 0], [0, 1, 0]]],  # (c, h, w)
+        [[[0, 0, 1], [0, 1, 1]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
@@ -450,8 +450,8 @@ def test_and_model_warp():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0], [1, 0, 0]]],
-        [[[0, 1, 0], [1, 1, 0]]]
+        [[[0, 0, 0], [0, 1, 0]]],  # (c, h, w)
+        [[[0, 0, 1], [0, 1, 1]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
@@ -512,8 +512,8 @@ def test_binary_model():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0], [1, 0, 0]]],
-        [[[0, 1, 0], [1, 1, 0]]]
+        [[[0, 0, 0], [0, 1, 0]]],  # (c, h, w)
+        [[[0, 0, 1], [0, 1, 1]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
@@ -563,8 +563,8 @@ def test_conv_model():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0], [1, 0, 0]]],
-        [[[0, 1, 0], [1, 1, 0]]]
+        [[[0, 0, 0], [0, 1, 0]]],  # (c, h, w)
+        [[[0, 0, 1], [0, 1, 1]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 
@@ -623,8 +623,8 @@ def test_conv_model_rect():
     )
 
     kernels = torch.tensor([
-        [[[0, 0, 0, 0], [1, 0, 0, 0]]],
-        [[[0, 1, 0, 0], [1, 1, 0, 0]]]
+        [[[0, 0, 0, 0], [0, 1, 0, 0]]],  # (c, d, h, w)
+        [[[0, 0, 1, 0], [0, 1, 1, 0]]]
     ])
     layer.connections.indices = layer.connections._get_indices_from_kernel_tensor(kernels)
 

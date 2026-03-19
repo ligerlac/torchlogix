@@ -384,11 +384,11 @@ class CompiledLogicNet(torch.nn.Module):
                 # Generate variables for the first level
                 for gate_idx in range(2**(conv_info['tree_depth']-1)):
                     if conv_dim == 2:
-                        left_h, left_w, left_c = left_indices[gate_idx]
-                        right_h, right_w, right_c = right_indices[gate_idx]
+                        left_c, left_h, left_w = left_indices[gate_idx]
+                        right_c, right_h, right_w = right_indices[gate_idx]
                     else:
-                        left_h, left_w, left_d, left_c = left_indices[gate_idx]
-                        right_h, right_w, right_d, right_c = right_indices[gate_idx]
+                        left_c, left_d, left_h, left_w = left_indices[gate_idx]
+                        right_c, right_d, right_h, right_w = right_indices[gate_idx]
 
                     gate_op = tree_ops[0][gate_idx][kernel_idx]
 
@@ -407,13 +407,13 @@ class CompiledLogicNet(torch.nn.Module):
                         else:
                             left_var = (
                                 f"inp[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
+                                f"{left_d} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{left_h} * {conv_info['in_dim'][2]} + {left_w}]"
                             )
                             right_var = (
                                 f"inp[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
+                                f"{right_d} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{right_h} * {conv_info['in_dim'][2]} + {right_w}]"
                             )
                     else:
                         if conv_dim == 2:
@@ -428,13 +428,13 @@ class CompiledLogicNet(torch.nn.Module):
                         else:
                             left_var = (
                                 f"layer_{prev_layer_name}_out[{left_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{left_w} * {conv_info['in_dim'][2]} + {left_d}]"
+                                f"{left_d} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{left_h} * {conv_info['in_dim'][2]} + {left_w}]"
                             )
                             right_var = (
                                 f"layer_{prev_layer_name}_out[{right_c} * {conv_info['in_dim'][0]} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_h} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
-                                f"{right_w} * {conv_info['in_dim'][2]} + {right_d}]"
+                                f"{right_d} * {conv_info['in_dim'][1]} * {conv_info['in_dim'][2]} + "
+                                f"{right_h} * {conv_info['in_dim'][2]} + {right_w}]"
                             )
 
 
