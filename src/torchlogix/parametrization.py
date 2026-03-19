@@ -19,7 +19,8 @@ from .functional import (
     weighted_light_basis_sum,
     softmax,
     sigmoid,
-    gumbel_sigmoid
+    gumbel_sigmoid,
+    apply_luts_vectorized
 )
 
 
@@ -225,7 +226,7 @@ class RawLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-        if x.dtype != weight.dtype:
+        if training and x.dtype != weight.dtype:
             x = x.to(weight.dtype)
 
         # Extract inputs
@@ -234,20 +235,22 @@ class RawLUTParametrization(LUTParametrization):
         # Sample weights (merged from SoftmaxSampler)
         if training:
             w = self._sample_train(weight)
+            return weighted_raw_basis_sum(a, b, w, contraction)
         else:
-            w = self._sample_eval(weight)
+            ids = weight.argmax(axis=-1)
+            return apply_luts_vectorized(a, b, ids, contraction)
 
-        # Handle 1D weight case (single neuron) for backward compatibility
-        if w.ndim == 1:
-            w = w.unsqueeze(0)
+        # # Handle 1D weight case (single neuron) for backward compatibility
+        # if w.ndim == 1:
+        #     w = w.unsqueeze(0)
 
-        if self.materialize_basis:
-            # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
-            ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
-            return torch.einsum(contraction_with_basis_dim, w, ops)
+        # if self.materialize_basis:
+        #     # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
+        #     contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
+        #     ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
+        #     return torch.einsum(contraction_with_basis_dim, w, ops)
 
-        return weighted_raw_basis_sum(a, b, w, contraction)
+        # return weighted_raw_basis_sum(a, b, w, contraction)
     
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
@@ -273,8 +276,8 @@ class RawLUTParametrization(LUTParametrization):
         return luts
 
     def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        ids = weight.argmax(axis=1)
-        luts = ((ids.unsqueeze(-1) >> torch.arange(self.lut_entries, device=ids.device)) & 1).flip(1)
+        ids = weight.argmax(axis=-1)  # argmax over LUT dimension (last axis)
+        luts = ((ids.unsqueeze(-1) >> torch.arange(self.lut_entries, device=ids.device)) & 1).flip(-1)
         return luts, ids
 
 

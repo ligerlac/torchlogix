@@ -73,6 +73,25 @@ ID_TO_WALSH_COEFFICIENTS = {
     15: (-1, 0, 0, 0),
 }
 
+_map = [
+    lambda a, b: a & False,      # FALSE
+    lambda a, b: a & b,          # AND
+    lambda a, b: a & ~b,         # A AND NOT B
+    lambda a, b: a,              # A
+    lambda a, b: b & ~a,         # B AND NOT A
+    lambda a, b: b,              # B
+    lambda a, b: a ^ b,          # XOR
+    lambda a, b: a | b,          # OR
+    lambda a, b: ~(a | b),       # NOR
+    lambda a, b: ~(a ^ b),       # XNOR
+    lambda a, b: ~b,             # NOT B
+    lambda a, b: ~(b & ~a),      # A OR NOT B
+    lambda a, b: ~a,             # NOT A
+    lambda a, b: ~(a & ~b),      # B OR NOT A
+    lambda a, b: ~(a & b),       # NAND
+    lambda a, b: a | ~a,         # TRUE
+]
+
 
 def bin_op(a, b, i):
     assert a[0].shape == b[0].shape, (a[0].shape, b[0].shape)
@@ -113,6 +132,44 @@ def compute_all_logic_ops_vectorized(a, b):
     ], dim=-1)
     
     return ops
+
+
+def apply_luts_vectorized(a, b, lut_ids, contraction):
+    # indexing happens along feature dimension
+    # for dense layers, this is the last dimension
+    # for conv layers, these are actually the 2nd and 4th dimension
+    # because we use b,c,s,f notation, where f already combines height and width
+    # maybe we can also flatten the channel dimension into the feature dimension for conv layers, to make this more uniform?
+    # that would be closer to how torch's unfold works, and would allow us to use the same code for both dense and conv layers without special handling for the conv case
+    print(f"a.shape={a.shape}, b.shape={b.shape}, lut_ids.shape={lut_ids.shape}, contraction={contraction}")
+    if isinstance(a, torch.Tensor):
+        a = a.bool()
+        b = b.bool()
+        result = torch.empty_like(a)
+        print(f"a.dtype={a.dtype}, b.dtype={b.dtype}, result.dtype={result.dtype}")
+        for lut_id in range(16):
+            mask = lut_ids == lut_id
+            print(f"mask.shape={mask.shape}, mask.dtype={mask.dtype}")
+            result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+        print(f"result.shape={result.shape}, result.dtype={result.dtype}")
+        return torch.einsum(contraction, torch.ones(lut_ids.shape), result)
+    else:
+        a = a.astype(bool)
+        b = b.astype(bool)
+        result = np.empty_like(a)
+        for lut_id in range(16):
+            mask = lut_ids == lut_id
+            result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+        return np.einsum(contraction, np.ones(lut_ids.shape), result)
+
+# def apply_luts_vectorized(a, b, lut_ids, contraction):
+#     a = a.astype(bool)
+#     b = b.astype(bool)
+#     result = np.empty_like(a)
+#     for lut_id in range(16):
+#         mask = lut_ids == lut_id
+#         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+#     return np.einsum(contraction, result, np.ones_like(result))
 
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:

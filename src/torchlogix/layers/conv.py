@@ -149,12 +149,19 @@ class _LogicConvNd(LogicBase):
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
         if self.padding > 0:
-            x = torch.nn.functional.pad(
-                x,
-                (self.padding, self.padding, self.padding, self.padding, 0, 0),
-                mode="constant",
-                value=0
-            )
+            if isinstance(x, torch.Tensor):
+                x = torch.nn.functional.pad(
+                    x,
+                    (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                    mode="constant",
+                    value=0
+                )
+            else:
+                # NumPy padding
+                import numpy as np
+                pad_width = [(0, 0), (0, 0)]  # No padding for batch and channel dims
+                pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
+                x = np.pad(x, pad_width, mode='constant', constant_values=0)
         # First level tree indices
         x = self.connections(x, 0)
         # Process first level with einsum contraction
@@ -166,15 +173,25 @@ class _LogicConvNd(LogicBase):
         # Process remaining levels
         for level in range(1, self.tree_depth):
             x = self.connections(x, level)
-            x = x.movedim(-2, 1)
+            # Move dimension -2 to position 1 (type-agnostic)
+            if isinstance(x, torch.Tensor):
+                x = x.movedim(-2, 1)
+            else:
+                import numpy as np
+                x = np.moveaxis(x, -2, 1)
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
                 contraction='fc,bcsf->bcsf'
             )
         # Reshape flattened output
-        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
+        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
-        x = x.view(x.shape[0], x.shape[1], *reshape)
+        new_shape = (x.shape[0], x.shape[1], *reshape)
+        if isinstance(x, torch.Tensor):
+            x = x.view(*new_shape)
+        else:
+            import numpy as np
+            x = x.reshape(new_shape)
 
         return x
 
