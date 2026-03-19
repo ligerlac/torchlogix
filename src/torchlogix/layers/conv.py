@@ -122,6 +122,7 @@ class _LogicConvNd(LogicBase):
         )
         return self.connections
 
+
     def forward(self, x):
         """Applies the logic convolution to the input.
 
@@ -173,6 +174,106 @@ class _LogicConvNd(LogicBase):
             )
         # Reshape flattened output
         reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
+                   for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
+        x = x.view(x.shape[0], x.shape[1], *reshape)
+
+        return x
+    
+
+    def forward2(self, x):
+        """Applies the logic convolution to the input.
+
+        The forward pass proceeds as follows:
+
+        1. Optionally pad the input spatially.
+        2. Select all receptive-field positions for the first tree level using
+           precomputed index tensors.
+        3. For each tree level:
+            a. Sample or select LUT weights for all nodes at that level.
+            b. Apply binary logic operations to the child activations,
+               reducing them up the tree.
+        4. Reshape the final per-kernel outputs into a 4D tensor of shape
+           ``(batch_size, num_kernels, out_height, out_width)``.
+
+        Args:
+            x: Input tensor of shape ``(batch_size, channels, height, width)``.
+
+        Returns:
+            Tensor of shape ``(batch_size, num_kernels, out_height, out_width)``,
+            where ``out_height`` and ``out_width`` are determined by the
+            convolution parameters:
+
+            * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
+            * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
+        """
+        if self.padding > 0:
+            x = torch.nn.functional.pad(
+                x,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
+            )
+        # First level tree indices
+        x = self.connections(x, 0)
+        # x is of shape (batch_size, lut_rank, num_kernels, spatial_positions, features (kernel inputs / lut_rank))
+
+        # Merge kernel and feature dimensions: (B, L, K, S, F) -> (B, L, S, K*F)
+        x = x.permute(0, 1, 3, 2, 4)
+        x = x.reshape(x.shape[0], x.shape[1], x.shape[2], -1)
+
+        # Reshape weights to match K*F ordering of merged features
+        w = self.tree_weights[0].permute(1, 0, 2).reshape(-1, self.tree_weights[0].shape[-1])
+
+        # first level tree processing (from receptive field)
+        x = self.parametrization.forward(
+            x, w, self.training,
+            contraction='f,bsf->bsf'
+        )
+        # x is now (B, S, F) where F = merged features
+
+        # Process remaining levels
+        for level in range(1, self.tree_depth):
+            # Unmerge kernel dimension for connections: (B, S, F) -> (B, S, K, features_per_kernel)
+            B, S, F = x.shape
+            K = self.num_kernels
+            features_per_kernel = F // K
+            x = x.view(B, S, K, features_per_kernel)
+
+            # Permute to format connections expects: (B, K, S, features)
+            x = x.permute(0, 2, 1, 3)
+
+            # Apply connections
+            x = self.connections(x, level)  # Returns (B, K, S, lut_rank, M)
+
+            # Movedim to get lut_rank at position 1
+            x = x.movedim(-2, 1)  # (B, lut_rank, K, S, M)
+
+            # Merge K, S, M for parametrization: (B, lut_rank, K*S*M)
+            B, L, K, S, M = x.shape
+            x = x.permute(0, 1, 3, 2, 4).reshape(B, L, S, K*M)
+
+            # Reshape weights to match K*M ordering
+            w = self.tree_weights[level].permute(1, 0, 2).reshape(-1, self.tree_weights[level].shape[-1])
+
+            # Apply parametrization
+            x = self.parametrization.forward(
+                x, w, self.training,
+                contraction='f,bsf->bsf'
+            )
+            # x is now (B, S, F') where F' = K*M
+
+        # Unmerge final output: (B, S, F) -> (B, S, K, features_per_kernel)
+        B, S, F = x.shape
+        K = self.num_kernels
+        features_per_kernel = F // K
+        x = x.view(B, S, K, features_per_kernel)
+
+        # Permute to (B, K, S, features) then select only the final output
+        x = x.permute(0, 2, 1, 3)  # (B, K, S, features)
+        x = x[..., 0]  # Take first feature (should be only one at final level)
+
+        # Reshape spatial dimension
+        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
         x = x.view(x.shape[0], x.shape[1], *reshape)
 
