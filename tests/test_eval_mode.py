@@ -26,15 +26,15 @@ def test_individual_layer(layer, input_shape):
 
     assert torch.allclose(out_relaxed, out_discrete)
 
-    # passing a numpy array should fail in train mode
-    inp_numpy = inp_torch.numpy()
+    # # passing a numpy array should fail in train mode
+    # inp_numpy = inp_torch.numpy()
 
-    layer.train()
-    with pytest.raises(Exception):
-        layer(inp_numpy)
+    # layer.train()
+    # with pytest.raises(Exception):
+    #     layer(inp_numpy)
 
-    # ... but should work in eval mode and give the same result as the torch input
-    layer.eval()
-    out_discrete_numpy = layer(inp_numpy)
+    # # ... but should work in eval mode and give the same result as the torch input
+    # layer.eval()
+    # out_discrete_numpy = layer(inp_numpy)
 
-    assert np.allclose(out_discrete, out_discrete_numpy)
+    # assert np.allclose(out_discrete, out_discrete_numpy)

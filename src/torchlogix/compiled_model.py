@@ -157,8 +157,11 @@ class CompiledLogicNet(torch.nn.Module):
         tree_operations = []
         for level_idx, level_weights in enumerate(layer.tree_weights):
             level_ops = []
-            for weight_param in level_weights:
-                ops = weight_param.argmax(1).cpu().numpy()
+            # level_weights is now a 2D tensor (K*lut_rank**i, weight_dim)
+            # Iterate over each neuron's weights
+            for neuron_idx in range(level_weights.shape[0]):
+                weight_param = level_weights[neuron_idx]
+                ops = weight_param.argmax(0).cpu().numpy()
                 level_ops.append(ops)
             tree_operations.append(level_ops)
 
@@ -377,12 +380,14 @@ class CompiledLogicNet(torch.nn.Module):
                 iter_range *= d_out
             for pos_idx in range(iter_range):
                 # First level: process receptive field positions
+                # indices[0] has shape (lut_rank, num_positions, num_kernels, sample_size, 3)
                 level_0_indices = indices[0]
-                left_indices = level_0_indices[0][kernel_idx, pos_idx]
-                right_indices = level_0_indices[1][kernel_idx, pos_idx]
+                left_indices = level_0_indices[0][pos_idx, kernel_idx]
+                right_indices = level_0_indices[1][pos_idx, kernel_idx]
 
                 # Generate variables for the first level
-                for gate_idx in range(2**(conv_info['tree_depth']-1)):
+                gates_per_kernel = 2**(conv_info['tree_depth']-1)
+                for gate_idx in range(gates_per_kernel):
                     if conv_dim == 2:
                         left_c, left_h, left_w = left_indices[gate_idx]
                         right_c, right_h, right_w = right_indices[gate_idx]
@@ -390,7 +395,9 @@ class CompiledLogicNet(torch.nn.Module):
                         left_c, left_d, left_h, left_w = left_indices[gate_idx]
                         right_c, right_d, right_h, right_w = right_indices[gate_idx]
 
-                    gate_op = tree_ops[0][gate_idx][kernel_idx]
+                    # With merged weights: neuron_idx = kernel_idx * gates_per_kernel + gate_idx
+                    neuron_idx = kernel_idx * gates_per_kernel + gate_idx
+                    gate_op = tree_ops[0][neuron_idx]
 
                     # Determine input source
                     prev_layer_name = self._get_previous_layer_name(layer_name)
@@ -455,7 +462,9 @@ class CompiledLogicNet(torch.nn.Module):
                         left_idx = left_gate_indices[gate_idx]
                         right_idx = right_gate_indices[gate_idx]
 
-                        gate_op = tree_ops[level][gate_idx][kernel_idx]
+                        # With merged weights: neuron_idx = kernel_idx * num_gates + gate_idx
+                        neuron_idx = kernel_idx * num_gates + gate_idx
+                        gate_op = tree_ops[level][neuron_idx]
 
                         left_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{left_idx}"
                         right_var = f"conv_{layer_name}_k{kernel_idx}_p{pos_idx}_l{level-1}_g{right_idx}"

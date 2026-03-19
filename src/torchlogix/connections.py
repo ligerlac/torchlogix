@@ -604,8 +604,8 @@ class FixedConvConnections(Connections):
                 where last dim is (c, h, w).
 
         Returns:
-            out: torch.Tensor of shape (lut_rank, num_kernels, num_positions, sample_size, 3),
-                with the sliding-window offsets applied.
+            out: torch.Tensor of shape (lut_rank, num_positions, num_kernels, sample_size, 3),
+                optimized for direct use in forward pass (eliminates runtime transpose).
         """
         #h, w = self.in_dim
         #h_k, w_k = self.receptive_field_size
@@ -649,8 +649,8 @@ class FixedConvConnections(Connections):
         # Combine back into indices: (K, P, L, S, 3) - channel first
         all_indices = torch.stack([c_idx, *idx], dim=-1)
 
-        # Reorder so first axis is L: (L, K, P, S, 3)
-        out = all_indices.permute(2, 0, 1, 3, 4)
+        # Reorder directly to what forward() needs: (L, P, K, S, 3)
+        out = all_indices.permute(2, 1, 0, 3, 4)
 
         return out
 
@@ -667,7 +667,18 @@ class FixedConvConnections(Connections):
     
     def forward(self, x, tree_level):
         if tree_level == 0:
-            return x[(slice(None), self.indices[0][..., 0],
+            # Indices are already in shape (L, P, K, S, 3)
+            # Fancy indexing gives us (B, L, S, K, F) directly
+            result = x[(slice(None), self.indices[0][..., 0],
               *self.indices[0][..., 1:].moveaxis(-1, 0))]
+            # Merge kernel and feature dimensions: (B, L, S, K, F) -> (B, L, S, K*F)
+            result = result.reshape(result.shape[0], result.shape[1], result.shape[2], -1)
+            return result
         else:
-            return x[..., self.indices[tree_level]]
+            # Input: (B, S, K, features), indices: (lut_rank, M)
+            # After indexing: (B, S, K, lut_rank, M)
+            result = x[..., self.indices[tree_level]]
+            # Merge K and M: (B, S, K, lut_rank, M) -> (B, lut_rank, S, K*M)
+            B, S, K, L, M = result.shape
+            result = result.permute(0, 3, 1, 2, 4).reshape(B, L, S, K*M)
+            return result

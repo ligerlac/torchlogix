@@ -24,11 +24,3 @@ def test_individual_layer(layer, input_shape):
     out_discrete = layer(inp_torch)
 
     assert torch.allclose(out_relaxed, out_discrete)
-
-    out_relaxed2 = layer.forward2(inp_torch)
-    out_discrete2 = layer.forward2(inp_torch)
-
-    assert torch.allclose(out_relaxed2, out_discrete2)
-
-    assert torch.allclose(out_relaxed, out_relaxed2)
-    assert torch.allclose(out_discrete, out_discrete2)

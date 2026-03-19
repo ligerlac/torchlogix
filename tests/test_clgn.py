@@ -85,10 +85,11 @@ class TestIndeces:
             ) + 1
         )
         num_positions = horizontal_positions * vertical_positions
+        # indices[0] has shape (lut_rank, num_positions, num_kernels, sample_size, 3)
         indices = layer.connections.indices[0][side]
         assert indices.shape == (
-            layer.num_kernels,
             num_positions,
+            layer.num_kernels,
             2**(layer.tree_depth-1),
             3,
         )

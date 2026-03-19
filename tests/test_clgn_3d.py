@@ -88,10 +88,11 @@ class TestIndices:
             int((layer.in_dim[2] + 2 * layer.padding - layer.receptive_field_size[2]) / layer.stride) + 1
         )
         num_positions = h_positions * w_positions * d_positions
+        # indices[0] has shape (lut_rank, num_positions, num_kernels, sample_size, 4)
         indices = layer.connections.indices[0][side]
         assert indices.shape == (
-            layer.num_kernels,
             num_positions,
+            layer.num_kernels,
             2**(layer.tree_depth-1),
             4,
         )
