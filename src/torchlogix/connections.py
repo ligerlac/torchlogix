@@ -603,8 +603,9 @@ class FixedConvConnections(Connections):
                 where last dim is (h, w, c).
 
         Returns:
-            out: torch.Tensor of shape (lut_rank, num_kernels, num_positions, sample_size, 3),
-                with the sliding-window offsets applied.
+            out: torch.Tensor of shape (lut_rank, num_positions, num_kernels, sample_size, 3),
+                with the sliding-window offsets applied. Note: K and P dimensions are swapped
+                compared to previous implementation, so forward() produces (b, k, s, c, f) directly.
         """
         #h, w = self.in_dim
         #h_k, w_k = self.receptive_field_size
@@ -648,8 +649,9 @@ class FixedConvConnections(Connections):
         # Combine back into indices: (K, P, L, S, 3)
         all_indices = torch.stack([*idx, c_idx], dim=-1)
 
-        # Reorder so first axis is L: (L, K, P, S, 3)
-        out = all_indices.permute(2, 0, 1, 3, 4)
+        # Reorder to (L, P, K, S, 3) instead of (L, K, P, S, 3)
+        # This swaps K and P dimensions so forward() produces (b, k, s, c, f) instead of (b, k, c, s, f)
+        out = all_indices.permute(2, 1, 0, 3, 4)
 
         return out
 

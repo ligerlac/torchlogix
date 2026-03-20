@@ -75,8 +75,11 @@ class TestIndices:
         """Test the shape of the first tree level indices.
 
         The first tree level defines which entries within the receptive field are
-        considered. It should be of shape (num_kernels, num_positions, 2**(tree_depth - 1), 4)
+        considered. It should be of shape (num_positions, num_kernels, 2**(tree_depth - 1), 4)
         [4 because of (w, h, d, c) notation].
+
+        Note: K and P dimensions were swapped (vs. original implementation) so that forward()
+        produces (b, k, s, c, f) instead of (b, k, c, s, f), eliminating permute calls.
         """
         h_positions = (
             int((layer.in_dim[0] + 2 * layer.padding - layer.receptive_field_size[0]) / layer.stride) + 1
@@ -90,8 +93,8 @@ class TestIndices:
         num_positions = h_positions * w_positions * d_positions
         indices = layer.connections.indices[0][side]
         assert indices.shape == (
-            layer.num_kernels,
             num_positions,
+            layer.num_kernels,
             2**(layer.tree_depth-1),
             4,
         )

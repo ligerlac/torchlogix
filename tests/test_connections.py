@@ -79,9 +79,12 @@ def test_learnable_gradients(lut_rank):
 @pytest.mark.parametrize("channel_group_size", [None, 1, 2])
 def test_fixed_conv_connections(channel_group_size):
     """
-    indices: (lut_rank, num_kernels, kernel_position, sample_size, 3)
+    indices: (lut_rank, kernel_position, num_kernels, sample_size, 3)
         where the last dim is (h, w, c)
         for each tree level
+
+        Note: K and P dimensions were swapped so that forward() produces (b, k, s, c, f)
+        instead of (b, k, c, s, f), eliminating need for permute calls in conv layers.
     """
     num_kernels = 3
 
@@ -93,7 +96,9 @@ def test_fixed_conv_connections(channel_group_size):
     fow_indices = conn.indices[0]
 
     for kernel_idx in range(num_kernels):
-        considered_channels = fow_indices[:, kernel_idx, :, :, 2].unique()
+        # Shape is now (lut_rank, kernel_position, num_kernels, sample_size, 3)
+        # So we index at position 2 instead of 1 for kernel_idx
+        considered_channels = fow_indices[:, :, kernel_idx, :, 2].unique()
         if channel_group_size is not None:
             assert len(considered_channels) <= channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"

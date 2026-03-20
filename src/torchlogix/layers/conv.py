@@ -168,31 +168,41 @@ class _LogicConvNd(LogicBase):
         #     self.tree_weights[i] = self.tree_weights[i].permute(1, 0, 2)
 
         # First level tree indices
+        # connections now returns (b, k, s, c, f) directly (K and P dimensions swapped in indices)
         x = self.connections(x, 0)
         # Process first level with einsum contraction
-        # b=batch, c=channels, s=spatial, f=features, k=lut_rank
-
-        x = permute(x, (0, 1, 3, 2, 4)) # (b, k, c, s, f) -> (b, k, s, c, f)
+        # b=batch, k=lut_rank, s=spatial, c=num_kernels, f=features
 
         x = self.parametrization.forward(
             x, self.tree_weights[0], self.training,
-            # contraction='fc,bcsf->bcsf'
             contraction='fc,bscf->bscf'
         )
-        x = permute(x, (0, 2, 1, 3)) # (b, s, c, f) -> (b, c, s, f)
+        # Parametrization returns (b, s, c, f) - no permute needed
 
         # Process remaining levels
         for level in range(1, self.tree_depth):
+            # Input is (b, s, c, f)
             x = self.connections(x, level)
-            # Move dimension -2 to position 1 (type-agnostic)
+            # After connections: (b, s, c, k, f')
+            # Move dimension -2 to position 1 (due to advanced indexing)
             x = movedim(x, -2, 1)
-            x = permute(x, (0, 1, 3, 2, 4)) # (b, k, c, s, f) -> (b, k, s, c, f)
+            # After movedim: (b, k, s, c, f') - no permute needed
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
                 contraction='fc,bscf->bscf'
             )
-            x = permute(x, (0, 2, 1, 3)) # (b, s, c, f) -> (b, c, s, f)
-        # Reshape flattened output
+            # Parametrization returns (b, s, c, f'') - no permute needed
+
+        # Reshape flattened output from (b, s, c, f) to (b, c, h_out, w_out)
+        # At final level, f should be 1
+        if isinstance(x, torch.Tensor):
+            x = x.squeeze(-1)  # (b, s, c, 1) -> (b, s, c)
+            x = x.transpose(1, 2)  # (b, s, c) -> (b, c, s)
+        else:
+            x = x.squeeze(-1)
+            x = x.swapaxes(1, 2)
+
+        # Unflatten spatial dimension
         reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
         new_shape = (x.shape[0], x.shape[1], *reshape)
