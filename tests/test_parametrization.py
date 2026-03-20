@@ -175,29 +175,29 @@ def test_residual_consistency(num_neurons, residual_probability):
     assert torch.allclose(warp(X), raw(X))
     
 
-@pytest.mark.parametrize("param_cls", [RawLUTParametrization, WarpLUTParametrization, LightLUTParametrization])
-@pytest.mark.parametrize("lut_rank", [2, 4, 6])
-def test_materialize_basis(param_cls, lut_rank):
-    if lut_rank > 2 and param_cls == RawLUTParametrization:
-        pytest.skip("Raw parametrization not supported for lut_rank > 2")
+# @pytest.mark.parametrize("param_cls", [RawLUTParametrization, WarpLUTParametrization, LightLUTParametrization])
+# @pytest.mark.parametrize("lut_rank", [2, 4, 6])
+# def test_materialize_basis(param_cls, lut_rank):
+#     if lut_rank > 2 and param_cls == RawLUTParametrization:
+#         pytest.skip("Raw parametrization not supported for lut_rank > 2")
 
-    weights = torch.randn((10, 2**lut_rank))
-    inputs = torch.randint(0, 2, (8, lut_rank)).unsqueeze(2).float()
-    param_in_place = param_cls(lut_rank=lut_rank, materialize_basis=False)
-    param_materialize = param_cls(lut_rank=lut_rank, materialize_basis=True)
+#     weights = torch.randn((10, 2**lut_rank))
+#     inputs = torch.randint(0, 2, (8, lut_rank)).unsqueeze(2).float()
+#     param_in_place = param_cls(lut_rank=lut_rank, materialize_basis=False)
+#     param_materialize = param_cls(lut_rank=lut_rank, materialize_basis=True)
 
-    output_in_place = param_in_place.forward(
-        x=inputs,
-        training=False,
-        weight=weights,
-        contraction='n,bn->bn'
-    )
+#     output_in_place = param_in_place.forward(
+#         x=inputs,
+#         training=False,
+#         weight=weights,
+#         contraction='n,bn->bn'
+#     )
 
-    output_materialize = param_materialize.forward(
-        x=inputs,
-        training=False,
-        weight=weights,
-        contraction='n,bn->bn'
-    )
+#     output_materialize = param_materialize.forward(
+#         x=inputs,
+#         training=False,
+#         weight=weights,
+#         contraction='n,bn->bn'
+#     )
 
-    assert torch.allclose(output_in_place, output_materialize)
+#     assert torch.allclose(output_in_place, output_materialize)

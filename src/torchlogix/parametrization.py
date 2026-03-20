@@ -237,6 +237,8 @@ class RawLUTParametrization(LUTParametrization):
             w = self._sample_train(weight)
             return weighted_raw_basis_sum(a, b, w, contraction)
         else:
+            # w = self._sample_eval(weight)
+            # return weighted_raw_basis_sum(a, b, w, contraction)
             ids = weight.argmax(axis=-1)
             return apply_luts_vectorized(a, b, ids, contraction)
 

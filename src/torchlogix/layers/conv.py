@@ -2,13 +2,15 @@ import math
 import random
 from typing import Union
 
+import numpy as np
+
 import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
 from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights
+    get_regularization_loss, rescale_weights, permute, movedim
     )
 from .base import LogicBase
 
@@ -158,31 +160,38 @@ class _LogicConvNd(LogicBase):
                 )
             else:
                 # NumPy padding
-                import numpy as np
                 pad_width = [(0, 0), (0, 0)]  # No padding for batch and channel dims
                 pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
                 x = np.pad(x, pad_width, mode='constant', constant_values=0)
+
+        # for i in range(len(self.tree_weights)):
+        #     self.tree_weights[i] = self.tree_weights[i].permute(1, 0, 2)
+
         # First level tree indices
         x = self.connections(x, 0)
         # Process first level with einsum contraction
-        # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
+        # b=batch, c=channels, s=spatial, f=features, k=lut_rank
+
+        x = permute(x, (0, 1, 3, 2, 4)) # (b, k, c, s, f) -> (b, k, s, c, f)
+
         x = self.parametrization.forward(
             x, self.tree_weights[0], self.training,
-            contraction='fc,bcsf->bcsf'
+            # contraction='fc,bcsf->bcsf'
+            contraction='fc,bscf->bscf'
         )
+        x = permute(x, (0, 2, 1, 3)) # (b, s, c, f) -> (b, c, s, f)
+
         # Process remaining levels
         for level in range(1, self.tree_depth):
             x = self.connections(x, level)
             # Move dimension -2 to position 1 (type-agnostic)
-            if isinstance(x, torch.Tensor):
-                x = x.movedim(-2, 1)
-            else:
-                import numpy as np
-                x = np.moveaxis(x, -2, 1)
+            x = movedim(x, -2, 1)
+            x = permute(x, (0, 1, 3, 2, 4)) # (b, k, c, s, f) -> (b, k, s, c, f)
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
-                contraction='fc,bcsf->bcsf'
+                contraction='fc,bscf->bscf'
             )
+            x = permute(x, (0, 2, 1, 3)) # (b, s, c, f) -> (b, c, s, f)
         # Reshape flattened output
         reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
@@ -190,7 +199,6 @@ class _LogicConvNd(LogicBase):
         if isinstance(x, torch.Tensor):
             x = x.view(*new_shape)
         else:
-            import numpy as np
             x = x.reshape(new_shape)
 
         return x
