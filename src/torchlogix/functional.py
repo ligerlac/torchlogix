@@ -145,9 +145,9 @@ def apply_luts_vectorized(
     # for conv layers, these last two dimensions: (b, s, c, f)
     # where b=batch, s=spatial, c=channels, f=features (=hweight*width)
     # obviously hard-coded for lut-rank 2. might need to generalize later
-    # WARNING: assumes a certain strcuture of the contraction string:
+    # WARNING: assumes a certain structure of the contraction string:
     # the feature dimension(s) must be the last one(s) in the input tensors and must be the one(s) being indexed by lut_ids
-    # also, the mask transposing means it has to be something like fc, ...cf -> ...cf
+    # with contraction 'cf,bscf->bscf', lut_ids has shape (c, f) matching the input's last two dims
     if isinstance(a, torch.Tensor):
         a, b = a.bool(), b.bool()
         result = torch.empty_like(a)
@@ -157,7 +157,7 @@ def apply_luts_vectorized(
 
     for lut_id in range(16):
         mask = lut_ids == lut_id
-        mask = mask.T
+        # No transpose needed - mask shape (c, f) matches input's last dims
         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
 
     if isinstance(a, torch.Tensor):

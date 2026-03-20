@@ -156,8 +156,12 @@ class CompiledLogicNet(torch.nn.Module):
         """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
         tree_operations = []
         for level_idx, level_weights in enumerate(layer.tree_weights):
+            # level_weights shape: (c, f, lut_entries) where c=num_kernels, f=num_features
+            # We need structure [level][feature][kernel]
+            # Transpose to (f, c, lut_entries) then extract ops
+            level_weights_transposed = level_weights.transpose(0, 1)
             level_ops = []
-            for weight_param in level_weights:
+            for weight_param in level_weights_transposed:
                 ops = weight_param.argmax(1).cpu().numpy()
                 level_ops.append(ops)
             tree_operations.append(level_ops)

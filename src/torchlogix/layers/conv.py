@@ -94,14 +94,16 @@ class _LogicConvNd(LogicBase):
         tree_weights = torch.nn.ParameterList()
         for i in reversed(range(self.tree_depth)):
             # each tree level has lut_rank**i nodes per kernel
-            level_weights = torch.nn.Parameter(torch.stack(
+            stacked = torch.stack(
                 [
                     self.parametrization.init_weights(
-                        self.num_kernels, 
+                        self.num_kernels,
                         self.device
                     ) for _ in range(self.lut_rank**i)
                 ]
-            ))
+            )
+            # Transpose to (c, f) layout: (f, c, lut_entries) -> (c, f, lut_entries)
+            level_weights = torch.nn.Parameter(stacked.transpose(0, 1))
             tree_weights.append(level_weights)
         return tree_weights
 
@@ -175,7 +177,7 @@ class _LogicConvNd(LogicBase):
 
         x = self.parametrization.forward(
             x, self.tree_weights[0], self.training,
-            contraction='fc,bscf->bscf'
+            contraction='cf,bscf->bscf'
         )
         # Parametrization returns (b, s, c, f) - no permute needed
 
@@ -189,18 +191,14 @@ class _LogicConvNd(LogicBase):
             # After movedim: (b, k, s, c, f') - no permute needed
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
-                contraction='fc,bscf->bscf'
+                contraction='cf,bscf->bscf'
             )
             # Parametrization returns (b, s, c, f'') - no permute needed
 
         # Reshape flattened output from (b, s, c, f) to (b, c, h_out, w_out)
-        # At final level, f should be 1
-        if isinstance(x, torch.Tensor):
-            x = x.squeeze(-1)  # (b, s, c, 1) -> (b, s, c)
-            x = x.transpose(1, 2)  # (b, s, c) -> (b, c, s)
-        else:
-            x = x.squeeze(-1)
-            x = x.swapaxes(1, 2)
+        # At final level, f should be 1 (as it was reduced by a tree)
+        x = x.squeeze(-1)
+        x = permute(x, [0, 2, 1])
 
         # Unflatten spatial dimension
         reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1
@@ -224,9 +222,12 @@ class _LogicConvNd(LogicBase):
         tree_ids = []
         tree_luts = []
         for level in range(self.tree_depth):
+            # tree_weights[level] has shape (c, f, lut_entries)
+            # Transpose to (f, c, lut_entries) to maintain structure [level][feature][...]
+            level_weights_transposed = self.tree_weights[level].transpose(0, 1)
             level_ids = []
             level_luts = []
-            for w in self.tree_weights[level]:
+            for w in level_weights_transposed:
                 luts, ids = self.parametrization.get_luts_and_ids(w)
                 level_ids.append(ids)
                 level_luts.append(luts)
@@ -242,8 +243,11 @@ class _LogicConvNd(LogicBase):
         """
         tree_luts = []
         for level in range(self.tree_depth):
+            # tree_weights[level] has shape (c, f, lut_entries)
+            # Transpose to (f, c, lut_entries) to maintain structure [level][feature][...]
+            level_weights_transposed = self.tree_weights[level].transpose(0, 1)
             level_luts = []
-            for w in self.tree_weights[level]:
+            for w in level_weights_transposed:
                 luts = self.parametrization.get_luts(w)
                 level_luts.append(luts)
             tree_luts.append(level_luts)

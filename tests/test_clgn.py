@@ -310,9 +310,10 @@ def test_and_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -373,9 +374,10 @@ def test_get_luts_and_ids():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
@@ -418,9 +420,10 @@ def test_get_luts_and_ids_and_warp():
     # Correct WARP weights for AND gate with {-1, +1} conversion
     with torch.no_grad():
         and_weights = torch.tensor([[50., 50., 50., -50.]])
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     luts, ids = layer.get_luts_and_ids()
     assert torch.allclose(luts[0][0].to(torch.long), torch.tensor([[0, 0, 0, 1]]))
@@ -465,9 +468,10 @@ def test_and_model_warp():
     # Scale weights to make sigmoid outputs sharp (like raw parametrization uses 100.0)
     with torch.no_grad():
         and_weights = torch.tensor([50., 50., 50., -50.]).reshape(1, 4)
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -524,9 +528,10 @@ def test_binary_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 1.0  # Pick 1 instead of 100 here
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     layer.train(False)  # Switch model to eval mode
     
@@ -575,9 +580,10 @@ def test_conv_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 
@@ -635,9 +641,10 @@ def test_conv_model_rect():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 
