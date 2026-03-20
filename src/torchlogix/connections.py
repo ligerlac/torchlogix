@@ -597,88 +597,179 @@ class FixedConvConnections(Connections):
 
 
     def _apply_sliding_window_tensor(self, tensor):
-        """Apply sliding window offsets to receptive field tensor.
+        """
+        Convert (c,h,w) coordinates into flat indices and apply sliding window.
 
         Args:
-            tensor: torch.Tensor of shape (lut_rank, num_kernels, sample_size, 3)
-                where last dim is (c, h, w).
+            tensor: (L, K, S, 3)  # (lut_rank, kernels, samples, coords)
 
         Returns:
-            out: torch.Tensor of shape (lut_rank, num_positions, num_kernels, sample_size, 3),
-                optimized for direct use in forward pass (eliminates runtime transpose).
+            indices: (P, L*S, K)  # flat indices for x.view(B, -1)[..., indices]
+                Shape allows: x_flat[..., indices] -> (B, P, L*S, K)
         """
-        #h, w = self.in_dim
-        #h_k, w_k = self.receptive_field_size
+        device = self.device
 
-        # Account for padding
+        # ---------------------------
+        # Input geometry
+        # ---------------------------
         padded = [in_dim + 2 * self.padding for in_dim in self.in_dim]
-        #h_padded = h + 2 * self.padding
-        #w_padded = w + 2 * self.padding
 
-        assert all(rfs <= p for rfs, p in zip(self.receptive_field_size, padded)), (
-            f"Receptive field size {self.receptive_field_size} must fit within input "
-            f"dimensions {padded} after padding."
-        )
+        # ---------------------------
+        # Sliding window positions
+        # ---------------------------
+        starts = [
+            torch.arange(0, p - r + 1, self.stride, device=device)
+            for p, r in zip(padded, self.receptive_field_size)
+        ]
 
-        # Sliding positions
-        starts = [torch.arange(0, p - rcf + 1, self.stride, device=self.device) 
-                  for p, rcf in zip(padded, self.receptive_field_size)]
-        #h_starts = torch.arange(0, padded[0] - self.receptive_field_size[0] + 1, self.stride, device=self.device)
-        #w_starts = torch.arange(0, padded[1] - self.receptive_field_size[1] + 1, self.stride, device=self.device)
+        # Check if there are any valid positions
+        if any(start.numel() == 0 for start in starts):
+            # No valid convolution positions - should raise assertion error
+            raise AssertionError(
+                f"Receptive field size {self.receptive_field_size} is larger than "
+                f"padded input dimensions {padded}"
+            )
 
-        # Meshgrid for all receptive-field start positions
         grid = torch.meshgrid(*starts, indexing="ij")
         offsets = [g.flatten() for g in grid]
-        num_positions = [o.numel() for o in offsets]
+        P = offsets[0].numel()
 
-        # tensor: (L, K, S, 3) → (K, L, S, 3)
-        pairs_all = tensor.permute(1, 0, 2, 3)
-        # K, L, S, _ = pairs_all.shape
+        # ---------------------------
+        # Reorder tensor: (K, L, S, 3)
+        # ---------------------------
+        tensor = tensor.permute(1, 0, 2, 3)
 
-        # Split c, h, w coordinates: (K, L, S)
-        c_base = pairs_all[..., 0]
-        base = [pairs_all[..., i] for i in range(1, len(offsets) + 1)]
-        #h_base = pairs_all[..., 1]
-        #w_base = pairs_all[..., 2]
+        c = tensor[..., 0]   # (K, L, S)
+        spatial = tensor[..., 1:]  # (K, L, S, D)
 
-        # Add sliding-window offsets (broadcasted) → (K, P, L, S)
-        idx = [b.unsqueeze(1) + o.view(1, num_positions[0], 1, 1)
-               for b, o in zip(base, offsets)]
-        c_idx = c_base.unsqueeze(1).expand(-1, num_positions[0], -1, -1)
+        # ---------------------------
+        # Apply offsets: expand to (K, P, L, S)
+        # ---------------------------
+        c = c.unsqueeze(1).expand(-1, P, -1, -1)
 
-        # Combine back into indices: (K, P, L, S, 3) - channel first
-        all_indices = torch.stack([c_idx, *idx], dim=-1)
+        spatial_idx = []
+        for i, off in enumerate(offsets):
+            base = spatial[..., i].unsqueeze(1)  # (K, 1, L, S)
+            spatial_idx.append(base + off.view(1, -1, 1, 1))  # (K, P, L, S)
 
-        # Reorder directly to what forward() needs: (L, P, K, S, 3)
-        out = all_indices.permute(2, 1, 0, 3, 4)
+        # ---------------------------
+        # Convert to linear indices
+        # ---------------------------
+        if self.conv_dimension == 2:
+            H, W = padded
+            h, w = spatial_idx
+            linear = c * (H * W) + h * W + w
 
-        return out
+        else:  # 3D
+            D, H, W = padded
+            d, h, w = spatial_idx
+            linear = c * (D * H * W) + d * (H * W) + h * W + w
+
+        # linear: (K, P, L, S)
+        # Rearrange to (P, L*S, K) for efficient indexing
+        K, P, L, S = linear.shape
+        linear = linear.permute(1, 2, 3, 0)  # (P, L, S, K)
+        linear = linear.reshape(P, L * S, K)
+
+        return linear.long()
+
 
     def _get_indices_from_kernel_tensor(self, tensor):
         """Build index tensors for all tree levels."""
-        indices = [
+        # Store coordinate-based tensor for debugging/tests/compilation
+        self._coord_tensor = tensor  # (L, K, S, 3)
+
+        # Also build coordinate-based sliding window indices for compilation
+        self._coord_indices = self._build_coordinate_indices(tensor)
+
+        # Build flat indices for efficient forward pass
+        self._flat_indices = [
             self._apply_sliding_window_tensor(tensor)
         ]
         for level in range(1, self.tree_depth):
             size = self.lut_rank ** (self.tree_depth - level)
             base = torch.arange(size, device=self.device).view(-1, self.lut_rank).transpose(0, 1)
-            indices.append(base)
+            self._flat_indices.append(base)
+
+        # Build coordinate-based indices for backward compatibility with tests
+        # Format: [(left, right), (left, right), ...] for each tree level
+        indices = []
+        # Level 0: from _coord_indices (L, P, K, S, ndim) -> [(P, K, S, ndim), (P, K, S, ndim)]
+        indices.append([self._coord_indices[0], self._coord_indices[1]])
+        # Other levels: split the lut_rank dimension
+        for level in range(1, self.tree_depth):
+            size = self.lut_rank ** (self.tree_depth - level)
+            base = torch.arange(size, device=self.device).view(-1, self.lut_rank).transpose(0, 1)
+            indices.append([base[0], base[1]])
+
         return indices
+
+    def _build_coordinate_indices(self, tensor):
+        """Build coordinate-based indices (L, P, K, S, ndim) for compilation."""
+        padded = [in_dim + 2 * self.padding for in_dim in self.in_dim]
+
+        starts = [
+            torch.arange(0, p - r + 1, self.stride, device=self.device)
+            for p, r in zip(padded, self.receptive_field_size)
+        ]
+
+        # Check if there are any valid positions
+        if any(start.numel() == 0 for start in starts):
+            # No valid convolution positions - should raise assertion error
+            raise AssertionError(
+                f"Receptive field size {self.receptive_field_size} is larger than "
+                f"padded input dimensions {padded}"
+            )
+
+        grid = torch.meshgrid(*starts, indexing="ij")
+        offsets = [g.flatten() for g in grid]
+        P = offsets[0].numel()
+
+        # tensor: (L, K, S, ndim)
+        L, K, S, ndim = tensor.shape
+
+        # Build indices with sliding window: (L, P, K, S, ndim)
+        coord_indices = []
+        for lut_idx in range(L):
+            lut_positions = []
+            for pos_idx in range(P):
+                pos_coords = tensor[lut_idx].clone()  # (K, S, ndim)
+                # Add spatial offsets
+                for dim_idx, offset in enumerate(offsets):
+                    pos_coords[..., dim_idx + 1] += offset[pos_idx]
+                lut_positions.append(pos_coords)
+            coord_indices.append(torch.stack(lut_positions, dim=0))  # (P, K, S, ndim)
+
+        return torch.stack(coord_indices, dim=0)  # (L, P, K, S, ndim)
     
+
     def forward(self, x, tree_level):
         if tree_level == 0:
-            # Indices are already in shape (L, P, K, S, 3)
-            # Fancy indexing gives us (B, L, S, K, F) directly
-            result = x[(slice(None), self.indices[0][..., 0],
-              *self.indices[0][..., 1:].moveaxis(-1, 0))]
-            # Merge kernel and feature dimensions: (B, L, S, K, F) -> (B, L, S, K*F)
-            result = result.reshape(result.shape[0], result.shape[1], result.shape[2], -1)
+            # Flatten input: (B, C, *spatial) -> (B, C*H*W)
+            B = x.shape[0]
+            x_flat = x.reshape(B, -1)
+
+            # _flat_indices[0]: (P, L*S, K)
+            # Indexing: x_flat[..., indices] -> (B, P, L*S, K)
+            result = x_flat[..., self._flat_indices[0]]
+
+            # Reshape to (B, L, P, K*S)
+            P, LS, K = self._flat_indices[0].shape
+            L = self.lut_rank
+            S = LS // L
+            result = result.reshape(B, P, L, S, K)
+            result = result.permute(0, 2, 1, 4, 3)  # (B, L, P, K, S)
+            result = result.reshape(B, L, P, K * S)
+
             return result
         else:
-            # Input: (B, S, K, features), indices: (lut_rank, M)
-            # After indexing: (B, S, K, lut_rank, M)
-            result = x[..., self.indices[tree_level]]
-            # Merge K and M: (B, S, K, lut_rank, M) -> (B, lut_rank, S, K*M)
+            # For levels > 0: simple indexing
+            # Input: (B, S, K, features)
+            # _flat_indices: (lut_rank, M)
+            result = x[..., self._flat_indices[tree_level]]  # (B, S, K, L, M)
+
+            # Reshape to (B, L, S, K*M)
             B, S, K, L, M = result.shape
-            result = result.permute(0, 3, 1, 2, 4).reshape(B, L, S, K*M)
+            result = result.permute(0, 3, 1, 2, 4).reshape(B, L, S, K * M)
+
             return result

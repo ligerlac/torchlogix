@@ -165,8 +165,12 @@ class CompiledLogicNet(torch.nn.Module):
                 level_ops.append(ops)
             tree_operations.append(level_ops)
 
+        # Use coordinate-based indices for compilation
+        coord_indices = [layer.connections._coord_indices] if hasattr(layer.connections, '_coord_indices') else layer.connections.indices[:1]
+        other_indices = layer.connections.indices[1:]
+
         return {
-            'indices': layer.connections.indices,
+            'indices': coord_indices + other_indices,
             'tree_operations': tree_operations,
             'tree_depth': layer.tree_depth,
             'num_kernels': layer.num_kernels,

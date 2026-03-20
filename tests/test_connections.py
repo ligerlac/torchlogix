@@ -78,22 +78,19 @@ def test_learnable_gradients(lut_rank):
 
 @pytest.mark.parametrize("channel_group_size", [None, 1, 2])
 def test_fixed_conv_connections(channel_group_size):
-    """
-    indices: (lut_rank, kernel_position, num_kernels, sample_size, 3)
-        where the last dim is (c, h, w)
-        for each tree level
-    """
+    """Test that fixed conv connections respect channel_group_size constraints."""
     num_kernels = 3
 
     conn = FixedConvConnections(
         in_dim=28, channels=3, num_kernels=num_kernels, tree_depth=3, receptive_field_size=3, channel_group_size=channel_group_size
     )
 
-    # only the first matters (field of view)
-    fow_indices = conn.indices[0]
+    # Use coordinate tensor for validation (L, K, S, 3)
+    coord_tensor = conn._coord_tensor
 
     for kernel_idx in range(num_kernels):
-        considered_channels = fow_indices[:, :, kernel_idx, :, 0].unique()
+        # Extract channel coordinates for this kernel
+        considered_channels = coord_tensor[:, kernel_idx, :, 0].unique()
         if channel_group_size is not None:
             assert len(considered_channels) <= channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"
