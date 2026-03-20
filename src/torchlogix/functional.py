@@ -135,11 +135,11 @@ def compute_all_logic_ops_vectorized(a, b):
 
 
 def apply_luts_vectorized(
-        a: torch.Tensor | np.ndarray,
-        b: torch.Tensor | np.ndarray,
+        a: torch.Tensor | np.ndarray[bool],
+        b: torch.Tensor | np.ndarray[bool],
         lut_ids: np.ndarray,
         contraction: str
-    ) -> torch.Tensor | np.ndarray:
+    ) -> torch.Tensor | np.ndarray[bool]:
     # indexing happens along feature dimension(s)
     # for dense layers, this is the last dimension
     # for conv layers, these last two dimensions: (b, s, c, f)
@@ -152,7 +152,7 @@ def apply_luts_vectorized(
         a, b = a.bool(), b.bool()
         result = torch.empty_like(a)
     else:
-        a, b = a.astype(bool), b.astype(bool)
+        # numpy arrays are already assumed to be bool
         result = np.empty_like(a)
 
     for lut_id in range(16):
@@ -163,7 +163,7 @@ def apply_luts_vectorized(
     if isinstance(a, torch.Tensor):
         return torch.einsum(contraction, torch.ones(lut_ids.shape), result)
     else:
-        return np.einsum(contraction, np.ones(lut_ids.shape), result)
+        return np.einsum(contraction, np.ones(lut_ids.shape, dtype=bool), result)
     
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:

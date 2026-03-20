@@ -27,7 +27,7 @@ def test_individual_layer(layer, input_shape):
     assert torch.allclose(out_relaxed, out_discrete)
 
     # passing a numpy array should fail in train mode
-    inp_numpy = inp_torch.numpy()
+    inp_numpy = inp_torch.numpy().astype(bool)
 
     layer.train()
     with pytest.raises(Exception):
