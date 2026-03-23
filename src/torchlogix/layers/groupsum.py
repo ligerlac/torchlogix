@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from torchlogix.packbitstensor import PackBitsTensor
 
@@ -25,11 +26,14 @@ class GroupSum(torch.nn.Module):
         if isinstance(x, PackBitsTensor):
             return x.group_sum(self.k)
 
+        if self.training and isinstance(x, np.ndarray):
+            raise TypeError("NumPy input is only supported in eval mode.")
+
         assert x.shape[-1] % self.k == 0, "The number of input features must be divisible by k."
 
         return (
             (x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1) + self.beta) / self.tau
         )
-
+        
     def extra_repr(self):
         return "k={}, tau={}".format(self.k, self.tau)

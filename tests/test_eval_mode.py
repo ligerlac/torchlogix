@@ -1,5 +1,5 @@
 import torch
-from torchlogix.layers import LogicDense, LogicConv2d, LogicConv3d, GroupSum, FixedBinarization
+from torchlogix.layers import LogicDense, LogicConv2d, GroupSum, OrPooling2d, OrPooling3d
 import pytest
 import numpy as np
 
@@ -7,6 +7,9 @@ import numpy as np
 @pytest.mark.parametrize("layer, input_shape", [
     (LogicDense(in_dim=1024, out_dim=1024), (1, 1024)),
     (LogicConv2d(in_dim=32, channels=3, num_kernels=8, tree_depth=2), (1, 3, 32, 32)),
+    (GroupSum(k=8), (1, 1024)),
+    (OrPooling2d(kernel_size=2, stride=2), (1, 3, 32, 32)),
+    (OrPooling3d(kernel_size=2, stride=2), (1, 3, 8, 16, 16)),
 ])
 def test_individual_layer(layer, input_shape):
     # set all weights to 0 execpt one gate per neuron (randomly selected)
