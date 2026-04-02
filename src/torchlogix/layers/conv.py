@@ -94,17 +94,16 @@ class _LogicConvNd(LogicBase):
         tree_weights = torch.nn.ParameterList()
         for i in reversed(range(self.tree_depth)):
             # each tree level has lut_rank**i nodes per kernel
-            stacked = torch.stack(
+            level_weights = torch.stack(
                 [
                     self.parametrization.init_weights(
                         self.num_kernels,
                         self.device
                     ) for _ in range(self.lut_rank**i)
-                ]
+                ],
+                dim=1,
             )
-            # Transpose to (c, f) layout: (f, c, lut_entries) -> (c, f, lut_entries)
-            level_weights = torch.nn.Parameter(stacked.transpose(0, 1))
-            tree_weights.append(level_weights)
+            tree_weights.append(torch.nn.Parameter(level_weights))
         return tree_weights
 
     def _init_connections(self):
@@ -222,12 +221,9 @@ class _LogicConvNd(LogicBase):
         tree_ids = []
         tree_luts = []
         for level in range(self.tree_depth):
-            # tree_weights[level] has shape (c, f, lut_entries)
-            # Transpose to (f, c, lut_entries) to maintain structure [level][feature][...]
-            level_weights_transposed = self.tree_weights[level].transpose(0, 1)
             level_ids = []
             level_luts = []
-            for w in level_weights_transposed:
+            for w in self.tree_weights[level].unbind(dim=1):
                 luts, ids = self.parametrization.get_luts_and_ids(w)
                 level_ids.append(ids)
                 level_luts.append(luts)
@@ -243,11 +239,8 @@ class _LogicConvNd(LogicBase):
         """
         tree_luts = []
         for level in range(self.tree_depth):
-            # tree_weights[level] has shape (c, f, lut_entries)
-            # Transpose to (f, c, lut_entries) to maintain structure [level][feature][...]
-            level_weights_transposed = self.tree_weights[level].transpose(0, 1)
             level_luts = []
-            for w in level_weights_transposed:
+            for w in self.tree_weights[level].unbind(dim=1):
                 luts = self.parametrization.get_luts(w)
                 level_luts.append(luts)
             tree_luts.append(level_luts)

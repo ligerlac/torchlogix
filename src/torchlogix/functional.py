@@ -161,9 +161,10 @@ def apply_luts_vectorized(
         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
 
     if isinstance(a, torch.Tensor):
-        return torch.einsum(contraction, torch.ones(lut_ids.shape), result)
-    else:
-        return np.einsum(contraction, np.ones(lut_ids.shape, dtype=bool), result)
+        # For all current contractions, the LUT index axes remain in the output,
+        # so the einsum with an all-ones tensor is an identity.
+        return result.to(dtype=torch.float32)
+    return result
     
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:
