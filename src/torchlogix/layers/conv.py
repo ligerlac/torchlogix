@@ -171,7 +171,7 @@ class _LogicConvNd(LogicBase):
         # First level tree indices
         # connections now returns (b, k, s, c, f) directly (K and P dimensions swapped in indices)
         x = self.connections(x, 0)
-        # Process first level with einsum contraction
+        # Process first level
         # b=batch, k=lut_rank, s=spatial, c=num_kernels, f=features
 
         x = self.parametrization.forward(

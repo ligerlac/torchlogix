@@ -167,12 +167,15 @@ def apply_luts_vectorized(
     return result
     
 
-def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:
+def weighted_raw_basis_sum(a, b, weights, contraction) -> torch.Tensor:
     """
     Compute the weighted sum of the raw basis functions.
     The 16-term weighted sum can be expressed using only
     4 coefficients, which is computationally more efficient.
     """
+    if contraction not in {"n,bn->bn", "cf,bscf->bscf"}:
+        raise ValueError(f"Unsupported contraction for raw parametrization: {contraction}")
+
     w = weights
 
     C1 = (
@@ -197,12 +200,7 @@ def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:
         + w[...,11] + w[...,13] - w[...,14]
     )
 
-    return (
-        torch.einsum(einsum_pattern, C1, a * 0 + 1) +
-        torch.einsum(einsum_pattern, Ca, a) +
-        torch.einsum(einsum_pattern, Cb, b) +
-        torch.einsum(einsum_pattern, Cab, a * b)
-    )
+    return C1 + Ca * a + Cb * b + Cab * (a * b)
 
 
 ##########################################################################
