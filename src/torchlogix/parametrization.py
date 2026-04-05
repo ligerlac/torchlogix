@@ -221,7 +221,7 @@ class RawLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for combining ops with weights
+            contraction: Contraction pattern used in eval mode
 
         Returns:
             Output with lut_rank dimension reduced
@@ -235,10 +235,10 @@ class RawLUTParametrization(LUTParametrization):
         # Sample weights (merged from SoftmaxSampler)
         if training:
             w = self._sample_train(weight)
-            return weighted_raw_basis_sum(a, b, w, contraction)
+            return weighted_raw_basis_sum(a, b, w)
         else:
             # w = self._sample_eval(weight)
-            # return weighted_raw_basis_sum(a, b, w, contraction)
+            # return weighted_raw_basis_sum(a, b, w)
             ids = weight.argmax(axis=-1)
             return apply_luts_vectorized(a, b, ids, contraction)
 
@@ -252,7 +252,7 @@ class RawLUTParametrization(LUTParametrization):
         #     ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
         #     return torch.einsum(contraction_with_basis_dim, w, ops)
 
-        # return weighted_raw_basis_sum(a, b, w, contraction)
+        # return weighted_raw_basis_sum(a, b, w)
     
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:

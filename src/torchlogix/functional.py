@@ -157,25 +157,21 @@ def apply_luts_vectorized(
 
     for lut_id in range(16):
         mask = lut_ids == lut_id
-        # No transpose needed - mask shape (c, f) matches input's last dims
         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
 
     if isinstance(a, torch.Tensor):
-        # For all current contractions, the LUT index axes remain in the output,
-        # so the einsum with an all-ones tensor is an identity.
         return result.to(dtype=torch.float32)
     return result
     
 
-def weighted_raw_basis_sum(a, b, weights, contraction) -> torch.Tensor:
+def weighted_raw_basis_sum(a, b, weights) -> torch.Tensor:
     """
-    Compute the weighted sum of the raw basis functions.
-    The 16-term weighted sum can be expressed using only
-    4 coefficients, which is computationally more efficient.
-    """
-    if contraction not in {"n,bn->bn", "cf,bscf->bscf"}:
-        raise ValueError(f"Unsupported contraction for raw parametrization: {contraction}")
+    Compute the weighted sum of the raw basis functions by broadcasting.
 
+    Supported shapes:
+    - dense: ``a, b`` are ``(batch, neurons)``, ``weights`` is ``(neurons, 16)``
+    - conv: ``a, b`` are ``(batch, spatial, kernels, features)``, ``weights`` is ``(kernels, features, 16)``
+    """
     w = weights
 
     C1 = (
