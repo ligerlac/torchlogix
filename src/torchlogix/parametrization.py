@@ -120,8 +120,7 @@ class LUTParametrization(ABC):
             x: Extracted inputs with lut_rank at dimension 1, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern specifying how to combine basis/ops with weights
-                        (e.g., 'bnk,nk->bn' for dense, 'bcsfk,fck->bcsf' for conv)
+            contraction: Einsum pattern for parametrizations that reduce via einsum
 
         Returns:
             Output tensor with lut_rank dimension reduced
@@ -221,7 +220,7 @@ class RawLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Contraction pattern used in eval mode
+            contraction: Unused for raw LUTs. Present for interface compatibility.
 
         Returns:
             Output with lut_rank dimension reduced
@@ -236,23 +235,9 @@ class RawLUTParametrization(LUTParametrization):
         if training:
             w = self._sample_train(weight)
             return weighted_raw_basis_sum(a, b, w)
-        else:
-            # w = self._sample_eval(weight)
-            # return weighted_raw_basis_sum(a, b, w)
-            ids = weight.argmax(axis=-1)
-            return apply_luts_vectorized(a, b, ids, contraction)
 
-        # # Handle 1D weight case (single neuron) for backward compatibility
-        # if w.ndim == 1:
-        #     w = w.unsqueeze(0)
-
-        # if self.materialize_basis:
-        #     # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-        #     contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
-        #     ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
-        #     return torch.einsum(contraction_with_basis_dim, w, ops)
-
-        # return weighted_raw_basis_sum(a, b, w)
+        ids = weight.argmax(axis=-1)
+        return apply_luts_vectorized(a, b, ids)
     
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:

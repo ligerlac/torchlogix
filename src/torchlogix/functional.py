@@ -137,17 +137,16 @@ def compute_all_logic_ops_vectorized(a, b):
 def apply_luts_vectorized(
         a: torch.Tensor | np.ndarray[bool],
         b: torch.Tensor | np.ndarray[bool],
-        lut_ids: np.ndarray,
-        contraction: str
+        lut_ids: np.ndarray
     ) -> torch.Tensor | np.ndarray[bool]:
-    # indexing happens along feature dimension(s)
-    # for dense layers, this is the last dimension
-    # for conv layers, these last two dimensions: (b, s, c, f)
-    # where b=batch, s=spatial, c=channels, f=features (=hweight*width)
-    # obviously hard-coded for lut-rank 2. might need to generalize later
-    # WARNING: assumes a certain structure of the contraction string:
-    # the feature dimension(s) must be the last one(s) in the input tensors and must be the one(s) being indexed by lut_ids
-    # with contraction 'cf,bscf->bscf', lut_ids has shape (c, f) matching the input's last two dims
+    """
+    Apply rank-2 LUTs by indexing into the last feature dimensions.
+
+    Supported shapes:
+    - dense: ``a, b`` are ``(batch, neurons)``, ``lut_ids`` is ``(neurons,)``
+    - conv: ``a, b`` are ``(batch, spatial, kernels, features)``,
+      ``lut_ids`` is ``(kernels, features)``
+    """
     if isinstance(a, torch.Tensor):
         a, b = a.bool(), b.bool()
         result = torch.empty_like(a)

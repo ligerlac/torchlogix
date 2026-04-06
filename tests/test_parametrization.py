@@ -173,6 +173,24 @@ def test_residual_consistency(num_neurons, residual_probability):
     raw.connections.indices = torch.arange(2).unsqueeze(-1)
     X = (torch.arange(1 << lut_rank)[:, None] >> torch.arange(lut_rank) & 1).flip(-1).to(torch.float32)
     assert torch.allclose(warp(X), raw(X))
+
+
+def test_raw_train_and_eval_match_for_fixed_luts():
+    param = RawLUTParametrization(lut_rank=2, forward_sampling="hard")
+    weights = torch.full((3, 16), -10.0)
+    weights[0, 0] = 10.0
+    weights[1, 6] = 10.0
+    weights[2, 15] = 10.0
+
+    x = torch.tensor([
+        [[0.0, 0.0, 1.0], [0.0, 1.0, 1.0]],
+        [[1.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+    ])
+
+    train_out = param.forward(x=x, training=True, weight=weights, contraction='n,bn->bn')
+    eval_out = param.forward(x=x, training=False, weight=weights, contraction='n,bn->bn')
+
+    assert torch.allclose(train_out, eval_out)
     
 
 # @pytest.mark.parametrize("param_cls", [RawLUTParametrization, WarpLUTParametrization, LightLUTParametrization])
