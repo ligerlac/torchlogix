@@ -174,7 +174,6 @@ class _LogicConvNd(LogicBase):
         # Process first level.
         x = self.parametrization.forward(
             x, self.tree_weights[0], self.training,
-            contraction='cf,bscf->bscf'
         )
         # Parametrization returns (b, s, c, f) - no permute needed
 
@@ -188,7 +187,6 @@ class _LogicConvNd(LogicBase):
             # After movedim: (b, k, s, c, f') - no permute needed
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
-                contraction='cf,bscf->bscf'
             )
             # Parametrization returns (b, s, c, f'') - no permute needed
 

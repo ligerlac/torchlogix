@@ -90,8 +90,7 @@ class LogicDense(LogicBase):
 
         # Delegate to the selected LUT parametrization.
         return self.parametrization.forward(
-            x, self.weight, self.training,
-            contraction='n,bn->bn'
+            x, self.weight, self.training
         )
 
     def extra_repr(self):

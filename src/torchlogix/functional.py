@@ -362,24 +362,24 @@ def walsh_basis_hard(x, lut_rank):
     return basis
 
 
-def weighted_walsh_basis_sum(x, weights, einsum_pattern, lut_rank) -> torch.Tensor:
+def weighted_walsh_basis_sum(x, weights, lut_rank) -> torch.Tensor:
     if lut_rank == 1:
         A = x[:, 0]
-        basis = weighted_walsh_basis_sum_1(A, weights, einsum_pattern)
+        basis = weighted_walsh_basis_sum_1(A, weights)
     elif lut_rank == 2:
         A, B = x[:, 0], x[:, 1]
-        basis = weighted_walsh_basis_sum_2(A, B, weights, einsum_pattern)
+        basis = weighted_walsh_basis_sum_2(A, B, weights)
     elif lut_rank == 4:
         A, B, C, D = (x[:, 0], x[:, 1],
                         x[:, 2], x[:, 3]
                         )
-        basis = weighted_walsh_basis_sum_4(A, B, C, D, weights, einsum_pattern)
+        basis = weighted_walsh_basis_sum_4(A, B, C, D, weights)
     elif lut_rank == 6:
         A, B, C, D, E, F = (
             x[:, 0], x[:, 1], x[:, 2],
             x[:, 3], x[:, 4], x[:, 5],
         )
-        basis = weighted_walsh_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern)
+        basis = weighted_walsh_basis_sum_6(A, B, C, D, E, F, weights)
     else:
         raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
@@ -394,7 +394,7 @@ def walsh_basis_1(A) -> torch.Tensor:
     return basis
 
 
-def weighted_walsh_basis_sum_1(A, weights, einsum_pattern) -> torch.Tensor:
+def weighted_walsh_basis_sum_1(A, weights) -> torch.Tensor:
     return (
         weights[...,0] * (A * 0 + 1) +
         weights[...,1] * A
@@ -413,7 +413,7 @@ def walsh_basis_2(A, B) -> torch.Tensor:
     return basis
 
 
-def weighted_walsh_basis_sum_2(A, B, weights, einsum_pattern) -> torch.Tensor:
+def weighted_walsh_basis_sum_2(A, B, weights) -> torch.Tensor:
     return (
         weights[...,0] * (A * 0 + 1) +
         weights[...,1] * B +
@@ -458,7 +458,7 @@ def walsh_basis_4(A, B, C, D) -> torch.Tensor:
     return basis
 
 
-def weighted_walsh_basis_sum_4(A, B, C, D, weights, einsum_pattern) -> torch.Tensor:
+def weighted_walsh_basis_sum_4(A, B, C, D, weights) -> torch.Tensor:
     AB = A * B
     CD = C * D
     return (
@@ -551,7 +551,7 @@ def walsh_basis_6(A, B, C, D, E, F) -> torch.Tensor:
     return basis
 
 
-def weighted_walsh_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern) -> torch.Tensor:
+def weighted_walsh_basis_sum_6(A, B, C, D, E, F, weights) -> torch.Tensor:
     AB = A * B
     CD = C * D
     EF = E * F
@@ -647,21 +647,21 @@ def light_basis_hard(x, lut_rank):
     return basis
 
 
-def weighted_light_basis_sum(x, weights, einsum_pattern, lut_rank) -> torch.Tensor:
+def weighted_light_basis_sum(x, weights, lut_rank) -> torch.Tensor:
     if lut_rank == 2:
         A, B = x[:, 0], x[:, 1]
-        basis = weighted_light_basis_sum_2(A, B, weights, einsum_pattern)
+        basis = weighted_light_basis_sum_2(A, B, weights)
     elif lut_rank == 4:
         A, B, C, D = (x[:, 0], x[:, 1],
                         x[:, 2], x[:, 3]
                         )
-        basis = weighted_light_basis_sum_4(A, B, C, D, weights, einsum_pattern)
+        basis = weighted_light_basis_sum_4(A, B, C, D, weights)
     elif lut_rank == 6:
         A, B, C, D, E, F = (
             x[:, 0], x[:, 1], x[:, 2],
             x[:, 3], x[:, 4], x[:, 5],
         )
-        basis = weighted_light_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern)
+        basis = weighted_light_basis_sum_6(A, B, C, D, E, F, weights)
     else:
         raise ValueError(f"Hard basis not supported for lut_rank={lut_rank}")
     return basis
@@ -677,7 +677,7 @@ def light_basis_2(A, B) -> torch.Tensor:
     return basis
 
 
-def weighted_light_basis_sum_2(A, B, weights, einsum_pattern) -> torch.Tensor:
+def weighted_light_basis_sum_2(A, B, weights) -> torch.Tensor:
     return (
         weights[...,0] * (1 - A) * (1 - B) +
         weights[...,1] * (1 - A) * B +
@@ -720,7 +720,7 @@ def light_basis_4(A, B, C, D) -> torch.Tensor:
     return basis
 
 
-def weighted_light_basis_sum_4(A, B, C, D, weights, einsum_pattern) -> torch.Tensor:
+def weighted_light_basis_sum_4(A, B, C, D, weights) -> torch.Tensor:
     return (
         weights[...,0] * (1 - A) * (1 - B) * (1 - C) * (1 - D) +
         weights[...,1] * (1 - A) * (1 - B) * (1 - C) * D +
@@ -811,7 +811,7 @@ def light_basis_6(A, B, C, D, E, F) -> torch.Tensor:
     return basis
 
 
-def weighted_light_basis_sum_6(A, B, C, D, E, F, weights, einsum_pattern) -> torch.Tensor:
+def weighted_light_basis_sum_6(A, B, C, D, E, F, weights) -> torch.Tensor:
     return (
         weights[...,0] * (1 - A) * (1 - B) * (1 - C) * (1 - D) * (1 - E) * (1 - F) +
         weights[...,1] * (1 - A) * (1 - B) * (1 - C) * (1 - D) * (1 - E) * F +

@@ -112,7 +112,6 @@ class LUTParametrization(ABC):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Compute forward pass (layer-agnostic).
 
@@ -120,10 +119,11 @@ class LUTParametrization(ABC):
             x: Extracted inputs with lut_rank at dimension 1, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for parametrizations that reduce via einsum
 
         Returns:
             Output tensor with lut_rank dimension reduced
+
+        Note: if weights is of shape (a, b, c, ...), then x must be of shape (..., *weight_shape) for the broadcasting to work
         """
         pass
 
@@ -212,7 +212,6 @@ class RawLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -220,7 +219,6 @@ class RawLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Unused for raw LUTs. Present for interface compatibility.
 
         Returns:
             Output with lut_rank dimension reduced
@@ -345,7 +343,6 @@ class WarpLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -353,7 +350,6 @@ class WarpLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for combining basis with weights
 
         Returns:
             Output with lut_rank dimension reduced
@@ -370,12 +366,13 @@ class WarpLUTParametrization(LUTParametrization):
 
         if self.materialize_basis:
             # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
+            # We use the fact that torch does broadcasting from the right, so we add the basis dimension at the end
+            # Note: materializing the full basis is very memory-intensive and should be avoided
             x = walsh_basis_hard(x, self.lut_rank)
-            x = torch.einsum(contraction_with_basis_dim, weight, x)
+            x = (weight * x).sum(dim=-1)
         
         else:
-            x = weighted_walsh_basis_sum(x, weight, contraction, self.lut_rank)
+            x = weighted_walsh_basis_sum(x, weight, self.lut_rank)
 
         if training:
             x = self._sample_train(-x)
@@ -466,7 +463,6 @@ class LightLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -474,7 +470,6 @@ class LightLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for combining basis with weights
 
         Returns:
             Output with lut_rank dimension reduced
@@ -490,11 +485,10 @@ class LightLUTParametrization(LUTParametrization):
 
         if self.materialize_basis:
             # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
             x = light_basis_hard(x, self.lut_rank)
-            x = torch.einsum(contraction_with_basis_dim, w, x)
+            x = (w * x).sum(dim=-1)
         else:
-            x = weighted_light_basis_sum(x, w, contraction, self.lut_rank)
+            x = weighted_light_basis_sum(x, w, self.lut_rank)
         return x
 
 
