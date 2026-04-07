@@ -143,8 +143,8 @@ def test_xor_model():
     - test the 4 possible inputs
     """
     layer = LogicDense(in_dim=2, out_dim=1, **llkw)
-    layer.weight.data = torch.zeros(16, dtype=torch.float32)
-    layer.weight.data[6] = 100
+    layer.weight.data = torch.zeros(1, 16, dtype=torch.float32)
+    layer.weight.data[0, 6] = 100
     model = torch.nn.Sequential(layer)
     test_cases = [((0, 0), 0), ((0, 1), 1), ((1, 0), 1), ((1, 1), 0)]
     for (x, y), expected in test_cases:

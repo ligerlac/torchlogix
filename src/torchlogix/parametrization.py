@@ -19,7 +19,8 @@ from .functional import (
     weighted_light_basis_sum,
     softmax,
     sigmoid,
-    gumbel_sigmoid
+    gumbel_sigmoid,
+    apply_luts_vectorized
 )
 
 
@@ -111,7 +112,6 @@ class LUTParametrization(ABC):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Compute forward pass (layer-agnostic).
 
@@ -119,11 +119,11 @@ class LUTParametrization(ABC):
             x: Extracted inputs with lut_rank at dimension 1, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern specifying how to combine basis/ops with weights
-                        (e.g., 'bnk,nk->bn' for dense, 'bcsfk,fck->bcsf' for conv)
 
         Returns:
             Output tensor with lut_rank dimension reduced
+
+        Note: if weights is of shape (a, b, c, ...), then x must be of shape (..., *weight_shape) for the broadcasting to work
         """
         pass
 
@@ -212,7 +212,6 @@ class RawLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -220,12 +219,11 @@ class RawLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for combining ops with weights
 
         Returns:
             Output with lut_rank dimension reduced
         """
-        if x.dtype != weight.dtype:
+        if training and x.dtype != weight.dtype:
             x = x.to(weight.dtype)
 
         # Extract inputs
@@ -234,20 +232,10 @@ class RawLUTParametrization(LUTParametrization):
         # Sample weights (merged from SoftmaxSampler)
         if training:
             w = self._sample_train(weight)
-        else:
-            w = self._sample_eval(weight)
+            return weighted_raw_basis_sum(a, b, w)
 
-        # Handle 1D weight case (single neuron) for backward compatibility
-        if w.ndim == 1:
-            w = w.unsqueeze(0)
-
-        if self.materialize_basis:
-            # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
-            ops = compute_all_logic_ops_vectorized(a, b)  # Shape: (..., 16)
-            return torch.einsum(contraction_with_basis_dim, w, ops)
-
-        return weighted_raw_basis_sum(a, b, w, contraction)
+        ids = weight.argmax(axis=-1)
+        return apply_luts_vectorized(a, b, ids)
     
 
     def _sample_train(self, weights: torch.Tensor) -> torch.Tensor:
@@ -273,8 +261,8 @@ class RawLUTParametrization(LUTParametrization):
         return luts
 
     def get_luts_and_ids(self, weight: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        ids = weight.argmax(axis=1)
-        luts = ((ids.unsqueeze(-1) >> torch.arange(self.lut_entries, device=ids.device)) & 1).flip(1)
+        ids = weight.argmax(axis=-1)  # argmax over LUT dimension (last axis)
+        luts = ((ids.unsqueeze(-1) >> torch.arange(self.lut_entries, device=ids.device)) & 1).flip(-1)
         return luts, ids
 
 
@@ -355,7 +343,6 @@ class WarpLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -363,7 +350,6 @@ class WarpLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for combining basis with weights
 
         Returns:
             Output with lut_rank dimension reduced
@@ -380,12 +366,13 @@ class WarpLUTParametrization(LUTParametrization):
 
         if self.materialize_basis:
             # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
+            # We use the fact that torch does broadcasting from the right, so we add the basis dimension at the end
+            # Note: materializing the full basis is very memory-intensive and should be avoided
             x = walsh_basis_hard(x, self.lut_rank)
-            x = torch.einsum(contraction_with_basis_dim, weight, x)
+            x = (weight * x).sum(dim=-1)
         
         else:
-            x = weighted_walsh_basis_sum(x, weight, contraction, self.lut_rank)
+            x = weighted_walsh_basis_sum(x, weight, self.lut_rank)
 
         if training:
             x = self._sample_train(-x)
@@ -476,7 +463,6 @@ class LightLUTParametrization(LUTParametrization):
         x: torch.Tensor,
         weight: torch.Tensor,
         training: bool,
-        contraction: str
     ) -> torch.Tensor:
         """Layer-agnostic forward pass.
 
@@ -484,7 +470,6 @@ class LightLUTParametrization(LUTParametrization):
             x: Extracted inputs, shape (batch, lut_rank, ...)
             weight: Weight parameters
             training: Whether in training mode
-            contraction: Einsum pattern for combining basis with weights
 
         Returns:
             Output with lut_rank dimension reduced
@@ -500,11 +485,10 @@ class LightLUTParametrization(LUTParametrization):
 
         if self.materialize_basis:
             # add 'k' dimension for basis entries (e.g. 'n,bn->bn' becomes 'nk,bnk->bn')
-            contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
             x = light_basis_hard(x, self.lut_rank)
-            x = torch.einsum(contraction_with_basis_dim, w, x)
+            x = (w * x).sum(dim=-1)
         else:
-            x = weighted_light_basis_sum(x, w, contraction, self.lut_rank)
+            x = weighted_light_basis_sum(x, w, self.lut_rank)
         return x
 
 

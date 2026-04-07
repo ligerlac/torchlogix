@@ -75,8 +75,11 @@ class TestIndices:
         """Test the shape of the first tree level indices.
 
         The first tree level defines which entries within the receptive field are
-        considered. It should be of shape (num_kernels, num_positions, 2**(tree_depth - 1), 4)
+        considered. It should be of shape (num_positions, num_kernels, 2**(tree_depth - 1), 4)
         [4 because of (w, h, d, c) notation].
+
+        Note: K and P dimensions were swapped (vs. original implementation) so that forward()
+        produces (b, k, s, c, f) instead of (b, k, c, s, f), eliminating permute calls.
         """
         h_positions = (
             int((layer.in_dim[0] + 2 * layer.padding - layer.receptive_field_size[0]) / layer.stride) + 1
@@ -90,8 +93,8 @@ class TestIndices:
         num_positions = h_positions * w_positions * d_positions
         indices = layer.connections.indices[0][side]
         assert indices.shape == (
-            layer.num_kernels,
             num_positions,
+            layer.num_kernels,
             2**(layer.tree_depth-1),
             4,
         )
@@ -203,9 +206,10 @@ def test_and_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     # only all 1s should produce 1
     test_cases = [
@@ -265,9 +269,10 @@ def test_binary_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 1.0  # Pick 1 instead of 100 here
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     layer.train(False)  # Switch model to eval mode
 
@@ -336,9 +341,10 @@ def test_conv_model():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 
@@ -408,9 +414,10 @@ def test_conv_model_rect():
     with torch.no_grad():
         and_weights = torch.zeros(1, 16)
         and_weights[0, 1] = 100.0  # Large value so softmax will make it close to 1
-        layer.tree_weights[0].data[0] = and_weights
-        layer.tree_weights[0].data[1] = and_weights
-        layer.tree_weights[1].data[0] = and_weights
+        # Note: tree_weights shape is now (c, f, lut_entries) instead of (f, c, lut_entries)
+        layer.tree_weights[0].data[0, 0] = and_weights
+        layer.tree_weights[0].data[0, 1] = and_weights
+        layer.tree_weights[1].data[0, 0] = and_weights
 
     model = torch.nn.Sequential(layer, torch.nn.Flatten(), GroupSum(1))
 

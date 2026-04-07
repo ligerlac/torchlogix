@@ -88,11 +88,9 @@ class LogicDense(LogicBase):
         # Extract inputs according to connection pattern
         x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
 
-        # Delegate to parametrization with einsum contraction
-        # b=batch, n=neurons, k=num_basis
+        # Delegate to the selected LUT parametrization.
         return self.parametrization.forward(
-            x, self.weight, self.training,
-            contraction='n,bn->bn'
+            x, self.weight, self.training
         )
 
     def extra_repr(self):

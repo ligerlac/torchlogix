@@ -156,8 +156,12 @@ class CompiledLogicNet(torch.nn.Module):
         """Extract information from a LogicConv2d or LogicConv3d layer for compilation."""
         tree_operations = []
         for level_idx, level_weights in enumerate(layer.tree_weights):
+            # level_weights shape: (c, f, lut_entries) where c=num_kernels, f=num_features
+            # We need structure [level][feature][kernel]
+            # Transpose to (f, c, lut_entries) then extract ops
+            level_weights_transposed = level_weights.transpose(0, 1)
             level_ops = []
-            for weight_param in level_weights:
+            for weight_param in level_weights_transposed:
                 ops = weight_param.argmax(1).cpu().numpy()
                 level_ops.append(ops)
             tree_operations.append(level_ops)
@@ -497,8 +501,9 @@ class CompiledLogicNet(torch.nn.Module):
             for pos_idx in range(iter_range):
                 # First level: process receptive field positions
                 level_0_indices = indices[0]
-                left_indices = level_0_indices[0][kernel_idx, pos_idx]
-                right_indices = level_0_indices[1][kernel_idx, pos_idx]
+                # Note: indices structure is (L, P, K, S, 3) so we swap kernel_idx and pos_idx
+                left_indices = level_0_indices[0][pos_idx, kernel_idx]
+                right_indices = level_0_indices[1][pos_idx, kernel_idx]
 
                 # Generate variables for the first level
                 for gate_idx in range(2**(conv_info['tree_depth']-1)):
@@ -869,8 +874,9 @@ class CompiledLogicNet(torch.nn.Module):
 
                 # Level 0: leaf gates (process receptive field)
                 level_0_indices = indices[0]
-                left_indices = level_0_indices[0][kernel_idx, pos_idx]
-                right_indices = level_0_indices[1][kernel_idx, pos_idx]
+                # Note: indices structure is (L, P, K, S, 3) so we swap kernel_idx and pos_idx
+                left_indices = level_0_indices[0][pos_idx, kernel_idx]
+                right_indices = level_0_indices[1][pos_idx, kernel_idx]
 
                 for gate_idx in range(2**(conv_info['tree_depth']-1)):
                     if conv_dim == 2:

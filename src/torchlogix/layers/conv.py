@@ -2,13 +2,15 @@ import math
 import random
 from typing import Union
 
+import numpy as np
+
 import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
 from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights
+    get_regularization_loss, rescale_weights, permute, movedim
     )
 from .base import LogicBase
 
@@ -92,15 +94,16 @@ class _LogicConvNd(LogicBase):
         tree_weights = torch.nn.ParameterList()
         for i in reversed(range(self.tree_depth)):
             # each tree level has lut_rank**i nodes per kernel
-            level_weights = torch.nn.Parameter(torch.stack(
+            level_weights = torch.stack(
                 [
                     self.parametrization.init_weights(
-                        self.num_kernels, 
+                        self.num_kernels,
                         self.device
                     ) for _ in range(self.lut_rank**i)
-                ]
-            ))
-            tree_weights.append(level_weights)
+                ],
+                dim=1,
+            )
+            tree_weights.append(torch.nn.Parameter(level_weights))
         return tree_weights
 
     def _init_connections(self):
@@ -149,32 +152,57 @@ class _LogicConvNd(LogicBase):
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
         if self.padding > 0:
-            x = torch.nn.functional.pad(
-                x,
-                (self.padding, self.padding, self.padding, self.padding, 0, 0),
-                mode="constant",
-                value=0
-            )
+            if isinstance(x, torch.Tensor):
+                x = torch.nn.functional.pad(
+                    x,
+                    (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                    mode="constant",
+                    value=0
+                )
+            else:
+                # NumPy padding
+                pad_width = [(0, 0), (0, 0)]  # No padding for batch and channel dims
+                pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
+                x = np.pad(x, pad_width, mode='constant', constant_values=0)
+
+        # for i in range(len(self.tree_weights)):
+        #     self.tree_weights[i] = self.tree_weights[i].permute(1, 0, 2)
+
         # First level tree indices
+        # connections now returns (b, k, s, c, f) directly (K and P dimensions swapped in indices)
         x = self.connections(x, 0)
-        # Process first level with einsum contraction
-        # b=batch, c=channels, s=spatial, f=features, k=num_basis/16
+        # Process first level.
         x = self.parametrization.forward(
             x, self.tree_weights[0], self.training,
-            contraction='fc,bcsf->bcsf'
         )
+        # Parametrization returns (b, s, c, f) - no permute needed
+
         # Process remaining levels
         for level in range(1, self.tree_depth):
+            # Input is (b, s, c, f)
             x = self.connections(x, level)
-            x = x.movedim(-2, 1)
+            # After connections: (b, s, c, k, f')
+            # Move dimension -2 to position 1 (due to advanced indexing)
+            x = movedim(x, -2, 1)
+            # After movedim: (b, k, s, c, f') - no permute needed
             x = self.parametrization.forward(
                 x, self.tree_weights[level], self.training,
-                contraction='fc,bcsf->bcsf'
             )
-        # Reshape flattened output
-        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
+            # Parametrization returns (b, s, c, f'') - no permute needed
+
+        # Reshape flattened output from (b, s, c, f) to (b, c, h_out, w_out)
+        # At final level, f should be 1 (as it was reduced by a tree)
+        x = x.squeeze(-1)
+        x = permute(x, [0, 2, 1])
+
+        # Unflatten spatial dimension
+        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
-        x = x.view(x.shape[0], x.shape[1], *reshape)
+        new_shape = (x.shape[0], x.shape[1], *reshape)
+        if isinstance(x, torch.Tensor):
+            x = x.view(*new_shape)
+        else:
+            x = x.reshape(new_shape)
 
         return x
 
@@ -191,7 +219,7 @@ class _LogicConvNd(LogicBase):
         for level in range(self.tree_depth):
             level_ids = []
             level_luts = []
-            for w in self.tree_weights[level]:
+            for w in self.tree_weights[level].unbind(dim=1):
                 luts, ids = self.parametrization.get_luts_and_ids(w)
                 level_ids.append(ids)
                 level_luts.append(luts)
@@ -208,7 +236,7 @@ class _LogicConvNd(LogicBase):
         tree_luts = []
         for level in range(self.tree_depth):
             level_luts = []
-            for w in self.tree_weights[level]:
+            for w in self.tree_weights[level].unbind(dim=1):
                 luts = self.parametrization.get_luts(w)
                 level_luts.append(luts)
             tree_luts.append(level_luts)
