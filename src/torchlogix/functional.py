@@ -83,7 +83,7 @@ def bin_op(a, b, i):
 
 def compute_all_logic_ops_vectorized(a, b):
     """Compute all 16 logic operations in a single vectorized operation.
-    
+
     Returns a tensor with shape [..., 16] where the last dimension contains
     all 16 logic operations applied to inputs a and b.
     """
@@ -91,11 +91,11 @@ def compute_all_logic_ops_vectorized(a, b):
     ab = a * b  # AND operation
     a_plus_b = a + b
     a_or_b = a_plus_b - ab  # OR operation
-    
+
     # Stack all 16 operations efficiently using precomputed terms
     ops = torch.stack([
         torch.zeros_like(a),           # 0: 0
-        ab,                           # 1: A and B  
+        ab,                           # 1: A and B
         a - ab,                       # 2: A and not B
         a,                            # 3: A
         b - ab,                       # 4: B and not A
@@ -106,13 +106,70 @@ def compute_all_logic_ops_vectorized(a, b):
         1 - (a_plus_b - 2 * ab),     # 9: not(A xor B)
         1 - b,                       # 10: not B
         1 - b + ab,                  # 11: B implies A
-        1 - a,                       # 12: not A  
+        1 - a,                       # 12: not A
         1 - a + ab,                  # 13: A implies B
         1 - ab,                      # 14: not(A and B)
         torch.ones_like(a)           # 15: 1
     ], dim=-1)
-    
+
     return ops
+
+
+def apply_luts_vectorized_export_mode(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    lut_ids: torch.Tensor
+) -> torch.Tensor:
+    """Tracer-friendly version of apply_luts_vectorized for ONNX/TorchScript export.
+
+    This version uses only torch operations that can be traced by ONNX and TorchScript.
+    It replaces the Python for loop with torch.where operations, making it fully traceable.
+
+    Args:
+        a: First input tensor (batch, neurons) or (batch, spatial, kernels, features)
+        b: Second input tensor (same shape as a)
+        lut_ids: LUT operation IDs (neurons,) or (kernels, features) - must be torch.Tensor
+
+    Returns:
+        Result tensor with same shape as a and b
+
+    Note: This function is optimized for export, not runtime performance.
+          For training/eval without export, use the regular forward pass.
+    """
+    # Convert to boolean for logical operations
+    a_bool = a.bool()
+    b_bool = b.bool()
+
+    # Broadcast lut_ids to match input shape for element-wise comparison
+    # lut_ids shape: (neurons,) or (kernels, features)
+    # a/b shape: (batch, neurons) or (batch, spatial, kernels, features)
+    # We need to broadcast lut_ids to match all dimensions
+    while lut_ids.ndim < a.ndim:
+        lut_ids = lut_ids.unsqueeze(0)
+
+    # Initialize result
+    result = torch.zeros_like(a, dtype=torch.float32)
+
+    # Unroll all 16 LUT operations using torch.where
+    # This is fully traceable by ONNX/TorchScript
+    result = torch.where(lut_ids == 0, torch.zeros_like(a_bool, dtype=torch.float32), result)
+    result = torch.where(lut_ids == 1, (a_bool & b_bool).float(), result)
+    result = torch.where(lut_ids == 2, (a_bool & ~b_bool).float(), result)
+    result = torch.where(lut_ids == 3, a_bool.float(), result)
+    result = torch.where(lut_ids == 4, (b_bool & ~a_bool).float(), result)
+    result = torch.where(lut_ids == 5, b_bool.float(), result)
+    result = torch.where(lut_ids == 6, (a_bool ^ b_bool).float(), result)
+    result = torch.where(lut_ids == 7, (a_bool | b_bool).float(), result)
+    result = torch.where(lut_ids == 8, (~(a_bool | b_bool)).float(), result)
+    result = torch.where(lut_ids == 9, (~(a_bool ^ b_bool)).float(), result)
+    result = torch.where(lut_ids == 10, (~b_bool).float(), result)
+    result = torch.where(lut_ids == 11, (~b_bool | a_bool).float(), result)
+    result = torch.where(lut_ids == 12, (~a_bool).float(), result)
+    result = torch.where(lut_ids == 13, (~a_bool | b_bool).float(), result)
+    result = torch.where(lut_ids == 14, (~(a_bool & b_bool)).float(), result)
+    result = torch.where(lut_ids == 15, torch.ones_like(a_bool, dtype=torch.float32), result)
+
+    return result
 
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:

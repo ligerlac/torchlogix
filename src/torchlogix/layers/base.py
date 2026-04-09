@@ -101,3 +101,14 @@ class LogicBase(torch.nn.Module, ABC):
             method (str): Rescaling method. Options are 'clip', 'abs_sum', 'L2'.
         """
         pass
+
+    def set_export_mode(self, enabled: bool):
+        """Enable or disable export mode for ONNX/TorchScript tracing.
+
+        When enabled, the layer will use tracer-friendly operations during eval mode.
+        This allows the model to be exported to ONNX or traced with TorchScript.
+
+        Args:
+            enabled (bool): Whether to enable export mode
+        """
+        self.parametrization.set_export_mode(enabled)
