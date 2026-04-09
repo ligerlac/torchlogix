@@ -149,7 +149,7 @@ class _LogicConvNd(LogicBase):
             * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
-        if self.export_mode and isinstance(x, np.ndarray):
+        if self.export_mode:
             return self._forward_export_mode(x)
         
         if self.padding > 0:
@@ -183,6 +183,13 @@ class _LogicConvNd(LogicBase):
         return x
     
     def _forward_export_mode(self, x):
+
+        # determine whether input is torch or numpy for later conversion
+        is_torch_input = isinstance(x, torch.Tensor)
+        if is_torch_input:
+            device = x.device
+            x = x.detach().cpu().numpy()
+
         # Padding
         if self.padding > 0:
             pad_width = [(0, 0), (0, 0)]
@@ -226,6 +233,9 @@ class _LogicConvNd(LogicBase):
             for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)
         ]
         x = x.reshape(x.shape[0], x.shape[1], *reshape)
+
+        if is_torch_input:
+            return torch.from_numpy(x).to(device)
         return x
 
     def get_luts_and_ids(self):
