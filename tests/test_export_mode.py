@@ -5,7 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlogix.layers.dense import LogicDense
+from torchlogix.layers import LogicDense, LogicConv2d
 from torchlogix.functional import apply_luts_vectorized_export_mode
 
 
@@ -234,7 +234,7 @@ class TestTorchNumpyEquivalence:
         assert np.array_equal(result_torch.numpy(), result_numpy)
 
     @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
-    def test_parametrization_equivalence(self, param_type):
+    def test_numpy_torch_equivalence_dense(self, param_type):
         batch_size = 32
         in_dim = 8
         out_dim = 16
@@ -250,6 +250,25 @@ class TestTorchNumpyEquivalence:
 
         # Compare results
         assert np.allclose(result_torch.numpy(), result_numpy, atol=1e-6)
+
+    @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
+    def test_numpy_torch_equivalence_conv(self, param_type):
+        batch_size = 16
+        in_dim = 16
+        channels = 3
+        num_kernels = 8
+
+        layer = LogicConv2d(in_dim=in_dim, channels=channels, num_kernels=num_kernels, receptive_field_size=3, tree_depth=2)
+        layer.set_export_mode()
+
+        x_np = np.random.randint(0, 2, (batch_size, channels, in_dim, in_dim), dtype=bool)
+        x_torch = torch.from_numpy(x_np)
+
+        result_torch = layer(x_torch)
+        result_numpy = layer(x_np)
+
+        assert np.allclose(result_torch.numpy(), result_numpy, atol=1e-6)
+
 
 class TestLayerExportMode:
     """Test export mode in logic layers."""
@@ -276,7 +295,7 @@ class TestLayerExportMode:
 
 
     @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
-    def test_export_mode_equivalence_in_layer(self, param_type):
+    def test_export_mode_equivalence_in_dense_layer(self, param_type):
         """Test that layer produces same results with and without export mode on binary inputs."""
         in_dim = 32
         out_dim = 64
@@ -292,6 +311,33 @@ class TestLayerExportMode:
 
         # Create BINARY input (this is what logic networks expect at inference)
         x = torch.randint(0, 2, (batch_size, in_dim)).float()
+
+        # Forward pass without export mode
+        layer.set_export_mode(False)
+        result_regular = layer(x)
+
+        # Forward pass with export mode
+        layer.set_export_mode(True)
+        result_export = layer(x.bool())
+
+        # Results should be identical for binary inputs
+        assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
+
+
+    @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
+    def test_export_mode_equivalence_in_conv_layer(self, param_type):
+        """Test that layer produces same results with and without export mode on binary inputs."""
+        in_dim = 32
+        channels = 3
+        num_kernels = 16
+        batch_size = 128
+
+        # Create layer
+        layer = LogicConv2d(in_dim=in_dim, channels=channels, num_kernels=num_kernels, receptive_field_size=3, tree_depth=3)
+        layer.eval()
+
+        # Create BINARY input (this is what logic networks expect at inference)
+        x = torch.randint(0, 2, (batch_size, channels, in_dim, in_dim)).float()
 
         # Forward pass without export mode
         layer.set_export_mode(False)

@@ -148,6 +148,9 @@ class _LogicConvNd(LogicBase):
             * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
+        # if self.export_mode:
+        #     return self._forward_export_mode(x)
+        
         if self.padding > 0:
             x = torch.nn.functional.pad(
                 x,
@@ -177,6 +180,9 @@ class _LogicConvNd(LogicBase):
         x = x.view(x.shape[0], x.shape[1], *reshape)
 
         return x
+    
+    # def _forward_export_mode(self, x):
+
 
     def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
@@ -223,6 +229,35 @@ class _LogicConvNd(LogicBase):
     def rescale_weights(self, method):
         for w in self.tree_weights:
             rescale_weights(w, method)
+
+    def set_export_mode(self, enabled: bool = True):
+        self.eval()
+        self.export_mode = enabled
+
+        if enabled:
+            _, tree_ids = self.get_luts_and_ids()
+
+            # Stack each level (already same shape within level)
+            for level_idx, level_ids in enumerate(tree_ids):
+                # level_ids is list of tensors, all shape (num_kernels,)
+                stacked = torch.stack(level_ids)  # Shape: (lut_rank**i, num_kernels)
+                self.register_buffer(f'_export_lut_ids_L{level_idx}',
+                                    stacked, persistent=True)
+        else:
+            # Clean up all buffers
+            buffers_to_delete = [name for name in self._buffers.keys()
+                                if name.startswith('_export_lut')]
+            for name in buffers_to_delete:
+                delattr(self, name)
+
+    def _get_export_lut_ids(self, level):
+        tree_ids = []
+        for level_idx in range(self.tree_depth):
+            # Just unstack (or iterate over dimension 0)
+            level_tensor = getattr(self, f'_export_lut_ids_L{level_idx}')
+            level_ids = [level_tensor[i] for i in range(level_tensor.shape[0])]
+            tree_ids.append(level_ids)
+        return tree_ids
 
 
 class LogicConv2d(_LogicConvNd):
