@@ -19,6 +19,7 @@ class LogicBase(torch.nn.Module, ABC):
         parametrization_kwargs (dict): Additional keyword arguments for parametrization.
         connections (str): Type of connections to use ('fixed', 'learnable', etc.).
         connections_kwargs (dict): Additional keyword arguments for connections.
+        export_mode (bool): Whether to enable export mode for traceable, fully boolean expression
     """
     def __init__(
         self, 
@@ -28,7 +29,8 @@ class LogicBase(torch.nn.Module, ABC):
         parametrization: str = "raw",
         parametrization_kwargs: dict = None,
         connections: str = "fixed",
-        connections_kwargs: dict = None,    
+        connections_kwargs: dict = None,
+        export_mode: bool = False
     ):
         super().__init__()
         # Create parametrization component (sampler merged into parametrization)
@@ -42,6 +44,7 @@ class LogicBase(torch.nn.Module, ABC):
         self.lut_rank = lut_rank
         self.connections = connections
         self.connections_kwargs = connections_kwargs or {}
+        self.export_mode = export_mode
 
     @abstractmethod
     def _init_weights(self, **kwargs):
@@ -102,7 +105,7 @@ class LogicBase(torch.nn.Module, ABC):
         """
         pass
 
-    def set_export_mode(self, enabled: bool):
+    def set_export_mode(self, enabled: bool = True):
         """Enable or disable export mode for ONNX/TorchScript tracing.
 
         When enabled, the layer will use tracer-friendly operations during eval mode.
@@ -111,4 +114,6 @@ class LogicBase(torch.nn.Module, ABC):
         Args:
             enabled (bool): Whether to enable export mode
         """
-        self.parametrization.set_export_mode(enabled)
+        self.eval()  # Ensure we're in eval mode for export
+        self.export_mode = enabled
+        

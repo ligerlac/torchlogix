@@ -20,7 +20,6 @@ from .functional import (
     softmax,
     sigmoid,
     gumbel_sigmoid,
-    apply_luts_vectorized_export_mode
 )
 
 
@@ -39,7 +38,7 @@ def setup_parametrization(parametrization: str, lut_rank: int, **parametrization
     return param_cls(lut_rank, **parametrization_kwargs)
 
 
-class LUTParametrization(ABC):
+class LUTParametrization(torch.nn.Module, ABC):
     """Base class for LUT parametrization strategies.
 
     A parametrization defines how to represent Boolean functions (LUTs)
@@ -55,7 +54,6 @@ class LUTParametrization(ABC):
         weight_init: str = "residual",
         residual_probability: float = 0.951,
         materialize_basis: bool = False,
-        export_mode: bool = False
     ):
         """Initialize parametrization.
 
@@ -72,9 +70,8 @@ class LUTParametrization(ABC):
             materialize_basis: Whether to materialize the 2^lut_rank-dimensional basis
                 and calculate the sum via the scalar product with weights (strongly discouraged).
                 If False, the weighted sum is calculated in-place, saving memory.
-            export_mode: Whether to use tracer-friendly operations for ONNX/TorchScript export.
-                When True, uses apply_luts_vectorized_export_mode in eval mode.
         """
+        super().__init__()
         self.lut_rank = lut_rank
         self.lut_entries = 1 << lut_rank
 
@@ -89,7 +86,6 @@ class LUTParametrization(ABC):
         self.weight_init = weight_init
         self.residual_probability = residual_probability
         self.materialize_basis = materialize_basis
-        self.export_mode = export_mode
 
     @abstractmethod
     def init_weights(
@@ -160,14 +156,6 @@ class LUTParametrization(ABC):
 
     def update_temperature(self, temperature: float):
         self.temperature = temperature
-
-    def set_export_mode(self, enabled: bool):
-        """Enable or disable export mode for ONNX/TorchScript tracing.
-
-        Args:
-            enabled: Whether to enable export mode
-        """
-        self.export_mode = enabled
     
 
 class RawLUTParametrization(LUTParametrization):
@@ -186,7 +174,6 @@ class RawLUTParametrization(LUTParametrization):
         weight_init: str = "residual",
         residual_probability: float = 0.951,
         materialize_basis: bool = False,
-        export_mode: bool = False
     ):
         super().__init__(
             lut_rank,
@@ -195,7 +182,6 @@ class RawLUTParametrization(LUTParametrization):
             weight_init,
             residual_probability,
             materialize_basis,
-            export_mode
         )
         if lut_rank != 2:
             raise ValueError("Raw parametrization currently only supports lut_rank=2")
@@ -243,12 +229,6 @@ class RawLUTParametrization(LUTParametrization):
         # Extract inputs
         a, b = x[:, 0], x[:, 1]
 
-        # Export mode: use tracer-friendly discrete operations
-        if self.export_mode and not training:
-            ids = weight.argmax(dim=-1)
-            return apply_luts_vectorized_export_mode(a, b, ids)
-
-        # Regular forward pass (training or eval without export)
         if x.dtype != weight.dtype:
             x = x.to(weight.dtype)
 
@@ -315,7 +295,6 @@ class WarpLUTParametrization(LUTParametrization):
         weight_init: str = "residual",
         residual_probability: float = 0.951,
         materialize_basis: bool = False,
-        export_mode: bool = False
     ):
         super().__init__(
             lut_rank,
@@ -324,7 +303,6 @@ class WarpLUTParametrization(LUTParametrization):
             weight_init,
             residual_probability,
             materialize_basis,
-            export_mode
         )
         if lut_rank not in [1, 2, 4, 6]:
             raise ValueError(
@@ -391,17 +369,6 @@ class WarpLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-        # Export mode: use tracer-friendly discrete operations
-        if self.export_mode and not training:
-            if self.lut_rank != 2:
-                raise NotImplementedError(
-                    f"Export mode for WarpLUTParametrization only supports lut_rank=2, got {self.lut_rank}"
-                )
-            # Extract LUT IDs from Walsh coefficients
-            _, ids = self.get_luts_and_ids(weight)
-            a, b = x[:, 0], x[:, 1]
-            return apply_luts_vectorized_export_mode(a, b, ids)
-
         # Regular forward pass (training or eval without export)
         if x.dtype != weight.dtype:
             x = x.to(weight.dtype)
@@ -473,7 +440,6 @@ class LightLUTParametrization(LUTParametrization):
         weight_init: str = "residual",
         residual_probability: float = 0.951,
         materialize_basis: bool = False,
-        export_mode: bool = False
     ):
         super().__init__(
             lut_rank,
@@ -482,7 +448,6 @@ class LightLUTParametrization(LUTParametrization):
             weight_init,
             residual_probability,
             materialize_basis,
-            export_mode
         )
         if lut_rank not in [2, 4, 6]:
             raise ValueError(
@@ -525,18 +490,6 @@ class LightLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-        # Export mode: use tracer-friendly discrete operations
-        if self.export_mode and not training:
-            if self.lut_rank != 2:
-                raise NotImplementedError(
-                    f"Export mode for LightLUTParametrization only supports lut_rank=2, got {self.lut_rank}"
-                )
-            # Extract LUT IDs from light coefficients
-            _, ids = self.get_luts_and_ids(weight)
-            a, b = x[:, 0], x[:, 1]
-            return apply_luts_vectorized_export_mode(a, b, ids)
-
-        # Regular forward pass (training or eval without export)
         # Handle 1D weight case (single neuron) for backward compatibility
         if weight.ndim == 1:
             weight = weight.unsqueeze(0)
