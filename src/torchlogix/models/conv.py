@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+from ..inference_state import InferenceStateDictMixin
 from ..layers import OrPooling2d, GroupSum, LogicConv2d, LogicDense
 from ..layers.binarization import setup_binarization
 
 
-class CNN(torch.nn.Module):
+class CNN(InferenceStateDictMixin, torch.nn.Module):
     """An implementation of a logic gate convolutional neural network."""
 
     def __init__(self, class_count, tau, parametrization="raw", **llkw):
@@ -67,7 +68,7 @@ class CNN(torch.nn.Module):
         return self.model(x)
 
 
-class ClgnMnist(torch.nn.Sequential):
+class ClgnMnist(InferenceStateDictMixin, torch.nn.Sequential):
     """
     Model as described in the paper 'Convolutional Logic Gate Networks'
     for the MNIST dataset.
@@ -155,7 +156,7 @@ class ClgnMnistLarge(ClgnMnist):
         super(ClgnMnistLarge, self).__init__(k_num=1024, tau=tau, **llkw)
 
 
-class ClgnCifar10(torch.nn.Sequential):
+class ClgnCifar10(InferenceStateDictMixin, torch.nn.Sequential):
     """
     An implementation of a logic gate convolutional neural network for CIFAR-10,
     as described in the paper 'convolutional logic gate networks'.

@@ -19,7 +19,7 @@ from .functional import (
     weighted_light_basis_sum,
     softmax,
     sigmoid,
-    gumbel_sigmoid
+    gumbel_sigmoid,
 )
 
 
@@ -38,7 +38,7 @@ def setup_parametrization(parametrization: str, lut_rank: int, **parametrization
     return param_cls(lut_rank, **parametrization_kwargs)
 
 
-class LUTParametrization(ABC):
+class LUTParametrization(torch.nn.Module, ABC):
     """Base class for LUT parametrization strategies.
 
     A parametrization defines how to represent Boolean functions (LUTs)
@@ -47,13 +47,13 @@ class LUTParametrization(ABC):
     """
 
     def __init__(
-        self, 
-        lut_rank: int, 
+        self,
+        lut_rank: int,
         forward_sampling: str = "soft",
         temperature: float = 1.0,
         weight_init: str = "residual",
         residual_probability: float = 0.951,
-        materialize_basis: bool = False
+        materialize_basis: bool = False,
     ):
         """Initialize parametrization.
 
@@ -71,6 +71,7 @@ class LUTParametrization(ABC):
                 and calculate the sum via the scalar product with weights (strongly discouraged).
                 If False, the weighted sum is calculated in-place, saving memory.
         """
+        super().__init__()
         self.lut_rank = lut_rank
         self.lut_entries = 1 << lut_rank
 
@@ -172,7 +173,7 @@ class RawLUTParametrization(LUTParametrization):
         temperature: float = 1.0,
         weight_init: str = "residual",
         residual_probability: float = 0.951,
-        materialize_basis: bool = False
+        materialize_basis: bool = False,
     ):
         super().__init__(
             lut_rank,
@@ -180,7 +181,7 @@ class RawLUTParametrization(LUTParametrization):
             temperature,
             weight_init,
             residual_probability,
-            materialize_basis
+            materialize_basis,
         )
         if lut_rank != 2:
             raise ValueError("Raw parametrization currently only supports lut_rank=2")
@@ -225,11 +226,11 @@ class RawLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-        if x.dtype != weight.dtype:
-            x = x.to(weight.dtype)
-
         # Extract inputs
         a, b = x[:, 0], x[:, 1]
+
+        if x.dtype != weight.dtype:
+            x = x.to(weight.dtype)
 
         # Sample weights (merged from SoftmaxSampler)
         if training:
@@ -293,7 +294,7 @@ class WarpLUTParametrization(LUTParametrization):
         temperature: float = 1.0,
         weight_init: str = "residual",
         residual_probability: float = 0.951,
-        materialize_basis: bool = False
+        materialize_basis: bool = False,
     ):
         super().__init__(
             lut_rank,
@@ -301,7 +302,7 @@ class WarpLUTParametrization(LUTParametrization):
             temperature,
             weight_init,
             residual_probability,
-            materialize_basis
+            materialize_basis,
         )
         if lut_rank not in [1, 2, 4, 6]:
             raise ValueError(
@@ -368,7 +369,7 @@ class WarpLUTParametrization(LUTParametrization):
         Returns:
             Output with lut_rank dimension reduced
         """
-
+        # Regular forward pass (training or eval without export)
         if x.dtype != weight.dtype:
             x = x.to(weight.dtype)
 
@@ -383,7 +384,7 @@ class WarpLUTParametrization(LUTParametrization):
             contraction_with_basis_dim = contraction.replace(',', 'k,').replace('->', 'k->')
             x = walsh_basis_hard(x, self.lut_rank)
             x = torch.einsum(contraction_with_basis_dim, weight, x)
-        
+
         else:
             x = weighted_walsh_basis_sum(x, weight, contraction, self.lut_rank)
 
@@ -438,7 +439,7 @@ class LightLUTParametrization(LUTParametrization):
         temperature: float = 1.0,
         weight_init: str = "residual",
         residual_probability: float = 0.951,
-        materialize_basis: bool = False
+        materialize_basis: bool = False,
     ):
         super().__init__(
             lut_rank,
@@ -446,7 +447,7 @@ class LightLUTParametrization(LUTParametrization):
             temperature,
             weight_init,
             residual_probability,
-            materialize_basis
+            materialize_basis,
         )
         if lut_rank not in [2, 4, 6]:
             raise ValueError(

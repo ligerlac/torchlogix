@@ -4,7 +4,9 @@ from ..connections import setup_connections
 from ..functional import (
     GradFactor, get_regularization_loss, rescale_weights
     )
+from ..inference_state import set_persistent_buffer
 from .base import LogicBase
+from ..functional import apply_luts_vectorized_export_mode
 
 
 class LogicDense(LogicBase):
@@ -88,6 +90,19 @@ class LogicDense(LogicBase):
         # Extract inputs according to connection pattern
         x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
 
+        # Split into export and train path (optimized separately for efficiency and exportability)
+        # Export path only needs to know which LUT, not how it's parameterized
+        if self.export_mode:
+            if self.lut_rank != 2:
+                raise NotImplementedError("Export mode currently only supports lut_rank=2.")
+            # TODO: apply_luts function w/ bit shifts that works on higher lut_ranks
+            if isinstance(x, torch.Tensor):
+                x = x.bool()
+            else:
+                x = x.astype(bool, copy=False)
+            a, b = x[:, 0], x[:, 1]  # Assuming lut_rank=2 for export mode
+            ids = self._export_lut_ids
+            return apply_luts_vectorized_export_mode(a, b, ids)
         # Delegate to parametrization with einsum contraction
         # b=batch, n=neurons, k=num_basis
         return self.parametrization.forward(
@@ -149,3 +164,67 @@ class LogicDense(LogicBase):
     
     def rescale_weights(self, method):
         rescale_weights(self.weight, method)
+
+    def _torchlogix_get_inference_state(self, prefix: str):
+        if self.lut_rank != 2:
+            raise NotImplementedError("Inference-only serialization currently only supports lut_rank=2.")
+
+        _, lut_ids = self.get_luts_and_ids()
+        state = {
+            f"{prefix}_inference.lut_ids": lut_ids.detach().clone(),
+        }
+
+        if hasattr(self.connections, "weights"):
+            state[f"{prefix}_inference.connection_candidates"] = self.connections.indices.detach().clone()
+            state[f"{prefix}_inference.connection_selection"] = self.connections.weights.argmax(dim=0).detach().clone()
+        else:
+            state[f"{prefix}_inference.connection_indices"] = self.connections.indices.detach().clone()
+
+        return state
+
+    def _torchlogix_load_inference_state(self, state_dict, prefix: str, missing_keys, consumed_keys):
+        lut_key = f"{prefix}_inference.lut_ids"
+        if lut_key not in state_dict:
+            missing_keys.append(lut_key)
+            return
+
+        lut_ids = state_dict[lut_key].to(device=self.weight.device, dtype=torch.int64)
+        consumed_keys.add(lut_key)
+        loaded_all_required_keys = True
+
+        if hasattr(self.connections, "weights"):
+            candidate_key = f"{prefix}_inference.connection_candidates"
+            selection_key = f"{prefix}_inference.connection_selection"
+
+            if candidate_key not in state_dict:
+                missing_keys.append(candidate_key)
+                loaded_all_required_keys = False
+            if selection_key not in state_dict:
+                missing_keys.append(selection_key)
+                loaded_all_required_keys = False
+            if candidate_key in state_dict and selection_key in state_dict:
+                candidates = state_dict[candidate_key].to(device=self.weight.device, dtype=torch.int64)
+                selection = state_dict[selection_key].to(device=self.weight.device, dtype=torch.int64)
+                self.connections.indices = candidates
+                new_weights = torch.zeros_like(self.connections.weights.data)
+                src = torch.ones_like(selection, dtype=new_weights.dtype).unsqueeze(0)
+                new_weights.scatter_(0, selection.unsqueeze(0), src)
+                self.connections.weights.data.copy_(new_weights)
+                consumed_keys.update({candidate_key, selection_key})
+        else:
+            conn_key = f"{prefix}_inference.connection_indices"
+            if conn_key not in state_dict:
+                missing_keys.append(conn_key)
+                loaded_all_required_keys = False
+            else:
+                self.connections.indices = state_dict[conn_key].to(
+                    device=self.weight.device,
+                    dtype=torch.int64,
+                )
+                consumed_keys.add(conn_key)
+
+        if not loaded_all_required_keys:
+            return
+
+        self._set_inference_only_mode()
+        set_persistent_buffer(self, "_export_lut_ids", lut_ids)

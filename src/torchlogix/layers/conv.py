@@ -2,14 +2,16 @@ import math
 import random
 from typing import Union
 
+import numpy as np
 import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
 from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights
+    apply_luts_vectorized_export_mode, get_regularization_loss, rescale_weights
     )
+from ..inference_state import set_persistent_buffer
 from .base import LogicBase
 
 
@@ -148,13 +150,11 @@ class _LogicConvNd(LogicBase):
             * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
+        if self.export_mode:
+            return self._forward_export_mode(x)
+        
         if self.padding > 0:
-            x = torch.nn.functional.pad(
-                x,
-                (self.padding, self.padding, self.padding, self.padding, 0, 0),
-                mode="constant",
-                value=0
-            )
+            x = self._pad_input_export_mode(x)
         # First level tree indices
         x = self.connections(x, 0)
         # Process first level with einsum contraction
@@ -177,6 +177,90 @@ class _LogicConvNd(LogicBase):
         x = x.view(x.shape[0], x.shape[1], *reshape)
 
         return x
+    
+    def _forward_export_mode(self, x):
+        if self.lut_rank != 2:
+            raise NotImplementedError("Export mode currently only supports lut_rank=2.")
+
+        result = self._first_level_export_forward(x)
+
+        for level in range(1, self.tree_depth):
+            conn_level = self._get_connection_indices(level)
+            selected = result[..., conn_level]
+            a = self._swap_kernel_and_spatial_axes(selected[..., 0, :])
+            b = self._swap_kernel_and_spatial_axes(selected[..., 1, :])
+            lut_ids = self._get_export_lut_ids_tensor(level)
+            result = apply_luts_vectorized_export_mode(a, b, lut_ids)
+            result = self._swap_kernel_and_spatial_axes(result)
+
+        result = result.squeeze(-1)
+        reshape = [
+            (in_dim + 2*self.padding - rfs) // self.stride + 1
+            for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)
+        ]
+        return result.reshape(result.shape[0], result.shape[1], *reshape)
+
+    def _first_level_export_forward(self, x):
+        x = self._pad_input_export_mode(x)
+        indices = self._get_connection_indices(0)
+
+        channel_idx = indices[..., -1]
+        spatial_idx = indices[..., :-1]
+        if isinstance(spatial_idx, torch.Tensor):
+            spatial_idx = spatial_idx.movedim(-1, 0)
+        else:
+            spatial_idx = np.moveaxis(spatial_idx, -1, 0)
+
+        selected = x[(slice(None), channel_idx, *spatial_idx)]
+
+        if isinstance(selected, torch.Tensor):
+            selected = selected.bool()
+        else:
+            selected = selected.astype(bool, copy=False)
+
+        a = self._swap_kernel_and_spatial_axes(selected[:, 0])
+        b = self._swap_kernel_and_spatial_axes(selected[:, 1])
+        lut_ids = self._get_export_lut_ids_tensor(0)
+
+        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
+        return self._swap_kernel_and_spatial_axes(result)
+
+    def _pad_input_export_mode(self, x):
+        if self.padding <= 0:
+            return x
+
+        if isinstance(x, torch.Tensor):
+            if self.conv_dimension == 2:
+                pad = (self.padding, self.padding, self.padding, self.padding)
+            else:
+                pad = (
+                    self.padding, self.padding,
+                    self.padding, self.padding,
+                    self.padding, self.padding,
+                )
+            return torch.nn.functional.pad(x, pad, mode="constant", value=0)
+
+        pad_width = [(0, 0), (0, 0)]
+        pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
+        return np.pad(x, pad_width, mode="constant", constant_values=0)
+
+    def _swap_kernel_and_spatial_axes(self, x):
+        if isinstance(x, torch.Tensor):
+            return x.permute(0, 2, 1, 3)
+        return np.transpose(x, (0, 2, 1, 3))
+
+    def _get_connection_indices(self, level):
+        indices = self.connections.indices[level]
+        if isinstance(indices, torch.Tensor):
+            return indices
+        return np.asarray(indices)
+
+    def _get_export_lut_ids_tensor(self, level):
+        lut_ids = getattr(self, f"_export_lut_ids_L{level}")
+        if isinstance(lut_ids, torch.Tensor):
+            return lut_ids.transpose(0, 1)
+        return np.swapaxes(lut_ids, 0, 1)
+
 
     def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
@@ -223,6 +307,70 @@ class _LogicConvNd(LogicBase):
     def rescale_weights(self, method):
         for w in self.tree_weights:
             rescale_weights(w, method)
+
+    def set_export_mode(self, enabled: bool = True):
+        self.eval()
+        self.export_mode = enabled
+
+        if enabled:
+            _, tree_ids = self.get_luts_and_ids()
+
+            # Stack each level (already same shape within level)
+            for level_idx, level_ids in enumerate(tree_ids):
+                # level_ids is list of tensors, all shape (num_kernels,)
+                stacked = torch.stack(level_ids)  # Shape: (lut_rank**i, num_kernels)
+                set_persistent_buffer(self, f'_export_lut_ids_L{level_idx}', stacked)
+        else:
+            # Clean up all buffers
+            buffers_to_delete = [name for name in self._buffers.keys()
+                                if name.startswith('_export_lut')]
+            for name in buffers_to_delete:
+                delattr(self, name)
+        self.inference_only = False
+
+    def _get_export_lut_ids(self, level):
+        tree_ids = []
+        for level_idx in range(self.tree_depth):
+            # Just unstack (or iterate over dimension 0)
+            level_tensor = getattr(self, f'_export_lut_ids_L{level_idx}')
+            level_ids = [level_tensor[i] for i in range(level_tensor.shape[0])]
+            tree_ids.append(level_ids)
+        return tree_ids
+
+    def _torchlogix_get_inference_state(self, prefix: str):
+        if self.lut_rank != 2:
+            raise NotImplementedError("Inference-only serialization currently only supports lut_rank=2.")
+
+        _, tree_ids = self.get_luts_and_ids()
+        state = {}
+        for level_idx, level_ids in enumerate(tree_ids):
+            state[f"{prefix}_inference.connection_indices.{level_idx}"] = self.connections.indices[level_idx].detach().clone()
+            state[f"{prefix}_inference.tree_lut_ids.{level_idx}"] = torch.stack(level_ids).detach().clone()
+        return state
+
+    def _torchlogix_load_inference_state(self, state_dict, prefix: str, missing_keys, consumed_keys):
+        loaded_indices = []
+
+        for level_idx in range(self.tree_depth):
+            conn_key = f"{prefix}_inference.connection_indices.{level_idx}"
+            lut_key = f"{prefix}_inference.tree_lut_ids.{level_idx}"
+
+            if conn_key not in state_dict:
+                missing_keys.append(conn_key)
+            if lut_key not in state_dict:
+                missing_keys.append(lut_key)
+            if conn_key not in state_dict or lut_key not in state_dict:
+                continue
+
+            conn_indices = state_dict[conn_key].to(device=self.tree_weights[0].device, dtype=torch.int64)
+            lut_ids = state_dict[lut_key].to(device=self.tree_weights[0].device, dtype=torch.int64)
+            loaded_indices.append(conn_indices)
+            set_persistent_buffer(self, f"_export_lut_ids_L{level_idx}", lut_ids)
+            consumed_keys.update({conn_key, lut_key})
+
+        if len(loaded_indices) == self.tree_depth:
+            self.connections.indices = loaded_indices
+            self._set_inference_only_mode()
 
 
 class LogicConv2d(_LogicConvNd):
