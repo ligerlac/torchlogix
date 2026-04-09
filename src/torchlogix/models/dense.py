@@ -1,11 +1,12 @@
 from typing import Union
 import torch
 
+from ..inference_state import InferenceStateDictMixin
 from ..layers import GroupSum, LogicDense
 from ..layers.binarization import setup_binarization
 
 
-class Dlgn(torch.nn.Sequential):
+class Dlgn(InferenceStateDictMixin, torch.nn.Sequential):
     """
     Randomly connected logic gate network as described in the paper
     'Deep Differentiable Logic Gate Networks'.

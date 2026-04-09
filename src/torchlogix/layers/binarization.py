@@ -46,6 +46,33 @@ class Binarization(torch.nn.Module, ABC):
     def forward(self, x: Tensor) -> Tensor:
         """Subclasses must implement forward."""
         pass
+
+    def _torchlogix_get_inference_state(self, prefix: str):
+        thresholds = self.get_thresholds()
+        if thresholds is None:
+            return {}
+        return {
+            f"{prefix}_inference.thresholds": thresholds.detach().clone(),
+        }
+
+    def _torchlogix_load_inference_state(self, state_dict, prefix: str, missing_keys, consumed_keys):
+        if self.thresholds is None:
+            return
+
+        key = f"{prefix}_inference.thresholds"
+        if key not in state_dict:
+            missing_keys.append(key)
+            return
+
+        thresholds = state_dict[key].to(dtype=torch.float32, device=self.thresholds.device)
+        consumed_keys.add(key)
+
+        if hasattr(self, "raw_diffs"):
+            zeros = torch.zeros_like(thresholds[..., :1])
+            diffs = torch.diff(thresholds, prepend=zeros, dim=-1)
+            self.raw_diffs.data.copy_(diffs.to(dtype=self.raw_diffs.dtype, device=self.raw_diffs.device))
+
+        self._buffers["thresholds"] = thresholds
     
     @staticmethod
     def get_uniform_thresholds(data_set: Tensor, num_bits: int, one_per: str) -> Tensor:

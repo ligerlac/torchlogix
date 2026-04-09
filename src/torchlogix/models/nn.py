@@ -1,9 +1,10 @@
 import torch
 
+from ..inference_state import InferenceStateDictMixin
 from ..layers import GroupSum, LogicDense
 
 
-class RandomlyConnectedNN(torch.nn.Module):
+class RandomlyConnectedNN(InferenceStateDictMixin, torch.nn.Module):
     """
     A difflog nn where node connections are random.
 

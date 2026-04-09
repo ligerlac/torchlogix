@@ -3,10 +3,11 @@
 from abc import ABC, abstractmethod
 import torch
 
+from ..inference_state import InferenceStateDictMixin, set_persistent_buffer
 from ..parametrization import RawLUTParametrization, WarpLUTParametrization, LightLUTParametrization, setup_parametrization
 
 
-class LogicBase(torch.nn.Module, ABC):
+class LogicBase(InferenceStateDictMixin, torch.nn.Module, ABC):
     """
     Abstract base class for logic layers.
     Provides common functionality and enforces implementation of certain methods.
@@ -45,6 +46,7 @@ class LogicBase(torch.nn.Module, ABC):
         self.connections = connections
         self.connections_kwargs = connections_kwargs or {}
         self.export_mode = export_mode
+        self.inference_only = False
 
     @abstractmethod
     def _init_weights(self, **kwargs):
@@ -117,8 +119,14 @@ class LogicBase(torch.nn.Module, ABC):
         if enabled:
             # Pre-compute LUT IDs and register as buffer (constant in ONNX)
             _, ids = self.get_luts_and_ids()
-            self.register_buffer('_export_lut_ids', ids, persistent=True)
+            set_persistent_buffer(self, '_export_lut_ids', ids)
         else:
             # Clean up cached IDs when disabling export mode
             if hasattr(self, '_export_lut_ids'):
                 delattr(self, '_export_lut_ids')
+        self.inference_only = False
+
+    def _set_inference_only_mode(self):
+        self.eval()
+        self.export_mode = True
+        self.inference_only = True

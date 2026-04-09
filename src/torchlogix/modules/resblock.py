@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+from ..inference_state import InferenceStateDictMixin
 from ..layers import OrPooling2d, LogicConv2d
 
 
-class ResidualLogicBlock(nn.Module):
+class ResidualLogicBlock(InferenceStateDictMixin, nn.Module):
     """
     This implements a resnet style block with two conv layers and a skip connection.
     The addition is replaced with a relaxed OR operation.
