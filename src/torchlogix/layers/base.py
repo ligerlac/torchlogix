@@ -108,12 +108,17 @@ class LogicBase(torch.nn.Module, ABC):
     def set_export_mode(self, enabled: bool = True):
         """Enable or disable export mode for ONNX/TorchScript tracing.
 
-        When enabled, the layer will use tracer-friendly operations during eval mode.
-        This allows the model to be exported to ONNX or traced with TorchScript.
-
-        Args:
-            enabled (bool): Whether to enable export mode
+        When enabled, pre-computes and caches LUT IDs as a buffer to avoid
+        recomputing argmax in the exported model.
         """
         self.eval()  # Ensure we're in eval mode for export
         self.export_mode = enabled
-        
+
+        if enabled:
+            # Pre-compute LUT IDs and register as buffer (constant in ONNX)
+            _, ids = self.get_luts_and_ids()
+            self.register_buffer('_export_lut_ids', ids, persistent=True)
+        else:
+            # Clean up cached IDs when disabling export mode
+            if hasattr(self, '_export_lut_ids'):
+                delattr(self, '_export_lut_ids')

@@ -96,7 +96,7 @@ class LogicDense(LogicBase):
                 raise NotImplementedError("Export mode currently only supports lut_rank=2.")
             # TODO: apply_luts function w/ bit shifts that works on higher lut_ranks
             a, b = x[:, 0], x[:, 1]  # Assuming lut_rank=2 for export mode
-            _, ids = self.get_luts_and_ids()
+            ids = self._export_lut_ids
             return apply_luts_vectorized_export_mode(a, b, ids)
         # Delegate to parametrization with einsum contraction
         # b=batch, n=neurons, k=num_basis
