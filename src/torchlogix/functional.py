@@ -158,6 +158,10 @@ def _apply_luts_export_torch(
     Returns:
         Float32 result tensor (0.0 or 1.0)
     """
+    # ensure inputs are boolean
+    a = a.bool()
+    b = b.bool()
+    
     # Broadcast lut_ids to match input shape for element-wise comparison
     while lut_ids.ndim < a.ndim:
         lut_ids = lut_ids.unsqueeze(0)

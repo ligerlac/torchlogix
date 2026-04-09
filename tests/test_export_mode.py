@@ -311,7 +311,7 @@ class TestLayerExportMode:
         layer.eval()
 
         # Create BINARY input (this is what logic networks expect at inference)
-        x = torch.randint(0, 2, (batch_size, in_dim)).float()
+        x = torch.randint(0, 2, (batch_size, in_dim)).int()
 
         # Forward pass without export mode
         layer.set_export_mode(False)
@@ -338,7 +338,7 @@ class TestLayerExportMode:
         layer.eval()
 
         # Create BINARY input (this is what logic networks expect at inference)
-        x = torch.randint(0, 2, input_shape).float()
+        x = torch.randint(0, 2, input_shape).int()
 
         # Forward pass without export mode
         result_regular = layer(x)
@@ -481,7 +481,7 @@ class TestTorchScriptTracing:
         model.eval()
         x = torch.rand(128, 3, 8, 8).bool()
 
-        result_eval = model(x.float())
+        result_eval = model(x.int())
 
         # Enable export mode
         for module in model.modules():
