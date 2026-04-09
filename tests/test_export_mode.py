@@ -5,7 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlogix.layers import LogicDense, LogicConv2d, OrPooling2d, GroupSum
+from torchlogix.layers import LogicDense, LogicConv2d, LogicConv3d, OrPooling2d, OrPooling3d, GroupSum
 from torchlogix.functional import apply_luts_vectorized_export_mode
 
 
@@ -233,6 +233,7 @@ class TestTorchNumpyEquivalence:
 
         assert np.array_equal(result_torch.numpy(), result_numpy)
 
+
     @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
     def test_numpy_torch_equivalence_dense(self, param_type):
         batch_size = 32
@@ -324,23 +325,22 @@ class TestLayerExportMode:
         assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
 
 
-    @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
-    def test_export_mode_equivalence_in_conv_layer(self, param_type):
+    @pytest.mark.parametrize("layer, input_shape", [
+        (LogicDense(in_dim=32, out_dim=64, parametrization="raw"), (128, 32)),
+        (LogicConv2d(in_dim=32, channels=3, num_kernels=16, receptive_field_size=3, tree_depth=3), (128, 3, 32, 32)),
+        (LogicConv3d(in_dim=16, channels=3, num_kernels=16, receptive_field_size=3, tree_depth=3), (128, 3, 16, 16, 16)),
+        (OrPooling2d(kernel_size=2, stride=2), (128, 3, 32, 32)),
+        (OrPooling3d(kernel_size=3, stride=2), (128, 3, 16, 16, 16)),
+        (GroupSum(10), (128, 100)),
+    ])
+    def test_export_mode_equivalence(self, layer, input_shape):
         """Test that layer produces same results with and without export mode on binary inputs."""
-        in_dim = 32
-        channels = 3
-        num_kernels = 16
-        batch_size = 128
-
-        # Create layer
-        layer = LogicConv2d(in_dim=in_dim, channels=channels, num_kernels=num_kernels, receptive_field_size=3, tree_depth=3)
         layer.eval()
 
         # Create BINARY input (this is what logic networks expect at inference)
-        x = torch.randint(0, 2, (batch_size, channels, in_dim, in_dim)).float()
+        x = torch.randint(0, 2, input_shape).float()
 
         # Forward pass without export mode
-        layer.set_export_mode(False)
         result_regular = layer(x)
 
         # Forward pass with export mode
@@ -478,14 +478,15 @@ class TestTorchScriptTracing:
             GroupSum(10),
         )
 
+        model.eval()
+        x = torch.rand(128, 3, 8, 8).bool()
+
+        result_eval = model(x.float())
+
         # Enable export mode
         for module in model.modules():
             if hasattr(module, 'set_export_mode'):
                 module.set_export_mode(True)
-
-        model.eval()
-
-        x = torch.rand(128, 3, 8, 8).bool()
 
         # Trace the model
         traced = torch.jit.trace(model, x)
@@ -496,6 +497,7 @@ class TestTorchScriptTracing:
         result_traced = traced(x)
 
         assert torch.allclose(result_original, result_traced, atol=1e-6)
+        assert torch.allclose(result_eval, result_traced, atol=1e-6)
 
 
 if __name__ == "__main__":
