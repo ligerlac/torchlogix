@@ -5,7 +5,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchlogix.layers import LogicDense, LogicConv2d
+from torchlogix.layers import LogicDense, LogicConv2d, OrPooling2d, GroupSum
 from torchlogix.functional import apply_luts_vectorized_export_mode
 
 
@@ -470,8 +470,12 @@ class TestTorchScriptTracing:
     def test_complex_model_tracing(self):
         """Test that a complex model can be traced with TorchScript."""
         model = nn.Sequential(
-            LogicDense(10, 8, parametrization="raw"),
-            LogicDense(8, 4, parametrization="raw")
+            LogicConv2d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
+            OrPooling2d(kernel_size=2, stride=2),
+            torch.nn.Flatten(),  # 3*3*8 = 72
+            LogicDense(72, 64, parametrization="raw"),
+            LogicDense(64, 50, parametrization="raw"),
+            GroupSum(10),
         )
 
         # Enable export mode
@@ -481,13 +485,14 @@ class TestTorchScriptTracing:
 
         model.eval()
 
-        x = torch.rand(3, 10).bool()
+        x = torch.rand(128, 3, 8, 8).bool()
 
         # Trace the model
         traced = torch.jit.trace(model, x)
 
         # Test that traced model works
         result_original = model(x)
+
         result_traced = traced(x)
 
         assert torch.allclose(result_original, result_traced, atol=1e-6)
