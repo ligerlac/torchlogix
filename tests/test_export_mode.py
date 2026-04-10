@@ -339,6 +339,7 @@ class TestLayerExportMode:
 
         # Create BINARY input (this is what logic networks expect at inference)
         x = torch.randint(0, 2, input_shape).float()
+        x = torch.randint(0, 2, input_shape).float()
 
         # Forward pass without export mode
         result_regular = layer(x)
@@ -481,7 +482,7 @@ class TestTorchScriptTracing:
         model.eval()
         x = torch.rand(128, 3, 8, 8).bool()
 
-        result_eval = model(x.float())
+        result_eval = model(x)
 
         # Enable export mode
         for module in model.modules():
@@ -499,6 +500,44 @@ class TestTorchScriptTracing:
         assert torch.allclose(result_original, result_traced, atol=1e-6)
         assert torch.allclose(result_eval, result_traced, atol=1e-6)
 
+    def test_complex_model_tracing_3d(self):
+        """Test that a complex 3D model can be traced with TorchScript."""
+        model = nn.Sequential(
+            LogicConv3d(
+                in_dim=8,
+                channels=3,
+                num_kernels=8,
+                receptive_field_size=3,
+                tree_depth=2,
+            ),
+            OrPooling3d(kernel_size=2, stride=2),
+            torch.nn.Flatten(),
+            LogicDense(216, 128, parametrization="raw"),
+            LogicDense(128, 64, parametrization="raw"),
+            GroupSum(8),
+        )
+
+        model.eval()
+
+        # 3D input: (N, C, D, H, W)
+        x = torch.rand(128, 3, 8, 8, 8).bool()
+
+        result_eval = model(x)
+
+        # Enable export mode
+        for module in model.modules():
+            if hasattr(module, "set_export_mode"):
+                module.set_export_mode(True)
+
+        # Trace the model
+        traced = torch.jit.trace(model, x)
+
+        # Test that traced model works
+        result_original = model(x)
+        result_traced = traced(x)
+
+        assert torch.allclose(result_original, result_traced, atol=1e-6)
+        assert torch.allclose(result_eval, result_traced, atol=1e-6)
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

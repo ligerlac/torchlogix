@@ -150,6 +150,7 @@ class _LogicConvNd(LogicBase):
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
         if self.export_mode:
+        if self.export_mode:
             return self._forward_export_mode(x)
         
         if self.padding > 0:
@@ -183,48 +184,56 @@ class _LogicConvNd(LogicBase):
         return x
     
     def _forward_export_mode(self, x):
-
-        # determine whether input is torch or numpy for later conversion
-        is_torch_input = isinstance(x, torch.Tensor)
-        if is_torch_input:
-            device = x.device
-            x = x.detach().cpu().numpy()
+        is_numpy = isinstance(x, np.ndarray)
 
         # Padding
         if self.padding > 0:
-            pad_width = [(0, 0), (0, 0)]
-            pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
-            x = np.pad(x, pad_width, mode='constant', constant_values=0)
+            if is_numpy:
+                pad_width = [(0, 0), (0, 0)]
+                pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
+                x = np.pad(x, pad_width, mode='constant', constant_values=0)
+            else:
+                x = torch.nn.functional.pad(
+                    x,
+                    (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                    mode="constant",
+                    value=0
+                )
 
         # First level
         x = self.connections(x, 0)
         a, b = x[:, 0], x[:, 1]
         lut_ids = getattr(self, f'_export_lut_ids_L0')
-        if not isinstance(lut_ids, np.ndarray):
+        if is_numpy and not isinstance(lut_ids, np.ndarray):
             lut_ids = lut_ids.detach().cpu().numpy()
-        lut_ids_bc = lut_ids.T[np.newaxis, :, np.newaxis, :]
+            lut_ids_bc = lut_ids.T[np.newaxis, :, np.newaxis, :]
+        else:
+            lut_ids_bc = lut_ids.T.unsqueeze(0).unsqueeze(-2)
+
         x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
 
         # Remaining levels
         for level in range(1, self.tree_depth):
             x = self.connections(x, level)
-            x = np.moveaxis(x, -2, 1)
+            if is_numpy:
+                x = np.moveaxis(x, -2, 1)
+            else:
+                x = x.movedim(-2, 1)
             a, b = x[:, 0], x[:, 1]
             lut_ids = getattr(self, f'_export_lut_ids_L{level}')
-            if not isinstance(lut_ids, np.ndarray):
-                lut_ids = lut_ids.detach().cpu().numpy()
-            lut_ids_T = lut_ids.T
             n_trailing = a.ndim - 2
-            reshape_shape = (
-                1,
-                lut_ids_T.shape[0],
-                *((1,) * (n_trailing - 1)),
-                lut_ids_T.shape[1],
-            )
-
-            lut_ids_bc = lut_ids_T.reshape(reshape_shape)
-
+            if is_numpy and not isinstance(lut_ids, np.ndarray):
+                lut_ids = lut_ids.detach().cpu().numpy()
+                lut_ids_bc = lut_ids.T.reshape(
+                    1, lut_ids.T.shape[0], *((1,) * (n_trailing - 1)), lut_ids.T.shape[1]
+                )
+            else:
+                lut_ids_bc = lut_ids.T
+                for _ in range(n_trailing - 1):
+                    lut_ids_bc = lut_ids_bc.unsqueeze(-2)
+                lut_ids_bc = lut_ids_bc.unsqueeze(0)
             x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
+
 
         # Final reshape
         x = x.reshape(x.shape[0], x.shape[1], -1)
@@ -232,10 +241,11 @@ class _LogicConvNd(LogicBase):
             (in_dim + 2 * self.padding - rfs) // self.stride + 1
             for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)
         ]
-        x = x.reshape(x.shape[0], x.shape[1], *reshape)
+        if is_numpy:
+            x = x.reshape(x.shape[0], x.shape[1], *reshape)
+        else:
+            x = x.view(x.shape[0], x.shape[1], *reshape)
 
-        if is_torch_input:
-            return torch.from_numpy(x).to(device)
         return x
 
     def get_luts_and_ids(self):

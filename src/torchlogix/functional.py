@@ -136,6 +136,7 @@ def apply_luts_vectorized_export_mode(
     Note: This function is optimized for export/tracing, not runtime performance.
           For training/eval without export, use the regular forward pass.
     """
+
     # Smart dispatch - single isinstance check
     if isinstance(a, np.ndarray):
         return _apply_luts_export_numpy(a, b, lut_ids)
@@ -158,6 +159,7 @@ def _apply_luts_export_torch(
     Returns:
         Float32 result tensor (0.0 or 1.0)
     """
+
     # Broadcast lut_ids to match input shape for element-wise comparison
     while lut_ids.ndim < a.ndim:
         lut_ids = lut_ids.unsqueeze(0)
@@ -961,7 +963,6 @@ def get_regularization_loss(weights, regularizer=None):
         # to enforce a growing norm factor (towards infinity)
         norm_factor = weights[:, -1]
         loss = torch.exp(-norm_factor).mean()
-        # print(f"WARP regularization loss: {loss.item()}")
         return loss
     else:
         raise ValueError(f"Unknown regularizer: {regularizer}")
