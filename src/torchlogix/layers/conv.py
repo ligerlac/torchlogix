@@ -150,7 +150,6 @@ class _LogicConvNd(LogicBase):
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
         if self.export_mode:
-        if self.export_mode:
             return self._forward_export_mode(x)
         
         if self.padding > 0:
