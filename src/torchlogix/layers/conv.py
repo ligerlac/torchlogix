@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import random
 from typing import Union
 
@@ -8,7 +9,7 @@ from torch.nn.modules.utils import _pair, _triple
 
 from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights
+    get_regularization_loss, rescale_weights, apply_luts_vectorized_export_mode
     )
 from .base import LogicBase
 
@@ -148,6 +149,9 @@ class _LogicConvNd(LogicBase):
             * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
+        if self.export_mode:
+            return self._forward_export_mode(x)
+        
         if self.padding > 0:
             x = torch.nn.functional.pad(
                 x,
@@ -175,6 +179,68 @@ class _LogicConvNd(LogicBase):
         reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
         x = x.view(x.shape[0], x.shape[1], *reshape)
+
+        return x
+    
+    def _forward_export_mode(self, x):
+        is_numpy = isinstance(x, np.ndarray)
+
+        # Padding
+        if self.padding > 0:
+            if is_numpy:
+                pad_width = [(0, 0), (0, 0)]
+                pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
+                x = np.pad(x, pad_width, mode='constant', constant_values=0)
+            else:
+                x = torch.nn.functional.pad(
+                    x,
+                    (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                    mode="constant",
+                    value=0
+                )
+
+        # First level
+        x = self.connections(x, 0)
+        a, b = x[:, 0], x[:, 1]
+        lut_ids = getattr(self, f'_export_lut_ids_L0')
+        if is_numpy and not isinstance(lut_ids, np.ndarray):
+            lut_ids = lut_ids.detach().cpu().numpy()
+            lut_ids_bc = lut_ids.T[np.newaxis, :, np.newaxis, :]
+        else:
+            lut_ids_bc = lut_ids.T.unsqueeze(0).unsqueeze(-2)
+
+        x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
+
+        # Remaining levels
+        for level in range(1, self.tree_depth):
+            x = self.connections(x, level)
+            if is_numpy:
+                x = np.moveaxis(x, -2, 1)
+            else:
+                x = x.movedim(-2, 1)
+            a, b = x[:, 0], x[:, 1]
+            lut_ids = getattr(self, f'_export_lut_ids_L{level}')
+            n_trailing = a.ndim - 2
+            if is_numpy and not isinstance(lut_ids, np.ndarray):
+                lut_ids = lut_ids.detach().cpu().numpy()
+                lut_ids_bc = lut_ids.T.reshape(
+                    1, lut_ids.T.shape[0], *((1,) * (n_trailing - 1)), lut_ids.T.shape[1]
+                )
+            else:
+                lut_ids_bc = lut_ids.T
+                for _ in range(n_trailing - 1):
+                    lut_ids_bc = lut_ids_bc.unsqueeze(-2)
+                lut_ids_bc = lut_ids_bc.unsqueeze(0)
+            x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
+
+
+        # Final reshape
+        x = x.reshape(x.shape[0], x.shape[1], -1)
+        reshape = [
+            (in_dim + 2 * self.padding - rfs) // self.stride + 1
+            for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)
+        ]
+        x = x.reshape(x.shape[0], x.shape[1], *reshape)
 
         return x
 
@@ -223,6 +289,35 @@ class _LogicConvNd(LogicBase):
     def rescale_weights(self, method):
         for w in self.tree_weights:
             rescale_weights(w, method)
+
+    def set_export_mode(self, enabled: bool = True):
+        self.eval()
+        self.export_mode = enabled
+
+        if enabled:
+            _, tree_ids = self.get_luts_and_ids()
+
+            # Stack each level (already same shape within level)
+            for level_idx, level_ids in enumerate(tree_ids):
+                # level_ids is list of tensors, all shape (num_kernels,)
+                stacked = torch.stack(level_ids)  # Shape: (lut_rank**i, num_kernels)
+                self.register_buffer(f'_export_lut_ids_L{level_idx}',
+                                    stacked, persistent=True)
+        else:
+            # Clean up all buffers
+            buffers_to_delete = [name for name in self._buffers.keys()
+                                if name.startswith('_export_lut')]
+            for name in buffers_to_delete:
+                delattr(self, name)
+
+    def _get_export_lut_ids(self, level):
+        tree_ids = []
+        for level_idx in range(self.tree_depth):
+            # Just unstack (or iterate over dimension 0)
+            level_tensor = getattr(self, f'_export_lut_ids_L{level_idx}')
+            level_ids = [level_tensor[i] for i in range(level_tensor.shape[0])]
+            tree_ids.append(level_ids)
+        return tree_ids
 
 
 class LogicConv2d(_LogicConvNd):

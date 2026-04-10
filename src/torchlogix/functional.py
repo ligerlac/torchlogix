@@ -7,8 +7,8 @@ gate networks.
 """
 import math
 import random
-import numpy as np
 import torch
+import numpy as np
 
 
 BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
@@ -83,7 +83,7 @@ def bin_op(a, b, i):
 
 def compute_all_logic_ops_vectorized(a, b):
     """Compute all 16 logic operations in a single vectorized operation.
-    
+
     Returns a tensor with shape [..., 16] where the last dimension contains
     all 16 logic operations applied to inputs a and b.
     """
@@ -91,11 +91,11 @@ def compute_all_logic_ops_vectorized(a, b):
     ab = a * b  # AND operation
     a_plus_b = a + b
     a_or_b = a_plus_b - ab  # OR operation
-    
+
     # Stack all 16 operations efficiently using precomputed terms
     ops = torch.stack([
         torch.zeros_like(a),           # 0: 0
-        ab,                           # 1: A and B  
+        ab,                           # 1: A and B
         a - ab,                       # 2: A and not B
         a,                            # 3: A
         b - ab,                       # 4: B and not A
@@ -106,13 +106,130 @@ def compute_all_logic_ops_vectorized(a, b):
         1 - (a_plus_b - 2 * ab),     # 9: not(A xor B)
         1 - b,                       # 10: not B
         1 - b + ab,                  # 11: B implies A
-        1 - a,                       # 12: not A  
+        1 - a,                       # 12: not A
         1 - a + ab,                  # 13: A implies B
         1 - ab,                      # 14: not(A and B)
         torch.ones_like(a)           # 15: 1
     ], dim=-1)
-    
+
     return ops
+
+
+def apply_luts_vectorized_export_mode(
+    a: torch.BoolTensor | np.ndarray[bool],
+    b: torch.BoolTensor | np.ndarray[bool],
+    lut_ids: torch.IntTensor | np.ndarray[int]
+) -> torch.Tensor | np.ndarray:
+    """Tracer-friendly LUT application for ONNX/TorchScript export.
+
+    Works with both torch tensors and numpy arrays. Detects backend once at entry
+    and routes to the appropriate implementation.
+
+    Args:
+        a: First input (batch, neurons) or (batch, spatial, kernels, features)
+        b: Second input (same shape as a)
+        lut_ids: LUT operation IDs (neurons,) or (kernels, features)
+
+    Returns:
+        Result with same shape and backend as inputs
+
+    Note: This function is optimized for export/tracing, not runtime performance.
+          For training/eval without export, use the regular forward pass.
+    """
+
+    # Smart dispatch - single isinstance check
+    if isinstance(a, np.ndarray):
+        return _apply_luts_export_numpy(a, b, lut_ids)
+    else:
+        return _apply_luts_export_torch(a, b, lut_ids)
+
+
+def _apply_luts_export_torch(
+    a: torch.BoolTensor,
+    b: torch.BoolTensor,
+    lut_ids: torch.IntTensor
+) -> torch.Tensor:
+    """Torch implementation using torch.where for ONNX/TorchScript tracing.
+
+    Args:
+        a: First input tensor (batch, neurons) or (batch, spatial, kernels, features)
+        b: Second input tensor (same shape as a)
+        lut_ids: LUT operation IDs (neurons,) or (kernels, features)
+
+    Returns:
+        Float32 result tensor (0.0 or 1.0)
+    """
+
+    # Broadcast lut_ids to match input shape for element-wise comparison
+    while lut_ids.ndim < a.ndim:
+        lut_ids = lut_ids.unsqueeze(0)
+
+    # Initialize result with all False
+    result = torch.zeros_like(a, dtype=torch.bool)
+
+    # Unroll all 16 LUT operations using torch.where
+    # This is fully traceable by ONNX/TorchScript
+    result = torch.where(lut_ids == 0, torch.zeros_like(a, dtype=torch.bool), result)           # FALSE
+    result = torch.where(lut_ids == 1, a & b, result)               # AND
+    result = torch.where(lut_ids == 2, a & ~b, result)              # A AND NOT B
+    result = torch.where(lut_ids == 3, a, result)                   # A
+    result = torch.where(lut_ids == 4, b & ~a, result)              # B AND NOT A
+    result = torch.where(lut_ids == 5, b, result)                   # B
+    result = torch.where(lut_ids == 6, a ^ b, result)               # XOR
+    result = torch.where(lut_ids == 7, a | b, result)               # OR
+    result = torch.where(lut_ids == 8, ~(a | b), result)            # NOR
+    result = torch.where(lut_ids == 9, ~(a ^ b), result)            # XNOR
+    result = torch.where(lut_ids == 10, ~b, result)                 # NOT B
+    result = torch.where(lut_ids == 11, ~b | a, result)             # B IMPLIES A
+    result = torch.where(lut_ids == 12, ~a, result)                 # NOT A
+    result = torch.where(lut_ids == 13, ~a | b, result)             # A IMPLIES B
+    result = torch.where(lut_ids == 14, ~(a & b), result)           # NAND
+    result = torch.where(lut_ids == 15, torch.ones_like(a, dtype=torch.bool), result)           # TRUE
+
+    return result
+
+
+def _apply_luts_export_numpy(
+    a: np.ndarray[bool],
+    b: np.ndarray[bool],
+    lut_ids: np.ndarray[int]
+) -> np.ndarray:
+    """NumPy implementation using boolean operations for 3rd party tracers.
+
+    Args:
+        a: First input array (batch, neurons) or (batch, spatial, kernels, features)
+        b: Second input array (same shape as a)
+        lut_ids: LUT operation IDs (neurons,) or (kernels, features)
+
+    Returns:
+        Float32 result array (0.0 or 1.0)
+    """
+    # Broadcast lut_ids to match input shape for element-wise comparison
+    while lut_ids.ndim < a.ndim:
+        lut_ids = np.expand_dims(lut_ids, axis=0)
+
+    # Initialize result with all False
+    result = np.zeros_like(a, dtype=bool)
+
+    # Unroll all 16 LUT operations using np.where
+    result = np.where(lut_ids == 0, np.zeros_like(a, dtype=bool), result)  # FALSE
+    result = np.where(lut_ids == 1, a & b, result)                          # AND
+    result = np.where(lut_ids == 2, a & ~b, result)                         # A AND NOT B
+    result = np.where(lut_ids == 3, a, result)                              # A
+    result = np.where(lut_ids == 4, b & ~a, result)                         # B AND NOT A
+    result = np.where(lut_ids == 5, b, result)                              # B
+    result = np.where(lut_ids == 6, a ^ b, result)                          # XOR
+    result = np.where(lut_ids == 7, a | b, result)                          # OR
+    result = np.where(lut_ids == 8, ~(a | b), result)                       # NOR
+    result = np.where(lut_ids == 9, ~(a ^ b), result)                       # XNOR
+    result = np.where(lut_ids == 10, ~b, result)                            # NOT B
+    result = np.where(lut_ids == 11, ~b | a, result)                        # B IMPLIES A
+    result = np.where(lut_ids == 12, ~a, result)                            # NOT A
+    result = np.where(lut_ids == 13, ~a | b, result)                        # A IMPLIES B
+    result = np.where(lut_ids == 14, ~(a & b), result)                      # NAND
+    result = np.where(lut_ids == 15, np.ones_like(a, dtype=bool), result)   # TRUE
+
+    return result
 
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:
@@ -846,7 +963,6 @@ def get_regularization_loss(weights, regularizer=None):
         # to enforce a growing norm factor (towards infinity)
         norm_factor = weights[:, -1]
         loss = torch.exp(-norm_factor).mean()
-        # print(f"WARP regularization loss: {loss.item()}")
         return loss
     else:
         raise ValueError(f"Unknown regularizer: {regularizer}")

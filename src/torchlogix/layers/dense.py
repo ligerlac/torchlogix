@@ -5,6 +5,7 @@ from ..functional import (
     GradFactor, get_regularization_loss, rescale_weights
     )
 from .base import LogicBase
+from ..functional import apply_luts_vectorized_export_mode
 
 
 class LogicDense(LogicBase):
@@ -88,6 +89,15 @@ class LogicDense(LogicBase):
         # Extract inputs according to connection pattern
         x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
 
+        # Split into export and train path (optimized separately for efficiency and exportability)
+        # Export path only needs to know which LUT, not how it's parameterized
+        if self.export_mode:
+            if self.lut_rank != 2:
+                raise NotImplementedError("Export mode currently only supports lut_rank=2.")
+            # TODO: apply_luts function w/ bit shifts that works on higher lut_ranks
+            a, b = x[:, 0], x[:, 1]  # Assuming lut_rank=2 for export mode
+            ids = self._export_lut_ids
+            return apply_luts_vectorized_export_mode(a, b, ids)
         # Delegate to parametrization with einsum contraction
         # b=batch, n=neurons, k=num_basis
         return self.parametrization.forward(
