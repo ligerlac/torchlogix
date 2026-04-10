@@ -1,14 +1,20 @@
 import numpy as np
 import torch
 
+def _to_tuple(v, n):
+    if isinstance(v, tuple):
+        return v
+    return (v,) * n
+
 class OrPooling2d(torch.nn.Module):
     """Logic gate based pooling layer."""
 
-    def __init__(self, kernel_size, stride, padding=0):
+    def __init__(self, kernel_size, stride, padding=0, export_mode=False):
         super(OrPooling2d, self).__init__()
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
+        self.export_mode = export_mode
 
     def forward(self, x):
         """Pool using logical OR (export) or max pooling (normal)."""
