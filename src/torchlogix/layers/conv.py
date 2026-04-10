@@ -240,10 +240,7 @@ class _LogicConvNd(LogicBase):
             (in_dim + 2 * self.padding - rfs) // self.stride + 1
             for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)
         ]
-        if is_numpy:
-            x = x.reshape(x.shape[0], x.shape[1], *reshape)
-        else:
-            x = x.view(x.shape[0], x.shape[1], *reshape)
+        x = x.reshape(x.shape[0], x.shape[1], *reshape)
 
         return x
 
