@@ -1,5 +1,5 @@
+import numpy as np
 import torch
-
 
 class OrPooling2d(torch.nn.Module):
     """Logic gate based pooling layer."""
@@ -87,7 +87,7 @@ class OrPooling2d(torch.nn.Module):
 class OrPooling3d(torch.nn.Module):
     """Logic gate based pooling layer."""
 
-    def __init__(self, kernel_size, stride, padding=0):
+    def __init__(self, kernel_size, stride, padding=0, export_mode=False):
         super(OrPooling3d, self).__init__()
         self.kernel_size = kernel_size
         self.stride = stride
