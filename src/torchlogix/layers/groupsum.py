@@ -33,3 +33,70 @@ class GroupSum(torch.nn.Module):
 
     def extra_repr(self):
         return "k={}, tau={}".format(self.k, self.tau)
+
+
+class LearnableGroupAffine(torch.nn.Module):
+    """
+    The continuous affine GroupSum module, as in "Differentiable Weightless Controllers", Kresse et. al.
+    """
+
+    def __init__(self, k: int, init_a=-0.6931, init_b=0.0, device="cuda"):
+        """
+
+        :param k: number of intended real valued outputs, e.g., number of classes
+        :param init_a: initial value for parameter a
+        :param init_b: initial value for parameter b
+        :param device:
+        """
+        super().__init__()
+        self.k = k
+        self.device = device
+        self.a = torch.nn.Parameter(torch.full((k,), init_a))
+        self.b = torch.nn.Parameter(torch.full((k,), init_b))
+
+    def forward(self, x):
+        if isinstance(x, PackBitsTensor):
+            return NotImplementedError("ContinuousGroupAffine does not support PackBitsTensor inputs.")
+
+        assert x.shape[-1] % self.k == 0, "The number of input features must be divisible by k."
+        n_k = x.shape[-1] // self.k
+        x = x.reshape(*x.shape[:-1], self.k, n_k).sum(-1)  # popcount
+        print(x)
+        x = 2 * x / n_k - 1.0  # normalize to interval [-1, 1]
+        x = x * torch.exp(self.a) + self.b  # scale and shift
+        return x
+
+    def extra_repr(self):
+        return "k={}".format(self.k)
+    
+
+class LearnableGroupLinear(torch.nn.Module):
+    """
+    The continuous GroupSum module with a linear transformation.
+    """
+
+    def __init__(self, k: int, device="cuda"):
+        """
+
+        :param k: number of intended real valued outputs, e.g., number of classes
+        :param device:
+        """
+        super().__init__()
+        self.k = k
+        self.device = device
+        self.linear = torch.nn.Linear(k, k)
+
+    def forward(self, x):
+        if isinstance(x, PackBitsTensor):
+            return NotImplementedError("ContinuousGroupSumLinear does not support PackBitsTensor inputs.")
+
+        assert x.shape[-1] % self.k == 0, "The number of input features must be divisible by k."
+        n_k = x.shape[-1] // self.k
+        x = x.reshape(*x.shape[:-1], self.k, n_k).sum(-1)  # popcount
+        x = 2 * x / n_k - 1.0  # normalize to interval [-1, 1]
+        x = self.linear(x)  # apply linear transformation
+        return x
+
+    def extra_repr(self):
+        return "k={}".format(self.k)
+    
