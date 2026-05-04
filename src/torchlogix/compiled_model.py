@@ -13,7 +13,7 @@ import torch
 from .layers.conv import LogicConv2d, LogicConv3d
 from .layers.pool import OrPooling2d, OrPooling3d
 from .layers.dense import LogicDense
-from .layers.groupsum import GroupSum
+from .layers.groupsum import GroupSum, LearnableGroupAffine
 from .layers.binarization import Binarization
 
 
@@ -72,8 +72,11 @@ class CompiledLogicNet(torch.nn.Module):
         self.lib_fn = None
 
         # GroupSum information
+        self.group_sum_layer_type = None
         self.tau = 1
         self.beta = 0
+        self.affine_scale = None
+        self.affine_bias = None
 
         if model is not None:
             self._parse_model(verbose)
@@ -87,16 +90,23 @@ class CompiledLogicNet(torch.nn.Module):
             if self.model[0].thresholds is not None:
                 self.apply_thresholding = True
 
-        # Find GroupSum layer for num_classes
+        # Find final aggregation layer for num_classes
         for layer in self.model:
             if isinstance(layer, GroupSum):
+                self.group_sum_layer_type = "groupsum"
                 self.num_classes = layer.k
                 self.tau = layer.tau
                 self.beta = layer.beta
                 break
+            if isinstance(layer, LearnableGroupAffine):
+                self.group_sum_layer_type = "learnable_affine"
+                self.num_classes = layer.k
+                self.affine_scale = torch.exp(layer.a.detach()).cpu().tolist()
+                self.affine_bias = layer.b.detach().cpu().tolist()
+                break
 
         if self.num_classes is None:
-            raise ValueError("No GroupSum layer found in model")
+            raise ValueError("No GroupSum or LearnableGroupAffine layer found in model")
 
         # Parse all layers and track execution order
         for layer in self.model:
@@ -127,6 +137,9 @@ class CompiledLogicNet(torch.nn.Module):
             elif isinstance(layer, GroupSum):
                 if verbose:
                     print(f"Found GroupSum layer (tau={self.tau}, beta={self.beta}) with {layer.k} classes")
+            elif isinstance(layer, LearnableGroupAffine):
+                if verbose:
+                    print(f"Found LearnableGroupAffine layer with {layer.k} classes")
             else:
                 if verbose:
                     print(f"Warning: Unknown layer type: {type(layer)}")
@@ -264,6 +277,29 @@ class CompiledLogicNet(torch.nn.Module):
                 raise ValueError(f"Operator {operation_name} unknown.")
 
         return res
+
+    @staticmethod
+    def _c_float_literal(value: float) -> str:
+        """Format a Python float as a C float literal."""
+        literal = f"{float(value):.9g}"
+        if "." not in literal and "e" not in literal and "E" not in literal:
+            literal += ".0"
+        return f"{literal}f"
+
+    def _get_groupsum_output_expression_indexed(
+        self, sum_expr: str, class_index_expr: str, neurons_per_class: int
+    ) -> str:
+        """Generate final C expression when the class index is a C variable."""
+        if not self.apply_groupsum_scaling:
+            return sum_expr
+
+        if self.group_sum_layer_type == "learnable_affine":
+            return (
+                f"(((2.0f * ({sum_expr}) / {neurons_per_class}.0f) - 1.0f) "
+                f"* affine_scale[{class_index_expr}] + affine_bias[{class_index_expr}])"
+            )
+
+        return f"(({sum_expr} + {self._c_float_literal(self.beta)}) / {self._c_float_literal(self.tau)})"
 
     def get_gate_verilog(self, var1: str, var2: str, gate_op: int) -> str:
         """Generate Verilog code for a logic gate operation.
@@ -1170,6 +1206,13 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
     bool *bool_temp = malloc({logic_net_inp_size} * {self.num_bits} * sizeof(bool));
     {thresholds_c_def}"""
 
+        if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_affine":
+            scale_str = ", ".join(self._c_float_literal(x) for x in self.affine_scale)
+            bias_str = ", ".join(self._c_float_literal(x) for x in self.affine_bias)
+            code_start += f"""
+    const float affine_scale[{self.num_classes}] = {{{scale_str}}};
+    const float affine_bias[{self.num_classes}] = {{{bias_str}}};"""
+
         code_start += f"""
 
     for(size_t i = 0; i < len; ++i) {{"""
@@ -1242,7 +1285,7 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
                     res <<= 1;
                     res += !!(out_temp_o[d] & bit_mask);
                 }}
-                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = {"(res + " + str(self.beta) + ") / " + str(self.tau) if self.apply_groupsum_scaling else "res"};
+                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = {self._get_groupsum_output_expression_indexed("res", "c", num_neurons_ll // self.num_classes)};
             }}
         }}
     }}
@@ -1289,6 +1332,13 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
     bool out_temp[{num_neurons_ll}];"""
         ]
 
+        if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_affine":
+            scale_str = ", ".join(self._c_float_literal(x) for x in self.affine_scale)
+            bias_str = ", ".join(self._c_float_literal(x) for x in self.affine_bias)
+            code.append(f"""    const float affine_scale[{self.num_classes}] = {{{scale_str}}};
+    const float affine_bias[{self.num_classes}] = {{{bias_str}}};
+""")
+
         if self.apply_thresholding:
             code.append(f"""    bool inp_temp[{input_size * num_thresholds}];
     {thresholds_c_def}
@@ -1318,15 +1368,8 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
             sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
         }}""")
 
-        if self.apply_groupsum_scaling:
-                code.append(f"""
-        out[c] = (sum + {self.beta}) / {self.tau};
-    }}
-}}
-""")
-        else:
-                code.append(f"""
-        out[c] = sum;
+        code.append(f"""
+        out[c] = {self._get_groupsum_output_expression_indexed("sum", "c", num_neurons_ll // self.num_classes)};
     }}
 }}
 """)
