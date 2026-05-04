@@ -17,7 +17,7 @@ import torchlogix.models
 
 from utils import (
     CreateFolder, save_metrics_csv, save_config, save_thresholds_csv,
-    evaluate_model, get_model, load_dataset, load_n
+    evaluate_model, get_model, load_dataset, load_n, get_loss
 )
 
 def get_parser():
@@ -50,6 +50,8 @@ def get_parser():
         "--valid-set-size", "-vss", type=float, default=0.1,
         help="Fraction of train set for validation"
     )
+    parser.add_argument("--loss", "-l", type=str, default="cross_entropy", help="Loss function to use")
+    parser.add_argument("--eval-functions", type=str, nargs="+", default=["loss", "acc"], help="Loss functions to use for evaluation")
 
     # Learning rate parameters
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.01, help="Learning rate")
@@ -70,7 +72,7 @@ def get_parser():
     parser.add_argument("--half-precision", action="store_true", 
                         help="Use half-precision (bfloat16) training to reduce memory usage and speed up training")
     parser.add_argument("--compile-model", action="store_true", 
-                        help="Use toch.compile() to compile the model for faster training")
+                        help="Use torch.compile() to compile the model for faster training")
 
     parser.add_argument(
         "--output", "-o", action=CreateFolder, type=Path, default="results/training/",
@@ -259,14 +261,14 @@ def run_training(args, callbacks=None):
         # Adjust settings if you encounter issues. E.g. dynamic=True can help
         model.compile(fullgraph=True, mode="max-autotune")
 
-    # Loss function for classification tasks like MNIST and CIFAR-10
-    loss_fn = torch.nn.CrossEntropyLoss()
+    # Loss function, defaults to cross-entropy for classification tasks
+    loss_fn = get_loss(args.loss)
     # Create evaluation functions
-    eval_functions = {
+    eval_functions_dict = {
         "loss": loss_fn,
         "acc": lambda preds, y: (preds.argmax(-1) == y).to(torch.float32).mean(),
     }
-
+    eval_functions = {name: eval_functions_dict[name] for name in args.eval_functions}
     # Set up optimizer with optional separate learning rate for binarization parameters
     params_list = []
     binarization_params = []
@@ -334,6 +336,10 @@ def run_training(args, callbacks=None):
         with torch.amp.autocast("cuda", dtype=dtype):
             model.train()
             x = model(x)
+            if args.loss != "cross_entropy":
+                y = y.to(torch.float32)
+                if len(y.shape) == 1:
+                    y = y.unsqueeze(1)
             loss = loss_fn(x, y)
             optimizer.zero_grad()
             loss.backward()
