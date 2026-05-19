@@ -144,7 +144,7 @@ def apply_luts_vectorized_export_mode(
         return _apply_luts_export_torch(a, b, lut_ids)
 
 
-def _apply_luts_export_torch(
+def _apply_luts_export_torch_old(
     a: torch.BoolTensor,
     b: torch.BoolTensor,
     lut_ids: torch.IntTensor
@@ -186,6 +186,73 @@ def _apply_luts_export_torch(
     result = torch.where(lut_ids == 14, ~(a & b), result)           # NAND
     result = torch.where(lut_ids == 15, torch.ones_like(a, dtype=torch.bool), result)           # TRUE
 
+    return result
+
+
+# def _apply_luts_export_torch(
+#     a: torch.Tensor,
+#     b: torch.Tensor,
+#     lut_ids: torch.Tensor,
+# ) -> torch.Tensor:
+#     while lut_ids.ndim < a.ndim:
+#         lut_ids = lut_ids.unsqueeze(0)
+
+#     def mask(n: int) -> torch.Tensor:
+#         return lut_ids == n   # bool mask
+
+#     # Instead of torch.where(cond, val, result),
+#     # use: result |= (cond & val)  — pure boolean, no Where op in ONNX graph
+#     result = torch.zeros_like(a, dtype=torch.bool)
+
+#     # LUT 0 (FALSE): contributes nothing
+#     result = result | (mask(1)  & (a & b))           # AND
+#     result = result | (mask(2)  & (a & ~b))          # A AND NOT B
+#     result = result | (mask(3)  & a)                 # A
+#     result = result | (mask(4)  & (b & ~a))          # B AND NOT A
+#     result = result | (mask(5)  & b)                 # B
+#     result = result | (mask(6)  & (a ^ b))           # XOR
+#     result = result | (mask(7)  & (a | b))           # OR
+#     result = result | (mask(8)  & ~(a | b))          # NOR
+#     result = result | (mask(9)  & ~(a ^ b))          # XNOR
+#     result = result | (mask(10) & ~b)                # NOT B
+#     result = result | (mask(11) & (~b | a))          # B IMPLIES A
+#     result = result | (mask(12) & ~a)                # NOT A
+#     result = result | (mask(13) & (~a | b))          # A IMPLIES B
+#     result = result | (mask(14) & ~(a & b))          # NAND
+#     result = result | (mask(15) & torch.ones_like(a, dtype=torch.bool))  # TRUE
+#     return result
+
+
+_map = [
+    lambda a, b: 0,
+    lambda a, b: a & b,
+    lambda a, b: a & ~b,
+    lambda a, b: a,
+    lambda a, b: b & ~a,
+    lambda a, b: b,
+    lambda a, b: a ^ b,
+    lambda a, b: a | b,
+    lambda a, b: ~(a | b),
+    lambda a, b: ~(a ^ b),
+    lambda a, b: ~b,
+    lambda a, b: ~(b & ~a),
+    lambda a, b: ~a,
+    lambda a, b: ~(a & ~b),
+    lambda a, b: ~(a & b),
+    lambda a, b: 1,
+]
+    
+
+def _apply_luts_export_torch(a, b, lut_ids):
+    print(f"hi, {a.shape=}, {b.shape=}, {lut_ids.shape=}")
+    result = torch.zeros_like(a, dtype=torch.bool)
+    # we can skip LUT 0 (always False) since result is initialized to False
+    for lut_id in range(1, 16):
+        # mask = (lut_ids == lut_id)
+        # result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+        # mask = (lut_ids == lut_id).expand_as(a)
+        mask = (lut_ids == lut_id)
+        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
     return result
 
 

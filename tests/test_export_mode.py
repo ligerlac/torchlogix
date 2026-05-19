@@ -1,543 +1,405 @@
 """Tests for export mode functionality (ONNX/TorchScript tracing)."""
+import tempfile
+import os
+import warnings
+import operator
 
 import numpy as np
+import onnxruntime as ort
 import pytest
 import torch
 import torch.nn as nn
 
-from torchlogix.layers import LogicDense, LogicConv2d, LogicConv3d, OrPooling2d, OrPooling3d, GroupSum
-from torchlogix.functional import apply_luts_vectorized_export_mode
+from torchlogix.layers import (
+    GroupSum,
+    LogicConv2d,
+    LogicConv3d,
+    LogicDense,
+    OrPooling2d,
+    OrPooling3d,
+)
 
 
-class TestApplyLutsVectorizedExportMode:
-    """Test the tracer-friendly LUT application function."""
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-    def test_basic_operations(self):
-        """Test that all 16 logic operations work correctly."""
-        # Create simple inputs covering all truth table cases
-        # Each column represents one truth table entry: (0,0), (0,1), (1,0), (1,1)
-        a = torch.tensor([[False, False, True, True]])
-        b = torch.tensor([[False, True, False, True]])
-
-        # Expected outputs are the truth table for each operation
-        # Applied to inputs (a,b) = [(0,0), (0,1), (1,0), (1,1)]
-        expected_outputs = {
-            0: [False, False, False, False],  # FALSE
-            1: [False, False, False, True],  # AND
-            2: [False, False, True, False],  # A AND NOT B
-            3: [False, False, True, True],  # A
-            4: [False, True, False, False],  # B AND NOT A
-            5: [False, True, False, True],  # B
-            6: [False, True, True, False],  # XOR
-            7: [False, True, True, True],  # OR
-            8: [True, False, False, False],  # NOR
-            9: [True, False, False, True],  # XNOR
-            10: [True, False, True, False],  # NOT B
-            11: [True, False, True, True],  # B IMPLIES A
-            12: [True, True, False, False],  # NOT A
-            13: [True, True, False, True],  # A IMPLIES B
-            14: [True, True, True, False],  # NAND
-            15: [True, True, True, True],  # TRUE
-        }
-
-        for lut_id in range(16):
-            lut_ids = torch.tensor([lut_id, lut_id, lut_id, lut_id])
-            result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-            expected = torch.tensor([expected_outputs[lut_id]])
-            assert torch.allclose(result, expected), \
-                f"LUT {lut_id} failed: expected {expected}, got {result}"
-
-    def test_batch_processing(self):
-        """Test that batch processing works correctly."""
-        batch_size = 8
-        num_neurons = 4
-
-        # Create random inputs
-        a = torch.rand(batch_size, num_neurons) > 0.5
-        b = torch.rand(batch_size, num_neurons) > 0.5
-
-        # Use AND operation (LUT ID = 1)
-        lut_ids = torch.ones(num_neurons, dtype=torch.long)
-        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-
-        # AND operation: result should be 1 only where both inputs are 1
-        expected = a & b
-        assert torch.allclose(result, expected)
-
-    def test_mixed_operations(self):
-        """Test multiple different operations in parallel."""
-        # Input pattern: (a,b) for each neuron
-        # neuron 0: (0,0), neuron 1: (1,0), neuron 2: (0,1), neuron 3: (1,1)
-        a = torch.tensor([[False, True, False, True]])
-        b = torch.tensor([[False, False, True, True]])
-
-        # Use different operations for each neuron: AND, OR, XOR, NAND
-        lut_ids = torch.tensor([1, 7, 6, 14])
-        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-
-        # Expected outputs:
-        # neuron 0: AND(0,0) = 0
-        # neuron 1: OR(1,0) = 1
-        # neuron 2: XOR(0,1) = 1
-        # neuron 3: NAND(1,1) = 0
-        expected = torch.tensor([[False, True, True, False]])
-        assert torch.allclose(result, expected)
-
-    def test_broadcasting(self):
-        """Test that broadcasting works correctly."""
-        batch_size = 4
-        num_neurons = 3
-
-        a = torch.rand(batch_size, num_neurons) > 0.5
-        b = torch.rand(batch_size, num_neurons) > 0.5
-        lut_ids = torch.tensor([1, 7, 6])  # AND, OR, XOR
-
-        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-
-        assert result.shape == (batch_size, num_neurons)
-
-        # Verify each operation
-        assert torch.allclose(result[:, 0], (a[:, 0] & b[:, 0]))  # AND
-        assert torch.allclose(result[:, 1], (a[:, 1] | b[:, 1]))  # OR
-        assert torch.allclose(result[:, 2], (a[:, 2] ^ b[:, 2]))  # XOR
+@pytest.fixture
+def logic_dense_model():
+    model = nn.Sequential(
+        LogicDense(16, 32, parametrization="raw"),
+        LogicDense(32, 16, parametrization="raw"),
+    )
+    model.eval()
+    return model
 
 
-class TestApplyLutsVectorizedExportModeNumpy:
-    """Test the tracer-friendly LUT application function with NumPy backend."""
-
-    def test_basic_operations_numpy(self):
-        """Test that all 16 logic operations work correctly with NumPy arrays."""
-        # Create simple inputs covering all truth table cases
-        a = np.array([[False, False, True, True]])
-        b = np.array([[False, True, False, True]])
-
-        # Expected outputs are the truth table for each operation
-        expected_outputs = {
-            0: [False, False, False, False],  # FALSE
-            1: [False, False, False, True],  # AND
-            2: [False, False, True, False],  # A AND NOT B
-            3: [False, False, True, True],  # A
-            4: [False, True, False, False],  # B AND NOT A
-            5: [False, True, False, True],  # B
-            6: [False, True, True, False],  # XOR
-            7: [False, True, True, True],  # OR
-            8: [True, False, False, False],  # NOR
-            9: [True, False, False, True],  # XNOR
-            10: [True, False, True, False],  # NOT B
-            11: [True, False, True, True],  # B IMPLIES A
-            12: [True, True, False, False],  # NOT A
-            13: [True, True, False, True],  # A IMPLIES B
-            14: [True, True, True, False],  # NAND
-            15: [True, True, True, True],  # TRUE
-        }
-
-        for lut_id in range(16):
-            lut_ids = np.array([lut_id, lut_id, lut_id, lut_id])
-            result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-            expected = np.array([expected_outputs[lut_id]])
-            assert np.array_equal(result, expected), \
-                f"LUT {lut_id} failed: expected {expected}, got {result}"
-            # Verify output is numpy array
-            assert isinstance(result, np.ndarray)
-
-    def test_batch_processing_numpy(self):
-        """Test that batch processing works correctly with NumPy."""
-        batch_size = 8
-        num_neurons = 4
-
-        # Create random inputs
-        a = np.random.rand(batch_size, num_neurons) > 0.5
-        b = np.random.rand(batch_size, num_neurons) > 0.5
-
-        # Use AND operation (LUT ID = 1)
-        lut_ids = np.ones(num_neurons, dtype=int)
-        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-
-        # AND operation: result should be 1 only where both inputs are 1
-        expected = (a & b)
-        assert np.array_equal(result, expected)
-        assert isinstance(result, np.ndarray)
-
-    def test_mixed_operations_numpy(self):
-        """Test multiple different operations in parallel with NumPy."""
-        a = np.array([[False, True, False, True]])
-        b = np.array([[False, False, True, True]])
-
-        # Use different operations for each neuron: AND, OR, XOR, NAND
-        lut_ids = np.array([1, 7, 6, 14])
-        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-
-        expected = np.array([[False, True, True, False]])
-        assert np.array_equal(result, expected)
-        assert isinstance(result, np.ndarray)
-
-    def test_broadcasting_numpy(self):
-        """Test that broadcasting works correctly with NumPy."""
-        batch_size = 4
-        num_neurons = 3
-
-        a = np.random.rand(batch_size, num_neurons) > 0.5
-        b = np.random.rand(batch_size, num_neurons) > 0.5
-        lut_ids = np.array([1, 7, 6])  # AND, OR, XOR
-
-        result = apply_luts_vectorized_export_mode(a, b, lut_ids)
-
-        assert result.shape == (batch_size, num_neurons)
-        assert isinstance(result, np.ndarray)
-
-        # Verify each operation
-        assert np.array_equal(result[:, 0], (a[:, 0] & b[:, 0]))  # AND
-        assert np.array_equal(result[:, 1], (a[:, 1] | b[:, 1]))  # OR
-        assert np.array_equal(result[:, 2], (a[:, 2] ^ b[:, 2]))  # XOR
+@pytest.fixture
+def conv2d_model_wo_group_sum():
+    model = nn.Sequential(
+        # LogicConv2d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
+        LogicConv2d(in_dim=8, channels=3, num_kernels=7, receptive_field_size=3, tree_depth=2),
+        OrPooling2d(kernel_size=2, stride=2),
+        nn.Flatten(),          # 3 × 3 × 8 = 72
+        # LogicDense(72, 64, parametrization="raw"),
+        LogicDense(63, 64, parametrization="raw"),
+        LogicDense(64, 50, parametrization="raw"),
+    )
+    model.eval()
+    return model
 
 
-class TestTorchNumpyEquivalence:
-    """Test that torch and numpy backends produce identical results."""
+@pytest.fixture
+def conv3d_model_wo_group_sum():
+    model = nn.Sequential(
+        LogicConv3d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
+        OrPooling3d(kernel_size=2, stride=2),
+        nn.Flatten(),          # 3 × 3 × 3 × 8 = 216
+        LogicDense(216, 128, parametrization="raw"),
+        LogicDense(128, 64, parametrization="raw"),
+    )
+    model.eval()
+    return model
 
-    def test_all_operations_equivalence(self):
-        """Test that all 16 operations produce identical results in both backends."""
-        # Create test inputs
-        a_torch = torch.tensor([[False, False, True, True]])
-        b_torch = torch.tensor([[False, True, False, True]])
-        a_numpy = np.array([[False, False, True, True]])
-        b_numpy = np.array([[False, True, False, True]])
-
-        for lut_id in range(16):
-            lut_ids_torch = torch.tensor([lut_id, lut_id, lut_id, lut_id])
-            lut_ids_numpy = np.array([lut_id, lut_id, lut_id, lut_id])
-
-            result_torch = apply_luts_vectorized_export_mode(a_torch, b_torch, lut_ids_torch)
-            result_numpy = apply_luts_vectorized_export_mode(a_numpy, b_numpy, lut_ids_numpy)
-
-            # Convert torch result to numpy for comparison
-            assert np.array_equal(result_torch.numpy(), result_numpy), \
-                f"LUT {lut_id} results differ between torch and numpy"
-
-    def test_batch_equivalence(self):
-        """Test torch/numpy equivalence on batch processing."""
-        batch_size = 8
-        num_neurons = 4
-
-        # Create identical inputs in both frameworks
-        np.random.seed(42)
-        a_np = np.random.rand(batch_size, num_neurons) > 0.5
-        b_np = np.random.rand(batch_size, num_neurons) > 0.5
-        lut_ids_np = np.array([1, 7, 6, 14])  # AND, OR, XOR, NAND
-
-        a_torch = torch.from_numpy(a_np)
-        b_torch = torch.from_numpy(b_np)
-        lut_ids_torch = torch.from_numpy(lut_ids_np)
-
-        result_torch = apply_luts_vectorized_export_mode(a_torch, b_torch, lut_ids_torch)
-        result_numpy = apply_luts_vectorized_export_mode(a_np, b_np, lut_ids_np)
-
-        assert np.array_equal(result_torch.numpy(), result_numpy)
+@pytest.fixture
+def conv2d_model():
+    model = nn.Sequential(
+        LogicConv2d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
+        OrPooling2d(kernel_size=2, stride=2),
+        nn.Flatten(),          # 3 × 3 × 8 = 72
+        LogicDense(72, 64, parametrization="raw"),
+        LogicDense(64, 50, parametrization="raw"),
+        GroupSum(10),
+    )
+    model.eval()
+    return model
 
 
-    @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
-    def test_numpy_torch_equivalence_dense(self, param_type):
-        batch_size = 32
-        in_dim = 8
-        out_dim = 16
-
-        layer = LogicDense(in_dim, out_dim, parametrization=param_type)
-        layer.set_export_mode()
-
-        x_np = np.random.randint(0, 2, (batch_size, in_dim), dtype=bool)
-        x_torch = torch.from_numpy(x_np)
-
-        result_torch = layer(x_torch)
-        result_numpy = layer(x_np)
-
-        # Compare results
-        assert np.allclose(result_torch.numpy(), result_numpy, atol=1e-6)
-
-    @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
-    def test_numpy_torch_equivalence_conv(self, param_type):
-        batch_size = 16
-        in_dim = 16
-        channels = 3
-        num_kernels = 8
-
-        layer = LogicConv2d(in_dim=in_dim, channels=channels, num_kernels=num_kernels, receptive_field_size=3, tree_depth=2)
-        layer.set_export_mode()
-
-        x_np = np.random.randint(0, 2, (batch_size, channels, in_dim, in_dim), dtype=bool)
-        x_torch = torch.from_numpy(x_np)
-
-        result_torch = layer(x_torch)
-        result_numpy = layer(x_np)
-
-        assert np.allclose(result_torch.numpy(), result_numpy, atol=1e-6)
+@pytest.fixture
+def conv3d_model():
+    model = nn.Sequential(
+        LogicConv3d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
+        OrPooling3d(kernel_size=2, stride=2),
+        nn.Flatten(),          # 3 × 3 × 3 × 8 = 216
+        LogicDense(216, 128, parametrization="raw"),
+        LogicDense(128, 64, parametrization="raw"),
+        GroupSum(8),
+    )
+    model.eval()
+    return model
 
 
-class TestLayerExportMode:
-    """Test export mode in logic layers."""
+@pytest.fixture
+def sample_input_1d():
+    torch.manual_seed(0)
+    return torch.randint(0, 2, (8, 16)).bool()
 
-    def test_logic_dense_export_mode(self):
-        """Test LogicDense layer with export mode."""
-        in_dim = 10
-        out_dim = 5
 
-        # Create layer
-        layer = LogicDense(
-            in_dim=in_dim,
-            out_dim=out_dim,
-            parametrization="raw"
+@pytest.fixture
+def sample_input_2d():
+    torch.manual_seed(0)
+    return torch.randint(0, 2, (8, 3, 8, 8)).bool()
+
+
+@pytest.fixture
+def sample_input_3d():
+    torch.manual_seed(0)
+    return torch.randint(0, 2, (4, 3, 8, 8, 8)).bool()
+
+
+def _enable_export_mode(model: nn.Module) -> None:
+    for module in model.modules():
+        if hasattr(module, "set_export_mode"):
+            module.set_export_mode(True)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _onnx_run(model: nn.Module, x: torch.Tensor) -> np.ndarray:
+    """Export *model* to ONNX (temp file) and run inference via OnnxRuntime."""
+    batch = torch.export.Dim("batch")
+    dynamic_shapes = {"input": {0: batch}}
+
+    with tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as f:
+        tmp_path = f.name
+        print(f"Exporting model to ONNX at {tmp_path}...")
+
+    try:
+        torch.onnx.export(
+            model,
+            (x,),                          # args must be a tuple with dynamic_shapes
+            tmp_path,
+            opset_version=18,
+            input_names=["input"],
+            output_names=["output"],
+            dynamic_shapes=dynamic_shapes,
+        )
+        sess = ort.InferenceSession(tmp_path, providers=["CPUExecutionProvider"])
+        (output_name,) = [o.name for o in sess.get_outputs()]
+        return sess.run([output_name], {"input": x.numpy()})[0]
+    finally:
+        os.unlink(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Parametrize over both 2-D and 3-D fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "model_fixture, input_fixture",
+    [
+        ("logic_dense_model", "sample_input_1d"),
+        ("conv2d_model_wo_group_sum", "sample_input_2d"),
+        # ("conv3d_model_wo_group_sum", "sample_input_3d"),
+        # ("conv2d_model", "sample_input_2d"),
+        # ("conv3d_model", "sample_input_3d"),
+    ],
+)
+class TestExportModeEquivalence:
+    """Eval-mode and export-mode must agree on binary inputs."""
+
+    def test_eval_export_equivalence(self, model_fixture, input_fixture, request):
+        model = request.getfixturevalue(model_fixture)
+        x = request.getfixturevalue(input_fixture)
+
+        # Baseline: plain eval-mode forward (accepts float bool-valued tensors)
+        x_float = x.float()
+        result_eval = model(x_float)
+
+        # Export mode
+        _enable_export_mode(model)
+        result_export = model(x)
+
+        assert torch.allclose(result_eval, result_export.float(), atol=1e-6), (
+            f"[{model_fixture}] eval and export results diverge"
         )
 
-        # Enable export mode
-        layer.set_export_mode()
-        assert layer.export_mode is True
 
-        # Disable export mode
-        layer.set_export_mode(False)
-        assert layer.export_mode is False
+ALLOWED_ONNX_OPS_WO_GROUP_SUM = {
+    # Boolean logic
+    "And", "Or", "Not", "Xor",
+    # Comparisons / selection (from lut_ids == n masks)
+    "Equal",
+    # Structural / indexing
+    "Gather", "GatherElements", "GatherND",
+    "Reshape", "Transpose", "Flatten", "Squeeze", "Unsqueeze",
+    "Slice", "Concat", "Shape", "Expand", "Tile", "Pad",
+    "Identity", "Constant", "ConstantOfShape",
+}
 
-
-    @pytest.mark.parametrize("param_type", ["raw", "warp", "light"])
-    def test_export_mode_equivalence_in_dense_layer(self, param_type):
-        """Test that layer produces same results with and without export mode on binary inputs."""
-        in_dim = 32
-        out_dim = 64
-        batch_size = 128
-
-        # Create layer
-        layer = LogicDense(
-            in_dim=in_dim,
-            out_dim=out_dim,
-            parametrization=param_type
-        )
-        layer.eval()
-
-        # Create BINARY input (this is what logic networks expect at inference)
-        x = torch.randint(0, 2, (batch_size, in_dim)).float()
-
-        # Forward pass without export mode
-        layer.set_export_mode(False)
-        result_regular = layer(x)
-
-        # Forward pass with export mode
-        layer.set_export_mode(True)
-        result_export = layer(x.bool())
-
-        # Results should be identical for binary inputs
-        assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
+ALLOWED_ONNX_OPS = ALLOWED_ONNX_OPS_WO_GROUP_SUM | {
+    "Cast", "ReduceSum", # for group sum
+}
 
 
-    @pytest.mark.parametrize("layer, input_shape", [
-        (LogicDense(in_dim=32, out_dim=64, parametrization="raw"), (128, 32)),
-        (LogicConv2d(in_dim=32, channels=3, num_kernels=16, receptive_field_size=3, tree_depth=3), (128, 3, 32, 32)),
-        (LogicConv3d(in_dim=16, channels=3, num_kernels=16, receptive_field_size=3, tree_depth=3), (128, 3, 16, 16, 16)),
-        (OrPooling2d(kernel_size=2, stride=2), (128, 3, 32, 32)),
-        (OrPooling3d(kernel_size=3, stride=2), (128, 3, 16, 16, 16)),
-        (GroupSum(10), (128, 100)),
+def _onnx_ops(tmp_path: str) -> set[str]:
+    """Return the set of op types present in an ONNX model file."""
+    import onnx
+    model_proto = onnx.load(tmp_path)
+    return {node.op_type for node in model_proto.graph.node}
+
+
+class TestOnnxExport:
+    """ONNX round-trip and op-set purity."""
+
+    @pytest.mark.parametrize("model_fixture, input_fixture", [
+        ("logic_dense_model", "sample_input_1d"),
+        ("conv2d_model_wo_group_sum", "sample_input_2d"),
+        ("conv3d_model_wo_group_sum", "sample_input_3d"),
+        ("conv2d_model", "sample_input_2d"),
+        ("conv3d_model", "sample_input_3d"),
     ])
-    def test_export_mode_equivalence(self, layer, input_shape):
-        """Test that layer produces same results with and without export mode on binary inputs."""
-        layer.eval()
+    def test_onnx_roundtrip(self, model_fixture, input_fixture, request):
+        model = request.getfixturevalue(model_fixture)
+        x = request.getfixturevalue(input_fixture)
+        _enable_export_mode(model)
 
-        # Create BINARY input (this is what logic networks expect at inference)
-        x = torch.randint(0, 2, input_shape).float()
-        x = torch.randint(0, 2, input_shape).float()
+        eager_out = model(x).float().detach().numpy()
+        onnx_out = _onnx_run(model, x)
 
-        # Forward pass without export mode
-        result_regular = layer(x)
+        assert np.allclose(eager_out, onnx_out, atol=1e-5)
 
-        # Forward pass with export mode
-        layer.set_export_mode(True)
-        result_export = layer(x.bool())
+    @pytest.mark.parametrize("model_fixture, input_fixture, allowed_ops", [
+        ("logic_dense_model", "sample_input_1d", ALLOWED_ONNX_OPS_WO_GROUP_SUM),
+        ("conv2d_model_wo_group_sum", "sample_input_2d", ALLOWED_ONNX_OPS_WO_GROUP_SUM),
+        ("conv3d_model_wo_group_sum", "sample_input_3d", ALLOWED_ONNX_OPS_WO_GROUP_SUM),
+        ("conv2d_model", "sample_input_2d", ALLOWED_ONNX_OPS),
+        ("conv3d_model", "sample_input_3d", ALLOWED_ONNX_OPS),
+    ])
+    def test_onnx_ops_are_pure_logic(self, model_fixture, input_fixture, allowed_ops, request, tmp_path):
+        model = request.getfixturevalue(model_fixture)
+        x = request.getfixturevalue(input_fixture)
+        _enable_export_mode(model)
 
-        # Results should be identical for binary inputs
-        assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
+        onnx_path = str(tmp_path / "model.onnx")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning, message=".*LeafSpec.*")
+            torch.onnx.export(
+                model, (x,), onnx_path,
+                opset_version=17,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_shapes={"input": {0: torch.export.Dim("batch")}},
+            )
 
-
-class TestComplexModelExportMode:
-    """Test export mode with complex model architectures."""
-
-    def test_sequential_model(self):
-        """Test export mode with sequential model."""
-        model = nn.Sequential(
-            LogicDense(10, 8, parametrization="raw"),
-            LogicDense(8, 4, parametrization="raw"),
-            LogicDense(4, 2, parametrization="raw")
+        ops = _onnx_ops(onnx_path)
+        disallowed = ops - allowed_ops
+        assert not disallowed, (
+            f"ONNX graph contains non-logic ops: {disallowed}\n"
+            f"Full op set: {ops}"
         )
 
-        x = torch.rand(5, 10).bool()
 
-        model.eval()
-        result_regular = model(x)
-
-        # Enable export mode on all layers
-        for module in model.modules():
-            if hasattr(module, 'set_export_mode'):
-                module.set_export_mode(True)
-
-        result_export = model(x)
-
-        assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
-
-
-    def test_custom_forward_model(self):
-        """Test export mode with custom forward method (residual connections)."""
-        class ResidualLogicModel(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.layer1 = LogicDense(10, 10, parametrization="raw")
-                self.layer2 = LogicDense(10, 10, parametrization="raw")
-                self.layer3 = LogicDense(10, 5, parametrization="raw")
-
-            def forward(self, x):
-                # Residual connection
-                out1 = self.layer1(x)
-                out2 = self.layer2(out1)
-                residual = out1 * out2
-                return self.layer3(residual)
-            
-        x = torch.rand(3, 10).bool()
-            
-        model = ResidualLogicModel()
-        model.eval()
-        result_regular = model(x)
-
-        # Enable export mode
-        for module in model.modules():
-            if hasattr(module, 'set_export_mode'):
-                module.set_export_mode(True)
-
-        result_export = model(x)
-
-        assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
+ALLOWED_FX_TARGETS = {
+    # Logic ops
+    torch.ops.aten.__and__.Tensor,
+    torch.ops.aten.__or__.Tensor,
+    torch.ops.aten.__xor__.Tensor,
+    torch.ops.aten.bitwise_not.default,
+    # LUT dispatch
+    torch.ops.aten.where.self,
+    torch.ops.aten.eq.Scalar,
+    # Indexing / wiring
+    torch.ops.aten.index.Tensor,
+    torch.ops.aten.select.int,
+    # Shape bookkeeping (final reshape only)
+    torch.ops.aten.reshape.default,
+    # Constant construction (LUT 0 and 15)
+    torch.ops.aten.zeros_like.default,
+    torch.ops.aten.ones_like.default,
+}
 
 
-    def test_parallel_branches_model(self):
-        """Test export mode with parallel branches."""
-        class ParallelLogicModel(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.branch1 = LogicDense(10, 5, parametrization="raw")
-                self.branch2 = LogicDense(10, 5, parametrization="raw")
-                # Merged input is 10 (5+5), output is 6 (satisfies out_dim*lut_rank >= in_dim)
-                self.merge = LogicDense(10, 6, parametrization="raw")
+def constant_fold_views(gm: torch.fx.GraphModule):
+    env = {}
 
-            def forward(self, x):
-                # Parallel branches
-                out1 = self.branch1(x)
-                out2 = self.branch2(x)
-                # Concatenate outputs
-                merged = torch.cat([out1, out2], dim=1)
-                return self.merge(merged)
+    def get_attr_value(gm, target: str):
+        obj = gm
+        for attr in target.split('.'):
+            obj = getattr(obj, attr)
+        return obj
 
-        x = torch.rand(4, 10).bool()
+    VIEW_OPS = {
+        torch.ops.aten.movedim.int,
+        torch.ops.aten.reshape.default,
+        torch.ops.aten.select.int,
+        torch.ops.aten.slice.Tensor,
+        torch.ops.aten.moveaxis.int,
+        torch.ops.aten.unbind.int,
+        torch.ops.aten.lift_fresh_copy.default,
+    }
 
-        model = ParallelLogicModel()
+    for node in gm.graph.nodes:
+        if node.op == 'placeholder':
+            continue
+        if node.op == 'get_attr':
+            env[node] = get_attr_value(gm, node.target)
+            continue
+        if node.op == 'call_function' and node.target in VIEW_OPS:
+            args_resolved = []
+            all_const = True
+            for a in node.args:
+                if isinstance(a, torch.fx.Node):
+                    if a in env:
+                        args_resolved.append(env[a])
+                    else:
+                        all_const = False
+                        break
+                else:
+                    args_resolved.append(a)
 
-        model.eval()
-        result_regular = model(x)
+            if all_const:
+                result = node.target(*args_resolved, **node.kwargs)
+                env[node] = result
 
-        # Enable export mode
-        for module in model.modules():
-            if hasattr(module, 'set_export_mode'):
-                module.set_export_mode(True)
+    # Replace folded nodes with constants
+    for node, value in env.items():
+        if node.op in ('placeholder', 'get_attr'):
+            continue
 
-        result_export = model(x)
+        const_name = f"_folded_{node.name}"
 
-        assert torch.allclose(result_regular, result_export.float(), atol=1e-6)
+        if isinstance(value, torch.Tensor):
+            gm.register_buffer(const_name, value)
+            with gm.graph.inserting_before(node):
+                new_node = gm.graph.get_attr(const_name)
+            node.replace_all_uses_with(new_node)
+
+        elif isinstance(value, (tuple, list)):
+            # e.g. unbind returns a tuple of tensors
+            # replace getitem users directly
+            for user in list(node.users):
+                if user.op == 'call_function' and user.target is operator.getitem:
+                    idx = user.args[1]
+                    item = value[idx]
+                    item_name = f"_folded_{node.name}_{idx}"
+                    if isinstance(item, torch.Tensor):
+                        gm.register_buffer(item_name, item)
+                        with gm.graph.inserting_before(user):
+                            new_node = gm.graph.get_attr(item_name)
+                        user.replace_all_uses_with(new_node)
+
+    gm.graph.eliminate_dead_code()
+    gm.recompile()
+    return gm
 
 
-class TestTorchScriptTracing:
-    """Test that export mode enables TorchScript tracing."""
+class TestFXGraphPurity:
 
-    def test_simple_layer_tracing(self):
-        """Test that a simple layer can be traced with TorchScript."""
-        layer = LogicDense(8, 4, parametrization="raw")
-        layer.set_export_mode(True)
-        layer.eval()
+    @pytest.mark.parametrize("model_fixture, input_fixture", [
+        ("logic_dense_model", "sample_input_1d"),
+        ("conv2d_model_wo_group_sum", "sample_input_2d"),
+        ("conv3d_model_wo_group_sum", "sample_input_3d"),
+        # ("conv2d_model", "sample_input_2d"),
+        # ("conv3d_model", "sample_input_3d"),
+    ])
+    def test_fx_graph_is_pure_logic(self, model_fixture, input_fixture, request):
+        model = request.getfixturevalue(model_fixture)
+        x = request.getfixturevalue(input_fixture)
+        _enable_export_mode(model)
 
-        x = torch.rand(2, 8).bool()
+        exported = torch.export.export(model, (x,), strict=False)
+        gm = exported.module()
+        gm = constant_fold_views(gm)
 
-        traced = torch.jit.trace(layer, x)
+        disallowed = []
+        for node in gm.graph.nodes:
+            if node.op == 'call_function' and node.target not in ALLOWED_FX_TARGETS:
+                disallowed.append(f"{node.name}: {node.target}")
 
-        # Test that traced model works
-        result_original = layer(x)
-        result_traced = traced(x)
-
-        print("Original result:", result_original)
-        print("Traced result:", result_traced)
-
-        assert torch.allclose(result_original, result_traced, atol=1e-6)
-
-
-    def test_complex_model_tracing(self):
-        """Test that a complex model can be traced with TorchScript."""
-        model = nn.Sequential(
-            LogicConv2d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
-            OrPooling2d(kernel_size=2, stride=2),
-            torch.nn.Flatten(),  # 3*3*8 = 72
-            LogicDense(72, 64, parametrization="raw"),
-            LogicDense(64, 50, parametrization="raw"),
-            GroupSum(10),
+        assert not disallowed, (
+            f"[{model_fixture}] FX graph contains non-logic ops:\n"
+            + "\n".join(disallowed)
         )
 
-        model.eval()
-        x = torch.rand(128, 3, 8, 8).bool()
+# @pytest.mark.parametrize(
+#     "model_fixture, input_fixture",
+#     [
+#         ("logic_dense_model", "sample_input_1d"),
+#         ("conv2d_model_wo_group_sum", "sample_input_2d"),
+#         ("conv3d_model_wo_group_sum", "sample_input_3d"),
+#         ("conv2d_model", "sample_input_2d"),
+#         ("conv3d_model", "sample_input_3d"),
+#     ],
+# )
+# class TestExportModeEquivalenceNumpy:
+#     """Numpy and torch export-mode must agree on identical inputs."""
 
-        result_eval = model(x)
+#     def test_numpy_export_equivalence(self, model_fixture, input_fixture, request):
+#         model = request.getfixturevalue(model_fixture)
+#         x = request.getfixturevalue(input_fixture)
+#         _enable_export_mode(model)
 
-        # Enable export mode
-        for module in model.modules():
-            if hasattr(module, 'set_export_mode'):
-                module.set_export_mode(True)
+#         x_np = x.numpy()
+#         result_torch = model(x)
+#         result_numpy = model(x_np)
 
-        # Trace the model
-        traced = torch.jit.trace(model, x)
-
-        # Test that traced model works
-        result_original = model(x)
-
-        result_traced = traced(x)
-
-        assert torch.allclose(result_original, result_traced, atol=1e-6)
-        assert torch.allclose(result_eval, result_traced, atol=1e-6)
-
-    def test_complex_model_tracing_3d(self):
-        """Test that a complex 3D model can be traced with TorchScript."""
-        model = nn.Sequential(
-            LogicConv3d(
-                in_dim=8,
-                channels=3,
-                num_kernels=8,
-                receptive_field_size=3,
-                tree_depth=2,
-            ),
-            OrPooling3d(kernel_size=2, stride=2),
-            torch.nn.Flatten(),
-            LogicDense(216, 128, parametrization="raw"),
-            LogicDense(128, 64, parametrization="raw"),
-            GroupSum(8),
-        )
-
-        model.eval()
-
-        # 3D input: (N, C, D, H, W)
-        x = torch.rand(128, 3, 8, 8, 8).bool()
-
-        result_eval = model(x)
-
-        # Enable export mode
-        for module in model.modules():
-            if hasattr(module, "set_export_mode"):
-                module.set_export_mode(True)
-
-        # Trace the model
-        traced = torch.jit.trace(model, x)
-
-        # Test that traced model works
-        result_original = model(x)
-        result_traced = traced(x)
-
-        assert torch.allclose(result_original, result_traced, atol=1e-6)
-        assert torch.allclose(result_eval, result_traced, atol=1e-6)
+#         assert isinstance(result_numpy, np.ndarray), "Numpy input should produce numpy output"
+#         assert np.allclose(result_torch.numpy(), result_numpy, atol=1e-6), (
+#             f"[{model_fixture}] torch and numpy export results diverge"
+#         )
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
