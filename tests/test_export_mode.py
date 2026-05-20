@@ -1,6 +1,3 @@
-"""Tests for export mode functionality (ONNX/TorchScript tracing)."""
-import tempfile
-import os
 import warnings
 import operator
 
@@ -9,9 +6,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-import onnx
-from onnx import shape_inference
-
+from torchlogix.utils import set_export_mode
 from torchlogix.layers import (
     GroupSum,
     LogicConv2d,
@@ -118,48 +113,6 @@ def sample_input_3d():
     return torch.randint(0, 2, (4, 3, 8, 8, 8)).bool()
 
 
-def _enable_export_mode(model: nn.Module, batch_size: int = 1) -> None:
-    for module in model.modules():
-        if hasattr(module, "set_export_mode"):
-            module.set_export_mode(True, batch_size=batch_size)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-def _onnx_run(model: nn.Module, x: torch.Tensor) -> np.ndarray:
-    import onnxruntime as ort
-    """Export *model* to ONNX (temp file) and run inference via OnnxRuntime."""
-    # batch = torch.export.Dim("batch")
-    # dynamic_shapes = {"input": {0: batch}}
-
-    with tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as f:
-        tmp_path = f.name
-        print(f"Exporting model to ONNX at {tmp_path}...")
-
-    try:
-        torch.onnx.export(
-            model,
-            (x,),                          # args must be a tuple with dynamic_shapes
-            tmp_path,
-            opset_version=21,
-            input_names=["input"],
-            output_names=["output"],
-            verbose=True,
-            # dynamic_shapes=dynamic_shapes,
-        )
-        
-        model = onnx.load(tmp_path)
-        onnx.checker.check_model(model)
-        inferred = shape_inference.infer_shapes(model)
-
-        sess = ort.InferenceSession(tmp_path, providers=["CPUExecutionProvider"])
-        (output_name,) = [o.name for o in sess.get_outputs()]
-        return sess.run([output_name], {"input": x.numpy()})[0]
-    finally:
-        os.unlink(tmp_path)
-
-
 # ---------------------------------------------------------------------------
 # Parametrize over both 2-D and 3-D fixtures
 # ---------------------------------------------------------------------------
@@ -186,93 +139,11 @@ class TestExportModeEquivalence:
         result_eval = model(x_float)
 
         # Export mode
-        _enable_export_mode(model, batch_size=x.shape[0])
+        set_export_mode(model, batch_size=x.shape[0])
         result_export = model(x)
 
         assert torch.allclose(result_eval, result_export.float(), atol=1e-6), (
             f"[{model_fixture}] eval and export results diverge"
-        )
-
-
-ALLOWED_ONNX_OPS = {
-    # Boolean logic
-    "And", "Or", "Not", "Xor",
-    # Comparisons / selection (from lut_ids == n masks)
-    "Equal",
-    # Structural / indexing
-    "Gather", "GatherElements", "GatherND",
-    "Where", "NonZero",
-    "Reshape", "Transpose", "Flatten", "Squeeze", "Unsqueeze",
-    "Slice", "Concat", "Shape", "Expand", "Tile", "Pad",
-    "Identity", "Constant", "ConstantOfShape",
-}
-
-ALLOWED_ONNX_OPS_GROUP_SUM = {
-    "Cast", "ReduceSum", # for group sum
-}
-
-
-def _onnx_ops(tmp_path: str) -> set[str]:
-    """Return the set of op types present in an ONNX model file."""
-    import onnx
-    model_proto = onnx.load(tmp_path)
-    return {node.op_type for node in model_proto.graph.node}
-
-
-class TestOnnxExport:
-    """ONNX round-trip and op-set purity."""
-
-    # Round-trip doesnt work for now because ONNX runtime
-    # doesn't support advanced indexing (bare ONNX does)
-
-    """
-    @pytest.mark.parametrize("model_fixture, input_fixture", [
-        ("logic_dense_model", "sample_input_1d"),
-        ("conv2d_model_wo_group_sum", "sample_input_2d"),
-        ("conv3d_model_wo_group_sum", "sample_input_3d"),
-        ("conv2d_model", "sample_input_2d"),
-        ("conv3d_model", "sample_input_3d"),
-    ])
-    def test_onnx_roundtrip(self, model_fixture, input_fixture, request):
-        model = request.getfixturevalue(model_fixture)
-        x = request.getfixturevalue(input_fixture)
-        _enable_export_mode(model, batch_size=x.shape[0])
-
-        eager_out = model(x).float().detach().numpy()
-        onnx_out = _onnx_run(model, x)
-
-        assert np.allclose(eager_out, onnx_out, atol=1e-5)
-    """
-
-    @pytest.mark.parametrize("model_fixture, input_fixture, allowed_ops", [
-        ("logic_dense_model", "sample_input_1d", ALLOWED_ONNX_OPS),
-        ("conv2d_model_wo_group_sum", "sample_input_2d", ALLOWED_ONNX_OPS),
-        ("conv3d_model_wo_group_sum", "sample_input_3d", ALLOWED_ONNX_OPS),
-        ("conv2d_model", "sample_input_2d", ALLOWED_ONNX_OPS | ALLOWED_ONNX_OPS_GROUP_SUM),
-        ("conv3d_model", "sample_input_3d", ALLOWED_ONNX_OPS | ALLOWED_ONNX_OPS_GROUP_SUM),
-        ("single_3d_conv_model", "sample_input_3d", ALLOWED_ONNX_OPS),
-    ])
-    def test_onnx_ops_are_pure_logic(self, model_fixture, input_fixture, allowed_ops, request, tmp_path):
-        model = request.getfixturevalue(model_fixture)
-        x = request.getfixturevalue(input_fixture)
-        _enable_export_mode(model, batch_size=x.shape[0])
-
-        onnx_path = str(tmp_path / "model.onnx")
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=FutureWarning, message=".*LeafSpec.*")
-            torch.onnx.export(
-                model, (x,), onnx_path,
-                opset_version=21,
-                input_names=["input"],
-                output_names=["output"],
-                # dynamic_shapes={"input": {0: torch.export.Dim("batch")}},
-            )
-
-        ops = _onnx_ops(onnx_path)
-        disallowed = ops - allowed_ops
-        assert not disallowed, (
-            f"ONNX graph contains non-logic ops: {disallowed}\n"
-            f"Full op set: {ops}"
         )
 
 
@@ -361,7 +232,7 @@ class TestFXGraphPurity:
     def test_fx_graph_is_pure_logic(self, model_fixture, input_fixture, allowed_targets, request):
         model = request.getfixturevalue(model_fixture)
         x = request.getfixturevalue(input_fixture)
-        _enable_export_mode(model, batch_size=x.shape[0])
+        set_export_mode(model, batch_size=x.shape[0])
 
         exported = torch.export.export(model, (x,), strict=False)
         gm = exported.module()
@@ -391,7 +262,7 @@ class TestFXGraphPurity:
 def test_numpy_export_equivalence(layer, input_shape):
     """Numpy and torch export-mode must agree on identical inputs."""
     x = torch.randint(0, 2, input_shape).bool()
-    _enable_export_mode(layer, batch_size=x.shape[0])
+    set_export_mode(layer, batch_size=x.shape[0])
 
     x_np = x.numpy()
     result_torch = layer(x)

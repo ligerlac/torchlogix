@@ -9,7 +9,6 @@ import math
 import random
 import torch
 import torch.library as _tlib
-from torch._decomp import register_decomposition as _reg_decomp
 import numpy as np
 
 
@@ -171,24 +170,13 @@ def _lut_layer_op(a: torch.Tensor, b: torch.Tensor,
     result = torch.empty_like(a, dtype=torch.bool)
     for lut_id in range(16):
         mask = (lut_ids == lut_id)
-        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+        result[mask] = _map[lut_id](a[mask], b[mask])
     return result
 
 
 @_lut_layer_op.register_fake
 def _lut_layer_fake(a, b, lut_ids):
     return torch.empty_like(a, dtype=torch.bool)
-
-
-# Decomposition for ONNX export: expand to aten bool ops so torch.onnx can lower.
-@_reg_decomp(torch.ops.torchlogix.lut_layer.default)
-def _lut_layer_decomp(a: torch.Tensor, b: torch.Tensor,
-                      lut_ids: torch.Tensor) -> torch.Tensor:
-    result = torch.empty_like(a, dtype=torch.bool)
-    for lut_id in range(16):
-        mask = (lut_ids == lut_id)
-        result = torch.where(mask, _map[lut_id](a, b), result)
-    return result
 
 
 def _apply_luts_export_numpy(

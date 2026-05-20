@@ -564,7 +564,6 @@ class Circuit:
             if tgt == torch.ops.torchlogix.lut_layer.default:
                 a_ids        = resolve(node.args[0])
                 b_ids        = resolve(node.args[1])
-                print(f"node.name = {node.name}, node.args = {node.args}, node.kwargs = {node.kwargs}")
                 lut_ids_node = node.args[2]
                 lut_ids_vals = _get_attr_val(gm, lut_ids_node).flatten().tolist()
 
