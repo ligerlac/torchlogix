@@ -90,7 +90,7 @@ class LogicDense(LogicBase):
         # Extract inputs according to connection pattern
         x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
 
-        # Split into export and train path (optimized separately for efficiency and exportability)
+        # Split into train/eval and export path (optimized for efficiency and exportability, respectively)
         # Export path only needs to know which LUT, not how it's parameterized
         if self.export_mode:
             if self.lut_rank != 2:

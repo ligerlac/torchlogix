@@ -283,7 +283,10 @@ ALLOWED_FX_TARGETS = {
     torch.ops.aten.__xor__.Tensor,
     torch.ops.aten.bitwise_not.default,
 
-    # LUT ops
+    # Custom torchlogix ops (registered via torch.library.custom_op)
+    torch.ops.torchlogix.lut_layer.default,
+
+    # LUT ops (kept for backward compat; not emitted with custom ops)
     torch.ops.aten.where.self,
     torch.ops.aten.eq.Scalar,
 
@@ -337,9 +340,12 @@ ALLOWED_FX_TARGETS = {
 }
 
 ALLOWED_FX_TARGETS_GROUP_SUM = {
+    # Custom torchlogix group_sum op
+    torch.ops.torchlogix.group_sum.default,
+    # Fallback aten ops (kept for backward compat)
     torch.ops.aten.add.Tensor,
     torch.ops.aten.div.Tensor,
-    torch.ops.aten.sum.dim_IntList
+    torch.ops.aten.sum.dim_IntList,
 }
 
 

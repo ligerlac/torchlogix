@@ -162,12 +162,21 @@ class Gate:
 
 
 @dataclass
+class GroupSumReduction:
+    k:          int
+    group_size: int
+    tau:        float = 1.0
+    beta:       float = 0.0
+
+
+@dataclass
 class Circuit:
     n_inputs:    int
     input_shape: list[int]          # original shape of the input tensor
     gates:       list[Gate] = field(default_factory=list)
     output_ids:   list[int] = field(default_factory=list)   # flat, in order
     output_shape: list[int] = field(default_factory=list)
+    output_reduction: GroupSumReduction | None = field(default=None)
 
     @classmethod
     def from_model(cls, model: torch.nn.Module, input_shape: list[int]) -> Circuit:
@@ -550,161 +559,61 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
-            # LUT cascade — two possible graph patterns:
-            #
-            # 1. "where" cascade (dense):
-            #      eq = aten.eq.Scalar(lut_ids, K)
-            #      result_k = <op>(a, b)
-            #      where_k = aten.where.self(eq, result_k, prev)
-            #
-            # 2. "index_put_" scatter (sparse):
-            #      eq = aten.eq.Scalar(lut_ids, K)
-            #      a_k  = aten.index.Tensor(select_a, [eq])   # boolean gather
-            #      b_k  = aten.index.Tensor(select_b, [eq])
-            #      val  = <op>(a_k, b_k)
-            #      buf  = aten.index_put_.default(prev, [eq], val)
-            #
-            # Both carry identical per-gate info (lut_ids + a/b select nodes),
-            # so the gate-emission logic is shared.
+            # torchlogix::lut_layer(a, b, lut_ids)  ->  one gate per position
             # ----------------------------------------------------------------
-            if tgt == torch.ops.aten.eq.Scalar:
-                # Walk back through unsqueeze/view wrappers to the underlying get_attr.
-                arg0 = node.args[0]
-                lut_ids_node = arg0
-                while (lut_ids_node.op == 'call_function'
-                    and lut_ids_node.target in (
-                        torch.ops.aten.unsqueeze.default,
-                        torch.ops.aten.reshape.default,
-                        torch.ops.aten.view.default,
-                    )):
-                    lut_ids_node = lut_ids_node.args[0]
-                if not (lut_ids_node.op == 'get_attr' and 'lut_ids' in lut_ids_node.name):
-                    i += 1
-                    continue
-                lut_ids = _get_attr_val(gm, lut_ids_node).flatten().tolist()
-                n_nodes = len(lut_ids)
+            if tgt == torch.ops.torchlogix.lut_layer.default:
+                a_ids        = resolve(node.args[0])
+                b_ids        = resolve(node.args[1])
+                print(f"node.name = {node.name}, node.args = {node.args}, node.kwargs = {node.kwargs}")
+                lut_ids_node = node.args[2]
+                lut_ids_vals = _get_attr_val(gm, lut_ids_node).flatten().tolist()
 
-                # Walk backward to find the two select nodes that supply a/b inputs.
-                a_ids = None
-                b_ids = None
-                a_node = None
-                b_node = None
-                for k in range(i - 1, -1, -1):
-                    n2 = nodes[k]
-                    if (n2.op == 'call_function'
-                            and n2.target == torch.ops.aten.select.int
-                            and n2.name in wire_map):
-                        if b_ids is None:
-                            b_ids = resolve(n2)
-                            b_node = n2
-                        elif a_ids is None:
-                            a_ids = resolve(n2)
-                            a_node = n2
-                            break
-
-                if a_ids is None or b_ids is None:
-                    i += 1
-                    continue
-
-                # Names of the select nodes — used to identify boolean gathers
-                # (index.Tensor nodes inside the scatter cascade) vs wiring steps.
-                select_names: set[str] = set()
-                if a_node is not None:
-                    select_names.add(a_node.name)
-                if b_node is not None:
-                    select_names.add(b_node.name)
-
-                # Scan forward over the cascade, stopping when we reach a node that
-                # begins the next wiring step or layer boundary.
-                j = i
-                last_output_node = None   # last where or index_put_ seen
-                while j < len(nodes):
-                    n2 = nodes[j]
-                    j += 1   # advance past n2
-
-                    if n2.op == 'output':
-                        # Step back so the outer loop processes the output node.
-                        j -= 1
-                        break
-
-                    if n2.op == 'get_attr':
-                        # Constant tensor used inside the cascade (e.g. folded
-                        # ones/zeros tensor for LUT 15/0) — skip, don't stop.
-                        continue
-
-                    if n2.op != 'call_function':
-                        # Unexpected non-call node — stop conservatively.
-                        j -= 1
-                        break
-
-                    if n2.target == torch.ops.aten.reshape.default:
-                        # Reshape ends the cascade; step back so the reshape handler runs.
-                        j -= 1
-                        break
-
-                    if n2.target == torch.ops.aten.index.Tensor:
-                        # Distinguish boolean gather (inside scatter cascade) from
-                        # wiring index (takes the cascade output as source).
-                        # Boolean gathers: src is a select node, index list has
-                        # exactly one non-None entry (the bool mask). Nones can
-                        # appear as prefix for batch dims (e.g. [None, eq_K]).
-                        src_name = (n2.args[0].name
-                                    if isinstance(n2.args[0], torch.fx.Node) else None)
-                        idx_list = n2.args[1]
-                        non_none = [idx for idx in idx_list if idx is not None]
-                        is_bool_gather = (
-                            src_name in select_names
-                            and len(non_none) == 1
-                        )
-                        if not is_bool_gather:
-                            # Wiring step — step back so the index handler runs.
-                            j -= 1
-                            break
-                        # else: boolean gather is part of this cascade, continue
-
-                    if n2.target == torch.ops.aten.where.self:
-                        last_output_node = n2
-
-                    if n2.target == torch.ops.aten.index_put_.default:
-                        last_output_node = n2
-
-                # Emit one gate per output position using lut_ids + a/b wire IDs.
-                result_ids = [None] * n_nodes
-                for nidx, lut_id in enumerate(lut_ids):
+                result_ids = []
+                for nidx, lut_id in enumerate(lut_ids_vals):
                     lut_id = int(lut_id)
                     op, uses_a, uses_b = LUT_ID_TO_GATE[lut_id]
                     in0 = a_ids[nidx] if uses_a else -1
                     in1 = b_ids[nidx] if uses_b else -1
                     # LUT 5 (wire b) and LUT 10 (not b): in0 must be b
-                    if lut_id == 5:
+                    if lut_id in (5, 10):
                         in0 = b_ids[nidx]
                         in1 = -1
-                    elif lut_id == 10:
-                        in0 = b_ids[nidx]
-                        in1 = -1
-
                     g = Gate(gate_id=next_id, op=op, in0=in0, in1=in1,
-                            layer=layer_idx, node_idx=nidx)
+                             layer=layer_idx, node_idx=nidx)
                     circuit.gates.append(g)
-                    result_ids[nidx] = next_id
+                    result_ids.append(next_id)
                     next_id += 1
 
-                # Register the cascade's output node in wire_map so the next
-                # wiring step (index.Tensor / reshape) can resolve it.
-                if last_output_node is not None:
-                    out_shape = (wire_map.get(f'__shape_{b_node.name}')
-                                if b_node is not None else None) or [n_nodes]
-                    wire_map[last_output_node.name] = result_ids
-                    wire_map[f'__shape_{last_output_node.name}'] = out_shape
-
+                lut_shape = list(_get_attr_val(gm, lut_ids_node).shape)
+                wire_map[node.name]              = result_ids
+                wire_map[f'__shape_{node.name}'] = lut_shape
                 layer_idx += 1
-                i = j
+                i += 1
                 continue
 
-            # ---- skip everything else (sym_size, asserts, eq on non-lut, etc.) ----
+            # ----------------------------------------------------------------
+            # torchlogix::group_sum(x, k, tau, beta)  ->  reduction metadata
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.torchlogix.group_sum.default:
+                x_node = node.args[0]
+                k      = int(node.args[1])
+                tau    = float(node.args[2])
+                beta   = float(node.args[3])
+                if isinstance(x_node, torch.fx.Node) and x_node.name in wire_map:
+                    x_ids = resolve(x_node)
+                    circuit.output_reduction = GroupSumReduction(
+                        k=k, group_size=len(x_ids) // k, tau=tau, beta=beta,
+                    )
+                    wire_map[node.name]              = x_ids
+                    wire_map[f'__shape_{node.name}'] = [k]
+                    circuit.output_ids               = x_ids
+                i += 1
+                continue
+
+            # ---- skip everything else (sym_size, asserts, etc.) ----
             i += 1
 
-        # If the output node was jumped over by the where-cascade skip, resolve it now.
+        # If output_ids were not set by a group_sum handler, resolve from the output node.
         if not circuit.output_ids:
             for node in nodes:
                 if node.op == 'output':
@@ -1031,15 +940,9 @@ class Circuit:
                 for k, gid in enumerate(self.output_ids):
                     raw[i, k] = gate_vals[gid]
 
-        # Reconstruct GroupSum reduction if output_shape indicates it.
-        # A 3-D output_shape [traced_batch, k, group_size] means the FX graph
-        # contained a reshape-then-sum (GroupSum) that is not a boolean gate.
-
-        os = self.output_shape
-        if len(os) >= 3:
-            group_size = os[-1]
-            k = os[-2]
-            return raw.reshape(batch_size, k, group_size).sum(-1).float()
+        r = self.output_reduction
+        if r is not None:
+            return (raw.reshape(batch_size, r.k, r.group_size).sum(-1).float() + r.beta) / r.tau
 
         return raw.float()
 
@@ -1144,7 +1047,7 @@ class Circuit:
         """
         Convert the circuit representation to a JSON-serializable format.
         """
-        return {
+        d = {
             'n_inputs': self.n_inputs,
             'input_shape': self.input_shape,
             'output_ids': self.output_ids,
@@ -1161,6 +1064,14 @@ class Circuit:
                 for g in self.gates
             ],
         }
+        if self.output_reduction is not None:
+            d['output_reduction'] = {
+                'k': self.output_reduction.k,
+                'group_size': self.output_reduction.group_size,
+                'tau': self.output_reduction.tau,
+                'beta': self.output_reduction.beta,
+            }
+        return d
     
     @classmethod
     def from_dict(cls, data: dict) -> Circuit:
@@ -1181,6 +1092,12 @@ class Circuit:
                 node_idx=g_data.get('node_idx', -1),
             )
             circuit.gates.append(g)
+        if 'output_reduction' in data:
+            od = data['output_reduction']
+            circuit.output_reduction = GroupSumReduction(
+                k=od['k'], group_size=od['group_size'],
+                tau=od.get('tau', 1.0), beta=od.get('beta', 0.0),
+            )
         return circuit
     
     @classmethod
