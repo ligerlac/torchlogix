@@ -105,20 +105,13 @@ class LogicBase(torch.nn.Module, ABC):
         """
         pass
 
-    def set_export_mode(self, enabled: bool = True):
+    def set_export_mode(self, enabled: bool = True, batch_size: int = 1):
         """Enable or disable export mode for ONNX/TorchScript tracing.
 
         When enabled, pre-computes and caches LUT IDs as a buffer to avoid
         recomputing argmax in the exported model.
+        Also, all shapes must be static, hence the batch size must be specified and fixed.
         """
-        self.eval()  # Ensure we're in eval mode for export
+        self.eval()
         self.export_mode = enabled
-
-        if enabled:
-            # Pre-compute LUT IDs and register as buffer (constant in ONNX)
-            _, ids = self.get_luts_and_ids()
-            self.register_buffer('_export_lut_ids', ids, persistent=True)
-        else:
-            # Clean up cached IDs when disabling export mode
-            if hasattr(self, '_export_lut_ids'):
-                delattr(self, '_export_lut_ids')
+        self.static_batch_size = batch_size if enabled else None

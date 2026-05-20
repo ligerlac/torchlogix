@@ -187,49 +187,9 @@ class _LogicConvNd(LogicBase):
         return x
     
 
-    # def _forward_export_mode(self, x):
-    #     is_numpy = isinstance(x, np.ndarray)
-
-    #     # Padding
-    #     if self.padding > 0:
-    #         if is_numpy:
-    #             pad_width = [(0, 0), (0, 0)]
-    #             pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
-    #             x = np.pad(x, pad_width, mode='constant', constant_values=0)
-    #         else:
-    #             x = torch.nn.functional.pad(
-    #                 x,
-    #                 (self.padding, self.padding, self.padding, self.padding, 0, 0),
-    #                 mode="constant",
-    #                 value=0
-    #             )
-
-    #     # First level
-    #     x = self.connections(x, 0)
-    #     a, b = x[:, 0], x[:, 1]
-    #     lut_ids_bc = getattr(self, f'_export_lut_ids_L0')
-
-    #     x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
-
-    #     # Remaining levels
-    #     for level in range(1, self.tree_depth):
-    #         x = self.connections(x, level)
-    #         if is_numpy:
-    #             x = np.moveaxis(x, -2, 1)
-    #         else:
-    #             x = x.movedim(-2, 1)
-    #         a, b = x[:, 0], x[:, 1]
-    #         lut_ids_bc = getattr(self, f'_export_lut_ids_L{level}')
-
-    #         x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
-
-    #     # Final reshape
-    #     x = x.reshape(x.shape[0], x.shape[1], *self.kernel_positions)
-
-    #     return x
-    
-
     def _forward_export_mode(self, x):
+
+        print(f"Beginning of forward export mode: {x.shape=}")
         is_numpy = isinstance(x, np.ndarray)
 
         # Padding
@@ -248,7 +208,9 @@ class _LogicConvNd(LogicBase):
 
         # First level
         x = self.connections(x, 0)
-        a, b = x[:, 0], x[:, 1]
+        # a, b = x[:, 0], x[:, 1]
+        a = x[:, 0]
+        b = x[:, 1]
         lut_ids_bc = getattr(self, f'_export_lut_ids_L0')
 
         x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
@@ -256,12 +218,15 @@ class _LogicConvNd(LogicBase):
         # Remaining levels
         for level in range(1, self.tree_depth):
             x = self.connections(x, level)
-            a, b = x[..., 0, :], x[..., 1, :]
+            a = x[..., 0, :]
+            b = x[..., 1, :]
             lut_ids_bc = getattr(self, f'_export_lut_ids_L{level}')
 
             x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
 
         # Final reshape
+        print(f"{x.shape=}, target={(x.shape[0], x.shape[1], *self.kernel_positions)}")
+
         x = x.reshape(x.shape[0], x.shape[1], *self.kernel_positions)
 
         return x
@@ -313,9 +278,10 @@ class _LogicConvNd(LogicBase):
         for w in self.tree_weights:
             rescale_weights(w, method)
 
-    def set_export_mode(self, enabled: bool = True):
+    def set_export_mode(self, enabled: bool = True, batch_size: int = 1):
         self.eval()
         self.export_mode = enabled
+        self.static_batch_size = batch_size if enabled else None
 
         if enabled:
             _, tree_ids = self.get_luts_and_ids()
@@ -328,7 +294,7 @@ class _LogicConvNd(LogicBase):
                 stacked = stacked.T.unsqueeze(0).unsqueeze(-2)
                 # transpose to (num_kernels, lut_rank**i) for easier indexing in forward pass
                 # expand to shape (batch, n_kernels, spatial, n_nodes)
-                stacked = stacked.expand(-1, -1, self.n_kernel_positions, -1)
+                stacked = stacked.expand(self.static_batch_size, -1, self.n_kernel_positions, -1)
                 # * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
                 # * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
 

@@ -244,16 +244,30 @@ _map = [
     
 
 def _apply_luts_export_torch(a, b, lut_ids):
-    print(f"hi, {a.shape=}, {b.shape=}, {lut_ids.shape=}")
-    result = torch.zeros_like(a, dtype=torch.bool)
+    print(f"{a.shape=}, {b.shape=}, {lut_ids.shape=}")
+    # result = torch.zeros_like(a, dtype=torch.bool)
+    result = torch.empty_like(a, dtype=torch.bool)
     # we can skip LUT 0 (always False) since result is initialized to False
-    for lut_id in range(1, 16):
-        # mask = (lut_ids == lut_id)
-        # result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
-        # mask = (lut_ids == lut_id).expand_as(a)
+    # for lut_id in range(1, 16):
+    for lut_id in range(16):
         mask = (lut_ids == lut_id)
-        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+        result[mask] = _map[lut_id](a[mask], b[mask])
     return result
+
+
+# def _apply_luts_export_torch(a, b, lut_masks):
+#     print(f"{a.shape=}, {b.shape=}, {lut_masks.shape=}")
+#     # orig_shape = a.shape
+#     # a = a.flatten()
+#     # b = b.flatten()
+#     result = torch.zeros_like(a, dtype=torch.bool)
+
+#     for lut_id, mask in enumerate(lut_masks):
+#         print(f"{mask.shape=}")
+#         print(mask)
+#         # mask = mask.flatten()
+#         result[mask] = _map[lut_id](a[mask], b[mask])
+#     return result
 
 
 def _apply_luts_export_numpy(
