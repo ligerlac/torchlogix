@@ -727,6 +727,18 @@ class Circuit:
         return circuit
     
 
+    def simplify(self, n_max=1000) -> None:
+        for _ in range(n_max):
+            before = len(self.gates)
+            self.constant_fold_gates()
+            self.bypass_wires()
+            self.dedup()
+            self.eliminate_dead_gates()
+            after = len(self.gates)
+            if after == before:
+                break
+
+
     def eliminate_dead_gates(self) -> None:
         """
         Remove gates that do not contribute to the output (i.e. not on a path
@@ -773,6 +785,180 @@ class Circuit:
                                 layer=g.layer, node_idx=g.node_idx))
         self.gates = new_gates
 
+
+    def bypass_wires(self) -> None:
+        """
+        Eliminate trivial aliases:
+            WIRE(x)    -> x
+            NOT(NOT(x)) -> x
+
+        Rewrites all fanins/output IDs transitively and removes dead alias gates.
+
+        This pass is intentionally conservative and cheap.
+        """
+
+        gate_by_id = {g.gate_id: g for g in self.gates}
+
+        # ------------------------------------------------------------------
+        # Build alias map
+        #
+        # alias[gid] = replacement_gid
+        # ------------------------------------------------------------------
+        alias: dict[int, int] = {}
+
+        changed = True
+        while changed:
+            changed = False
+
+            for g in self.gates:
+
+                # ----------------------------------------------------------
+                # WIRE(x) -> x
+                # ----------------------------------------------------------
+                if g.op == GateOp.WIRE and g.in0 >= 0:
+                    target = alias.get(g.in0, g.in0)
+
+                    if alias.get(g.gate_id) != target:
+                        alias[g.gate_id] = target
+                        changed = True
+
+                # ----------------------------------------------------------
+                # NOT(NOT(x)) -> x
+                # ----------------------------------------------------------
+                elif g.op == GateOp.NOT and g.in0 >= 0:
+                    src = gate_by_id.get(g.in0)
+
+                    if src is not None and src.op == GateOp.NOT:
+                        target = alias.get(src.in0, src.in0)
+
+                        if alias.get(g.gate_id) != target:
+                            alias[g.gate_id] = target
+                            changed = True
+
+        # ------------------------------------------------------------------
+        # Resolve aliases transitively
+        # ------------------------------------------------------------------
+        def resolve(gid: int) -> int:
+            while gid in alias:
+                nxt = alias[gid]
+
+                if nxt == gid:
+                    break
+
+                gid = nxt
+
+            return gid
+
+        # ------------------------------------------------------------------
+        # Rewrite all fanins
+        # ------------------------------------------------------------------
+        for g in self.gates:
+            if g.in0 >= 0:
+                g.in0 = resolve(g.in0)
+
+            if g.in1 >= 0:
+                g.in1 = resolve(g.in1)
+
+        # ------------------------------------------------------------------
+        # Rewrite outputs
+        # ------------------------------------------------------------------
+        self.output_ids = [resolve(gid) for gid in self.output_ids]
+
+        # ------------------------------------------------------------------
+        # Remove aliased gates themselves
+        # ------------------------------------------------------------------
+        self.gates = [g for g in self.gates if g.gate_id not in alias]
+
+
+    def dedup(self) -> None:
+        """
+        Structural hashing / common-subexpression elimination.
+
+        Deduplicates gates with identical:
+            (op, in0, in1)
+
+        Commutative ops are canonicalized so:
+            AND(a,b) == AND(b,a)
+
+        After deduplication, all fanins/output IDs are rewritten to the
+        canonical representative and duplicate gates are removed.
+        """
+
+        COMMUTATIVE = {
+            GateOp.AND,
+            GateOp.OR,
+            GateOp.XOR,
+            GateOp.NAND,
+            GateOp.NOR,
+            GateOp.XNOR,
+        }
+
+        # ------------------------------------------------------------------
+        # Canonical representative for each structural key
+        # ------------------------------------------------------------------
+        canonical: dict[tuple, int] = {}
+
+        # duplicate_gid -> canonical_gid
+        replace: dict[int, int] = {}
+
+        # ------------------------------------------------------------------
+        # Build replacement map
+        # ------------------------------------------------------------------
+        for g in self.gates:
+
+            in0 = g.in0
+            in1 = g.in1
+
+            # Normalize commutative ops
+            if g.op in COMMUTATIVE and in0 > in1:
+                in0, in1 = in1, in0
+
+            key = (g.op, in0, in1)
+
+            if key in canonical:
+                replace[g.gate_id] = canonical[key]
+            else:
+                canonical[key] = g.gate_id
+
+        # ------------------------------------------------------------------
+        # Resolve transitively
+        # ------------------------------------------------------------------
+        def resolve(gid: int) -> int:
+            while gid in replace:
+                nxt = replace[gid]
+
+                if nxt == gid:
+                    break
+
+                gid = nxt
+
+            return gid
+
+        # ------------------------------------------------------------------
+        # Rewrite fanins
+        # ------------------------------------------------------------------
+        for g in self.gates:
+
+            if g.in0 >= 0:
+                g.in0 = resolve(g.in0)
+
+            if g.in1 >= 0:
+                g.in1 = resolve(g.in1)
+
+            # Keep commutative gates normalized afterward
+            if g.op in COMMUTATIVE and g.in0 > g.in1:
+                g.in0, g.in1 = g.in1, g.in0
+
+        # ------------------------------------------------------------------
+        # Rewrite outputs
+        # ------------------------------------------------------------------
+        self.output_ids = [resolve(gid) for gid in self.output_ids]
+
+        # ------------------------------------------------------------------
+        # Remove duplicate gates
+        # ------------------------------------------------------------------
+        self.gates = [g for g in self.gates if g.gate_id not in replace]
+        
 
     def compile(self) -> None:
         """
@@ -954,7 +1140,7 @@ class Circuit:
         return "\n".join(lines)
 
 
-    def to_json(self) -> dict:
+    def to_dict(self) -> dict:
         """
         Convert the circuit representation to a JSON-serializable format.
         """
@@ -977,9 +1163,9 @@ class Circuit:
         }
     
     @classmethod
-    def from_json(cls, data: dict) -> Circuit:
+    def from_dict(cls, data: dict) -> Circuit:
         """
-        Create a Circuit instance from a JSON-deserialized dictionary.
+        Create a Circuit instance from a (JSON-deserialized) dictionary.
         """
         circuit = cls(n_inputs=data['n_inputs'])
         circuit.input_shape = data.get('input_shape', [])
@@ -1004,7 +1190,7 @@ class Circuit:
         """
         with open(file_path, 'r') as f:
             data = json.load(f)
-        return cls.from_json(data)
+        return cls.from_dict(data)
 
     def get_lisp_code(self, inline_single_use: bool) -> str:
         """
@@ -1208,7 +1394,7 @@ class Circuit:
         """
         Write the circuit representation to a JSON file.
         """
-        json_data = self.to_json()
+        json_data = self.to_dict()
         with open(path, 'w') as f:
             json.dump(json_data, f)
 

@@ -90,8 +90,6 @@ class _LogicConvNd(LogicBase):
         self.kernel_positions = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
                    for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
         self.n_kernel_positions = math.prod(self.kernel_positions)
-        # print(f"kernel_positions: {self.kernel_positions}")
-        # print(f"n_kernel_positions: {self.n_kernel_positions}")
 
 
     def _init_weights(self):
@@ -189,7 +187,6 @@ class _LogicConvNd(LogicBase):
 
     def _forward_export_mode(self, x):
 
-        print(f"Beginning of forward export mode: {x.shape=}")
         is_numpy = isinstance(x, np.ndarray)
 
         # Padding
@@ -223,9 +220,6 @@ class _LogicConvNd(LogicBase):
             lut_ids_bc = getattr(self, f'_export_lut_ids_L{level}')
 
             x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
-
-        # Final reshape
-        print(f"{x.shape=}, target={(x.shape[0], x.shape[1], *self.kernel_positions)}")
 
         x = x.reshape(x.shape[0], x.shape[1], *self.kernel_positions)
 
@@ -295,10 +289,7 @@ class _LogicConvNd(LogicBase):
                 # transpose to (num_kernels, lut_rank**i) for easier indexing in forward pass
                 # expand to shape (batch, n_kernels, spatial, n_nodes)
                 stacked = stacked.expand(self.static_batch_size, -1, self.n_kernel_positions, -1)
-                # * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
-                # * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
 
-                # stacked = stacked.T.contiguous()
                 self.register_buffer(f'_export_lut_ids_L{level_idx}',
                                     stacked, persistent=True)
         else:

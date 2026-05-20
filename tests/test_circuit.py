@@ -55,9 +55,8 @@ class BranchModel(nn.Module):
         return x
     
  
-
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
-def test_circuit(model_cls):
+def test_circuit_compilation(model_cls):
     model = model_cls()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
@@ -74,3 +73,19 @@ def test_circuit(model_cls):
     circuit.compile()
     preds_circuit_compiled = circuit(x.reshape(x.shape[0], -1))
     assert torch.equal(preds_eval, preds_circuit_compiled), "Compiled circuit predictions differ from Eval-mode predictions"
+
+
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+@pytest.mark.parametrize("simplification", [
+    Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup
+])
+def test_circuit_simplifications(model_cls, simplification):
+    model = model_cls()
+    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
+
+    circuit = Circuit.from_model(model, input_shape=model.input_shape)
+    preds_before = circuit(x.reshape(x.shape[0], -1))
+
+    simplification(circuit)
+    preds_after = circuit(x.reshape(x.shape[0], -1))
+    assert torch.equal(preds_before, preds_after), f"Predictions differ after {simplification.__name__}!"
