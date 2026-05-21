@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 import operator
 import json
+import numpy as np
 
 import torch
 import torch.fx
@@ -950,6 +951,10 @@ class Circuit:
         If the stored output_shape has 3+ dimensions (e.g. [1, k, group_size]
         from a GroupSum layer), the raw boolean outputs are summed along the
         last axis to reproduce the GroupSum reduction.
+
+        Attention: For a fair performance comparison, the compiled code does not
+        do type conversions or looping over batches. Instead, it expects numpy
+        inputs of the correct shape (batch dim must match number of packed bits)
         """
         import ctypes
 
@@ -957,21 +962,30 @@ class Circuit:
         n_out = len(self.output_ids)
 
         if use_compiled:
-            if not hasattr(self, '_lib'):
-                raise RuntimeError("Circuit not compiled yet. Call compile() first.")
 
             pack = self._pack_bits
+
+            if not hasattr(self, '_lib'):
+                raise RuntimeError("Circuit not compiled yet. Call compile() first.")
+            
+            assert batch_size in (1, pack), (
+                "pack_bits={pack} mode requires batch_size == 1 or {pack}, "
+                "got {batch_size}".format(pack=pack, batch_size=batch_size)
+            )
+
+            # check input is boolean numpy array (not torch)
+            assert isinstance(input, np.ndarray) and input.dtype == np.bool_, (
+                "Compiled circuit expects boolean numpy array input, "
+                "got {t} with dtype {dt}".format(t=type(input), dt=input.dtype)
+            )
+
             if pack is None:
-                raw = torch.zeros(batch_size, n_out, dtype=torch.bool)
-                for i in range(batch_size):
-                    in_arr  = (ctypes.c_bool * self.n_inputs)(*input[i].flatten().tolist())
-                    out_arr = (ctypes.c_bool * n_out)()
-                    self._lib.circuit(in_arr, out_arr)
-                    raw[i] = torch.tensor(
-                        [bool(out_arr[k]) for k in range(n_out)], dtype=torch.bool
-                    )
+                in_arr = input.ctypes.data_as(ctypes.POINTER(ctypes.c_bool))
+                out_arr = (ctypes.c_bool * n_out)()
+                self._lib.circuit(in_arr, out_arr)
+                raw = np.ctypeslib.as_array(out_arr)
+
             else:
-                import numpy as np
                 assert batch_size in (1, pack), (
                     f"pack_bits={pack} mode requires batch_size == 1 or {pack}, "
                     f"got {batch_size}"
@@ -980,7 +994,7 @@ class Circuit:
                 _CType    = {8: ctypes.c_uint8, 16: ctypes.c_uint16,
                              32: ctypes.c_uint32, 64: ctypes.c_uint64}[pack]
 
-                flat = input.reshape(batch_size, -1).bool().numpy()  # (bs, n_inputs)
+                flat = input.reshape(batch_size, -1)
 
                 # Pack: packed_in[k] = OR_j( flat[j,k] << j ) — no Python for-loop
                 shifts_pow = (np.uint64(1) << np.arange(batch_size, dtype=np.uint64))
@@ -994,10 +1008,9 @@ class Circuit:
 
                 # Unpack: raw[j,k] = (out_packed[k] >> j) & 1 — no Python for-loop
                 shifts = np.arange(batch_size, dtype=np.uint64)
-                raw = torch.from_numpy(
-                    ((out_packed[np.newaxis, :].astype(np.uint64)
-                      >> shifts[:, np.newaxis]) & 1).astype(bool)
-                )
+                raw = ((out_packed[np.newaxis, :].astype(np.uint64)
+                         >> shifts[:, np.newaxis]) & 1).astype(bool)
+                       
         else:
             raw = torch.zeros(batch_size, n_out, dtype=torch.bool)
             for i in range(batch_size):
@@ -1014,7 +1027,8 @@ class Circuit:
 
         r = self.output_reduction
         if r is not None:
-            return (raw.reshape(batch_size, r.k, r.group_size).sum(-1).float() + r.beta) / r.tau
+            # return (raw.reshape(batch_size, r.k, r.group_size).sum(-1).float() + r.beta) / r.tau
+            return (raw.reshape(batch_size, r.k, r.group_size).sum(-1) + r.beta) / r.tau
 
         return raw.float()
 
@@ -1194,91 +1208,6 @@ class Circuit:
             data = json.load(f)
         return cls.from_dict(data)
 
-    def get_lisp_code(self, inline_single_use: bool) -> str:
-        """
-        Generate a Lisp-like text representation of the circuit.
-        """
-        n_in = self.n_inputs
-        gate_by_id = {g.gate_id: g for g in self.gates}
-
-        # ---- use-count for optional inlining --------------------------------
-        use_count: dict[int, int] = {}
-        if inline_single_use:
-            for g in self.gates:
-                use_count.setdefault(g.gate_id, 0)
-                for dep in (g.in0, g.in1):
-                    if dep >= n_in:
-                        use_count[dep] = use_count.get(dep, 0) + 1
-            for oid in self.output_ids:
-                if oid >= n_in:
-                    use_count[oid] = use_count.get(oid, 0) + 1
-
-        def should_inline(gid: int) -> bool:
-            return inline_single_use and use_count.get(gid, 0) <= 1
-
-        _expr_cache: dict[int, str] = {}
-
-        def lisp_expr(gid: int) -> str:
-            if gid < 0:
-                return "_"
-            if gid < n_in:
-                return f"in[{gid}]"
-            if not should_inline(gid):
-                return f"g{gid}"
-            if gid in _expr_cache:
-                return _expr_cache[gid]
-            g = gate_by_id.get(gid)
-            if g is None:
-                return f"g{gid}"
-            a = lisp_expr(g.in0)
-            b = lisp_expr(g.in1)
-            result = GATE_OP_LISP[g.op].format(a=a, b=b)
-            _expr_cache[gid] = result
-            return result
-
-        # ---- build output ---------------------------------------------------
-        lines = []
-        lines.append(f"(circuit")
-        lines.append(f"  (meta")
-        lines.append(f"    (n-inputs  {self.n_inputs})")
-        lines.append(f"    (n-gates   {len(self.gates)})")
-        lines.append(f"    (n-outputs {len(self.output_ids)})")
-        lines.append(f"    (input-shape  {self.input_shape})")
-        lines.append(f"    (output-shape {self.output_shape}))")
-        lines.append("")
-        lines.append(f"  (inputs")
-        lines.append(f"    ; IDs 0..{self.n_inputs - 1} map flat into input tensor")
-        lines.append(f"    (shape {self.input_shape}))")
-        lines.append("")
-
-        current_layer = -1
-        for gate in self.gates:
-            if should_inline(gate.gate_id):
-                continue  # will appear inlined at its use site
-
-            if gate.layer != current_layer:
-                if current_layer >= 0:
-                    lines.append(f"  ) ; end layer {current_layer}")
-                    lines.append("")
-                current_layer = gate.layer
-                lines.append(f"  (layer {current_layer}")
-
-            a_str = lisp_expr(gate.in0)
-            b_str = lisp_expr(gate.in1)
-            expr  = GATE_OP_LISP[gate.op].format(a=a_str, b=b_str)
-            lines.append(f"    (gate g{gate.gate_id} {expr})")
-
-        if current_layer >= 0:
-            lines.append(f"  ) ; end layer {current_layer}")
-
-        lines.append("")
-        lines.append(f"  (outputs ; shape {self.output_shape}")
-        for k, gid in enumerate(self.output_ids):
-            lines.append(f"    {lisp_expr(gid)}")
-        lines.append("  )")
-        lines.append(")")
-        return "\n".join(lines)
-
 
     def get_verilog_code(self, inline_single_use: bool) -> str:
         """
@@ -1375,14 +1304,6 @@ class Circuit:
         c_code = self.get_c_code()
         with open(path, 'w') as f:
             f.write(c_code)
-
-    def write_lisp_code(self, path: str) -> None:
-        """
-        Write the generated Lisp code to a file.
-        """
-        lisp_code = self.get_lisp_code()
-        with open(path, 'w') as f:
-            f.write(lisp_code)
 
     def write_verilog_code(self, path: str) -> None:
         """

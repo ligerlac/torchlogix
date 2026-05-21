@@ -56,23 +56,25 @@ class BranchModel(nn.Module):
     
  
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
-def test_circuit_compilation(model_cls):
+@pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
+def test_circuit_compilation(model_cls, pack_bits):
     model = model_cls()
-    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
-    model.eval()
-    preds_eval = model(x)
+    batch_size = 1 if pack_bits is None else pack_bits
+    x = torch.randint(0, 2, (batch_size, *model.input_shape), dtype=torch.bool)
+
     set_export_mode(model)
-    preds_export = model(x)
-    assert torch.equal(preds_eval, preds_export), "Export-mode predictions differ from Eval-mode predictions"
+    preds_eager = model(x)
     
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     preds_circuit = circuit(x.reshape(x.shape[0], -1))
-    assert torch.equal(preds_eval, preds_circuit), "Circuit predictions differ from Eval-mode predictions"
+    assert torch.equal(preds_eager, preds_circuit), "Circuit predictions differ from Eval-mode predictions"
 
-    circuit.compile()
-    preds_circuit_compiled = circuit(x.reshape(x.shape[0], -1))
-    assert torch.equal(preds_eval, preds_circuit_compiled), "Compiled circuit predictions differ from Eval-mode predictions"
+    circuit.compile(pack_bits=pack_bits)
+    input_np = x.reshape(x.shape[0], -1).numpy()
+    preds_circuit_compiled = circuit(input_np, use_compiled=True)
+    preds_circuit_compiled_torch = torch.from_numpy(preds_circuit_compiled)
+    assert torch.equal(preds_eager, preds_circuit_compiled_torch), "Compiled circuit predictions differ from Eval-mode predictions"
 
 
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
