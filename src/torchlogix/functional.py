@@ -144,6 +144,7 @@ def apply_luts_vectorized_export_mode(
     else:
         return torch.ops.torchlogix.lut_layer(a, b, lut_ids)
 
+
 _map = [
     lambda a, b: a & False,  # constant False
     lambda a, b: a & b,
@@ -170,7 +171,7 @@ def _lut_layer_op(a: torch.Tensor, b: torch.Tensor,
     result = torch.empty_like(a, dtype=torch.bool)
     for lut_id in range(16):
         mask = (lut_ids == lut_id)
-        result[mask] = _map[lut_id](a[mask], b[mask])
+        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
     return result
 
 
@@ -184,10 +185,10 @@ def _apply_luts_export_numpy(
     b: np.ndarray[bool],
     lut_ids: np.ndarray[int]
 ) -> np.ndarray:
-    result = np.empty_like(a, dtype=np.bool_)
+    result = np.empty_like(a)
     for lut_id in range(16):
         mask = (lut_ids == lut_id)
-        result[mask] = _map[lut_id](a[mask], b[mask])
+        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
     return result
 
 

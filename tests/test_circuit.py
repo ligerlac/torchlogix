@@ -62,7 +62,7 @@ def test_circuit_compilation(model_cls):
 
     model.eval()
     preds_eval = model(x)
-    set_export_mode(model, enabled=True, batch_size=1)
+    set_export_mode(model)
     preds_export = model(x)
     assert torch.equal(preds_eval, preds_export), "Export-mode predictions differ from Eval-mode predictions"
     
@@ -89,3 +89,20 @@ def test_circuit_simplifications(model_cls, simplification):
     simplification(circuit)
     preds_after = circuit(x.reshape(x.shape[0], -1))
     assert torch.equal(preds_before, preds_after), f"Predictions differ after {simplification.__name__}!"
+
+
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+def test_json_roundtrip(model_cls):
+    model = model_cls()
+    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
+
+    circuit = Circuit.from_model(model, input_shape=model.input_shape)
+    preds_before = circuit(x.reshape(x.shape[0], -1))
+
+    # Export the circuit to a temporary file and load it back
+    with tempfile.NamedTemporaryFile(suffix=".json") as tmp_file:
+        circuit.write_json(tmp_file.name)
+        circuit_loaded = Circuit.from_json_file(tmp_file.name)
+
+    preds_after = circuit_loaded(x.reshape(x.shape[0], -1))
+    assert torch.equal(preds_before, preds_after), "Predictions differ after export/import roundtrip!"

@@ -205,9 +205,8 @@ class _LogicConvNd(LogicBase):
 
         # First level
         x = self.connections(x, 0)
-        # a, b = x[:, 0], x[:, 1]
-        a = x[:, 0]
-        b = x[:, 1]
+        a, b = x[:, 0], x[:, 1]
+
         lut_ids_bc = getattr(self, f'_export_lut_ids_L0')
 
         x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
@@ -215,8 +214,7 @@ class _LogicConvNd(LogicBase):
         # Remaining levels
         for level in range(1, self.tree_depth):
             x = self.connections(x, level)
-            a = x[..., 0, :]
-            b = x[..., 1, :]
+            a, b = x[..., 0, :], x[..., 1, :]
             lut_ids_bc = getattr(self, f'_export_lut_ids_L{level}')
 
             x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
@@ -272,41 +270,28 @@ class _LogicConvNd(LogicBase):
         for w in self.tree_weights:
             rescale_weights(w, method)
 
-    def set_export_mode(self, enabled: bool = True, batch_size: int = 1):
+    def set_export_mode(self, enabled: bool = True):
         self.eval()
         self.export_mode = enabled
-        self.static_batch_size = batch_size if enabled else None
 
         if enabled:
             _, tree_ids = self.get_luts_and_ids()
 
-            # Stack each level (already same shape within level)
             for level_idx, level_ids in enumerate(tree_ids):
-                # level_ids is list of tensors, all shape (num_kernels,)
-                stacked = torch.stack(level_ids)  # Shape: (lut_rank**i, num_kernels)
-                # stacked = stacked.T.expand()
-                stacked = stacked.T.unsqueeze(0).unsqueeze(-2)
-                # transpose to (num_kernels, lut_rank**i) for easier indexing in forward pass
-                # expand to shape (batch, n_kernels, spatial, n_nodes)
-                stacked = stacked.expand(self.static_batch_size, -1, self.n_kernel_positions, -1)
-
+                stacked = torch.stack(level_ids)  # (lut_rank**i, num_kernels)
+                # shape: (num_kernels, spatial, n_nodes) — broadcasts over any batch dim
+                stacked = stacked.T.unsqueeze(-2)
+                stacked = stacked.expand(-1, self.n_kernel_positions, -1)
                 self.register_buffer(f'_export_lut_ids_L{level_idx}',
                                     stacked, persistent=True)
         else:
-            # Clean up all buffers
             buffers_to_delete = [name for name in self._buffers.keys()
                                 if name.startswith('_export_lut')]
             for name in buffers_to_delete:
                 delattr(self, name)
 
     def _get_export_lut_ids(self, level):
-        tree_ids = []
-        for level_idx in range(self.tree_depth):
-            # Just unstack (or iterate over dimension 0)
-            level_tensor = getattr(self, f'_export_lut_ids_L{level_idx}')
-            level_ids = [level_tensor[i] for i in range(level_tensor.shape[0])]
-            tree_ids.append(level_ids)
-        return tree_ids
+        return getattr(self, f'_export_lut_ids_L{level}')
 
 
 class LogicConv2d(_LogicConvNd):

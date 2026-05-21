@@ -139,7 +139,7 @@ class TestExportModeEquivalence:
         result_eval = model(x_float)
 
         # Export mode
-        set_export_mode(model, batch_size=x.shape[0])
+        set_export_mode(model)
         result_export = model(x)
 
         assert torch.allclose(result_eval, result_export.float(), atol=1e-6), (
@@ -232,7 +232,7 @@ class TestFXGraphPurity:
     def test_fx_graph_is_pure_logic(self, model_fixture, input_fixture, allowed_targets, request):
         model = request.getfixturevalue(model_fixture)
         x = request.getfixturevalue(input_fixture)
-        set_export_mode(model, batch_size=x.shape[0])
+        set_export_mode(model)
 
         exported = torch.export.export(model, (x,), strict=False)
         gm = exported.module()
@@ -262,7 +262,7 @@ class TestFXGraphPurity:
 def test_numpy_export_equivalence(layer, input_shape):
     """Numpy and torch export-mode must agree on identical inputs."""
     x = torch.randint(0, 2, input_shape).bool()
-    set_export_mode(layer, batch_size=x.shape[0])
+    set_export_mode(layer)
 
     x_np = x.numpy()
     result_torch = layer(x)

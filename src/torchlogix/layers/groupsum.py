@@ -74,7 +74,6 @@ class GroupSum(torch.nn.Module):
     def extra_repr(self):
         return "k={}, tau={}".format(self.k, self.tau)
 
-    def set_export_mode(self, export_mode: bool, batch_size: int = 1):
+    def set_export_mode(self, export_mode: bool):
         self.eval()
         self.export_mode = export_mode
-        self.static_batch_size = batch_size if export_mode else None

@@ -130,6 +130,28 @@ GATE_OP_C = {
     GateOp.NOT_B:       "!{b}",
 }
 
+# Bit-packed C expression templates (uint{N}_t words, bitwise ops process N samples in parallel).
+# Uses ~ (bitwise NOT) instead of ! (logical NOT) so all N bits are inverted.
+# {T} is replaced with the concrete C type (e.g. "uint32_t") before use.
+GATE_OP_C_PACKED = {
+    GateOp.CONST_FALSE: "({T})0",
+    GateOp.CONST_TRUE:  "~({T})0",
+    GateOp.WIRE:        "{a}",
+    GateOp.NOT:         "~{a}",
+    GateOp.AND:         "({a} & {b})",
+    GateOp.OR:          "({a} | {b})",
+    GateOp.XOR:         "({a} ^ {b})",
+    GateOp.NAND:        "~({a} & {b})",
+    GateOp.NOR:         "~({a} | {b})",
+    GateOp.XNOR:        "~({a} ^ {b})",
+    GateOp.AND_NOT_B:   "({a} & ~{b})",
+    GateOp.AND_NOT_A:   "(~{a} & {b})",
+    GateOp.OR_NOT_B:    "({a} | ~{b})",
+    GateOp.OR_NOT_A:    "(~{a} | {b})",
+    GateOp.NOT_A:       "~{a}",
+    GateOp.NOT_B:       "~{b}",
+}
+
 def _eval_gate_op(op: GateOp, a: bool, b: bool) -> bool:
     if op == GateOp.CONST_FALSE: return False
     if op == GateOp.CONST_TRUE:  return True
@@ -188,11 +210,15 @@ class Circuit:
         FX graph is in the expected form.
         """
         model.eval()
-        set_export_mode(model, enabled=True, batch_size=1)
+        set_export_mode(model, enabled=True)
         x_dummy = torch.zeros(1, *input_shape, dtype=torch.bool)
         exported = torch.export.export(model, (x_dummy,), strict=False)
         gm = exported.module()
-        return cls.from_fx_graph(gm, [1, *input_shape])
+        # Trace with (1, *input_shape) so the FX graph's batch-dimension ops
+        # resolve correctly; then strip the leading 1 from the stored shape.
+        circuit = cls.from_fx_graph(gm, [1, *input_shape])
+        circuit.input_shape = list(input_shape)
+        return circuit
 
     @classmethod
     def from_fx_graph(cls, gm: torch.fx.GraphModule, input_shape: list[int]) -> Circuit:
@@ -583,9 +609,15 @@ class Circuit:
                     result_ids.append(next_id)
                     next_id += 1
 
-                lut_shape = list(_get_attr_val(gm, lut_ids_node).shape)
+                # Output shape matches `a`'s shape (lut_layer returns empty_like(a)).
+                # The lut_ids buffer may have fewer dims than the actual output (no
+                # batch dim), so prefer a's wire_map shape over the buffer's shape.
+                # a_shape = wire_map.get(f'__shape_{node.args[0].name}')
+                # out_shape = a_shape if a_shape is not None \
+                #     else list(_get_attr_val(gm, lut_ids_node).shape)
+                out_shape = node.meta['val'].shape
                 wire_map[node.name]              = result_ids
-                wire_map[f'__shape_{node.name}'] = lut_shape
+                wire_map[f'__shape_{node.name}'] = out_shape
                 layer_idx += 1
                 i += 1
                 continue
@@ -868,7 +900,7 @@ class Circuit:
         self.gates = [g for g in self.gates if g.gate_id not in replace]
         
 
-    def compile(self) -> None:
+    def compile(self, pack_bits: int = None) -> None:
         """
         Write C code to a temp file, compile to a shared library, and load it.
         After calling this, circuit(x) will use the compiled implementation.
@@ -877,7 +909,7 @@ class Circuit:
         import subprocess
         import tempfile
 
-        c_code = self.get_c_code()
+        c_code = self.get_c_code(pack_bits=pack_bits)
         tmp_c = tempfile.NamedTemporaryFile(suffix='.c', delete=False, mode='w')
         tmp_c.write(c_code)
         tmp_c.close()
@@ -890,13 +922,22 @@ class Circuit:
         if result.returncode != 0:
             raise RuntimeError(f"Compilation failed:\n{result.stderr}")
 
+        _ctype_map = {
+            None: ctypes.c_bool,
+            8:    ctypes.c_uint8,
+            16:   ctypes.c_uint16,
+            32:   ctypes.c_uint32,
+            64:   ctypes.c_uint64,
+        }
+        ctype = _ctype_map[pack_bits]
         lib = ctypes.CDLL(so_path)
         lib.circuit.argtypes = [
-            ctypes.POINTER(ctypes.c_bool),
-            ctypes.POINTER(ctypes.c_bool),
+            ctypes.POINTER(ctype),
+            ctypes.POINTER(ctype),
         ]
         lib.circuit.restype = None
         self._lib = lib
+        self._pack_bits = pack_bits
 
 
     def __call__(self, input: torch.Tensor, use_compiled: bool = False) -> torch.Tensor:
@@ -914,16 +955,48 @@ class Circuit:
 
         batch_size = input.shape[0]
         n_out = len(self.output_ids)
-        use_c = use_compiled or hasattr(self, '_lib')
 
-        if use_c:
-            raw = torch.zeros(batch_size, n_out, dtype=torch.bool)
-            for i in range(batch_size):
-                in_arr  = (ctypes.c_bool * self.n_inputs)(*input[i].flatten().tolist())
-                out_arr = (ctypes.c_bool * n_out)()
+        if use_compiled:
+            if not hasattr(self, '_lib'):
+                raise RuntimeError("Circuit not compiled yet. Call compile() first.")
+
+            pack = self._pack_bits
+            if pack is None:
+                raw = torch.zeros(batch_size, n_out, dtype=torch.bool)
+                for i in range(batch_size):
+                    in_arr  = (ctypes.c_bool * self.n_inputs)(*input[i].flatten().tolist())
+                    out_arr = (ctypes.c_bool * n_out)()
+                    self._lib.circuit(in_arr, out_arr)
+                    raw[i] = torch.tensor(
+                        [bool(out_arr[k]) for k in range(n_out)], dtype=torch.bool
+                    )
+            else:
+                import numpy as np
+                assert batch_size in (1, pack), (
+                    f"pack_bits={pack} mode requires batch_size == 1 or {pack}, "
+                    f"got {batch_size}"
+                )
+                _np_dtype = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}[pack]
+                _CType    = {8: ctypes.c_uint8, 16: ctypes.c_uint16,
+                             32: ctypes.c_uint32, 64: ctypes.c_uint64}[pack]
+
+                flat = input.reshape(batch_size, -1).bool().numpy()  # (bs, n_inputs)
+
+                # Pack: packed_in[k] = OR_j( flat[j,k] << j ) — no Python for-loop
+                shifts_pow = (np.uint64(1) << np.arange(batch_size, dtype=np.uint64))
+                packed_in = (flat.astype(np.uint64) * shifts_pow[:, np.newaxis]) \
+                                 .sum(axis=0, dtype=np.uint64).astype(_np_dtype)
+                in_arr  = packed_in.ctypes.data_as(ctypes.POINTER(_CType))
+
+                out_packed = np.zeros(n_out, dtype=_np_dtype)
+                out_arr = out_packed.ctypes.data_as(ctypes.POINTER(_CType))
                 self._lib.circuit(in_arr, out_arr)
-                raw[i] = torch.tensor(
-                    [bool(out_arr[k]) for k in range(n_out)], dtype=torch.bool
+
+                # Unpack: raw[j,k] = (out_packed[k] >> j) & 1 — no Python for-loop
+                shifts = np.arange(batch_size, dtype=np.uint64)
+                raw = torch.from_numpy(
+                    ((out_packed[np.newaxis, :].astype(np.uint64)
+                      >> shifts[:, np.newaxis]) & 1).astype(bool)
                 )
         else:
             raw = torch.zeros(batch_size, n_out, dtype=torch.bool)
@@ -946,7 +1019,7 @@ class Circuit:
         return raw.float()
 
 
-    def get_c_code(self, inline_single_use: bool = True) -> str:
+    def get_c_code(self, inline_single_use: bool = True, pack_bits=None) -> str:
         """
         Generate a self-contained C function that evaluates the circuit.
 
@@ -955,6 +1028,19 @@ class Circuit:
         This eliminates most temporaries and makes each output a single expression
         tree rooted at the inputs.
         """
+
+        assert pack_bits in (None, 8, 16, 32, 64), "pack_bits must be one of None, 8, 16, 32, or 64"
+
+        if pack_bits is not None:
+            ctype     = f"uint{pack_bits}_t"
+            gate_ops  = {op: tmpl.replace("{T}", ctype)
+                         for op, tmpl in GATE_OP_C_PACKED.items()}
+            const_false = f"({ctype})0"
+        else:
+            ctype     = "bool"
+            gate_ops  = GATE_OP_C
+            const_false = "false"
+
         n_in  = self.n_inputs
         n_g   = len(self.gates)
         n_out = len(self.output_ids)
@@ -984,7 +1070,7 @@ class Circuit:
         def expr_of(gid: int) -> str:
             """Return C expression for gate gid (inlined if single-use)."""
             if gid < 0:
-                return "false"
+                return const_false
             if gid < n_in:
                 return f"in[{gid}]"
             if not should_inline(gid):
@@ -996,7 +1082,7 @@ class Circuit:
                 return f"g{gid}"
             a = expr_of(g.in0)
             b = expr_of(g.in1)
-            result = GATE_OP_C[g.op].format(a=a, b=b)
+            result = gate_ops[g.op].format(a=a, b=b)
             _expr_cache[gid] = result
             return result
 
@@ -1010,11 +1096,12 @@ class Circuit:
         lines.append("")
         lines.append(f"// Input shape:  {self.input_shape}")
         lines.append(f"// Output shape: {self.output_shape}")
-        lines.append(f"// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_out}")
+        pack_str = f"  pack_bits={pack_bits}" if pack_bits else ""
+        lines.append(f"// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_out}{pack_str}")
         lines.append("")
         lines.append(f"void circuit(")
-        lines.append(f"    const bool in[{n_in}],")
-        lines.append(f"    bool       out[{n_out}])")
+        lines.append(f"    const {ctype} in[{n_in}],")
+        lines.append(f"    {ctype}       out[{n_out}])")
         lines.append("{")
 
         current_layer = -1
@@ -1030,8 +1117,8 @@ class Circuit:
 
             a = expr_of(gate.in0)
             b = expr_of(gate.in1)
-            expr = GATE_OP_C[gate.op].format(a=a, b=b)
-            lines.append(f"    bool g{gate.gate_id} = {expr};")
+            expr = gate_ops[gate.op].format(a=a, b=b)
+            lines.append(f"    {ctype} g{gate.gate_id} = {expr};")
 
         lines.append("")
         lines.append("    // --- outputs ---")
@@ -1077,8 +1164,7 @@ class Circuit:
         """
         Create a Circuit instance from a (JSON-deserialized) dictionary.
         """
-        circuit = cls(n_inputs=data['n_inputs'])
-        circuit.input_shape = data.get('input_shape', [])
+        circuit = cls(n_inputs=data['n_inputs'], input_shape=data['input_shape'])
         circuit.output_ids = data.get('output_ids', [])
         circuit.output_shape = data.get('output_shape', [])
         for g_data in data.get('gates', []):

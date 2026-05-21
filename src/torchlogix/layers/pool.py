@@ -93,11 +93,10 @@ class OrPooling2d(torch.nn.Module):
         return result 
 
 
-    def set_export_mode(self, export_mode: bool, batch_size: int = 1):
+    def set_export_mode(self, export_mode: bool):
         """Set export mode for the layer."""
         self.eval()
         self.export_mode = export_mode
-        self.static_batch_size = batch_size if export_mode else None
 
 
 class OrPooling3d(torch.nn.Module):
@@ -194,8 +193,7 @@ class OrPooling3d(torch.nn.Module):
         return result
     
 
-    def set_export_mode(self, export_mode: bool, batch_size: int = 1):
+    def set_export_mode(self, export_mode: bool):
         """Set export mode for the layer."""
         self.eval()
         self.export_mode = export_mode
-        self.static_batch_size = batch_size if export_mode else None

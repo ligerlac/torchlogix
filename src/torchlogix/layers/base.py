@@ -105,13 +105,12 @@ class LogicBase(torch.nn.Module, ABC):
         """
         pass
 
-    def set_export_mode(self, enabled: bool = True, batch_size: int = 1):
-        """Enable or disable export mode for ONNX/TorchScript tracing.
+    def set_export_mode(self, enabled: bool = True):
+        """Enable or disable export mode for circuit/ONNX tracing.
 
         When enabled, pre-computes and caches LUT IDs as a buffer to avoid
-        recomputing argmax in the exported model.
-        Also, all shapes must be static, hence the batch size must be specified and fixed.
+        recomputing argmax in the exported model. All shapes must be static;
+        circuit tracing always operates on a single sample (no batch dim).
         """
         self.eval()
         self.export_mode = enabled
-        self.static_batch_size = batch_size if enabled else None

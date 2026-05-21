@@ -55,7 +55,6 @@ class LogicDense(LogicBase):
         # Legacy attributes for compatibility
         self.num_neurons = out_dim
         self.num_weights = out_dim
-        self.static_batch_size = None  # Set in export mode if needed
 
     def _init_weights(self, out_dim):
         # Initialize weights using parametrization
@@ -162,22 +161,18 @@ class LogicDense(LogicBase):
     def rescale_weights(self, method):
         rescale_weights(self.weight, method)
 
-    def set_export_mode(self, enabled: bool = True, batch_size: int = 1):
-        """Enable or disable export mode for ONNX/TorchScript tracing.
+    def set_export_mode(self, enabled: bool = True):
+        """Enable or disable export mode for circuit/ONNX tracing.
 
         When enabled, pre-computes and caches LUT IDs as a buffer to avoid
         recomputing argmax in the exported model.
         """
-        self.eval()  # Ensure we're in eval mode for export
+        self.eval()
         self.export_mode = enabled
-        self.static_batch_size = batch_size if enabled else None
 
         if enabled:
-            # Pre-compute LUT IDs and register as buffer (constant in ONNX)
             _, ids = self.get_luts_and_ids()
-            ids = ids.expand(batch_size, -1)  # Expand to static batch size for export
             self.register_buffer('_export_lut_ids', ids, persistent=True)
         else:
-            # Clean up cached IDs when disabling export mode
             if hasattr(self, '_export_lut_ids'):
                 delattr(self, '_export_lut_ids')
