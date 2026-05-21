@@ -116,19 +116,19 @@ GATE_OP_C = {
     GateOp.CONST_FALSE: "false",
     GateOp.CONST_TRUE:  "true",
     GateOp.WIRE:        "{a}",
-    GateOp.NOT:         "!{a}",
+    GateOp.NOT:         "(!{a})",
     GateOp.AND:         "({a} & {b})",
     GateOp.OR:          "({a} | {b})",
     GateOp.XOR:         "({a} ^ {b})",
-    GateOp.NAND:        "!({a} & {b})",
-    GateOp.NOR:         "!({a} | {b})",
-    GateOp.XNOR:        "!({a} ^ {b})",
+    GateOp.NAND:        "(!({a} & {b}))",
+    GateOp.NOR:         "(!({a} | {b}))",
+    GateOp.XNOR:        "(!({a} ^ {b}))",
     GateOp.AND_NOT_B:   "({a} & !{b})",
-    GateOp.AND_NOT_A:   "(!{a} & {b})",
+    GateOp.AND_NOT_A:   "((!{a}) & {b})",
     GateOp.OR_NOT_B:    "({a} | !{b})",
-    GateOp.OR_NOT_A:    "(!{a} | {b})",
-    GateOp.NOT_A:       "!{a}",
-    GateOp.NOT_B:       "!{b}",
+    GateOp.OR_NOT_A:    "((!{a}) | {b})",
+    GateOp.NOT_A:       "(!{a})",
+    GateOp.NOT_B:       "(!{b})",
 }
 
 # Bit-packed C expression templates (uint{N}_t words, bitwise ops process N samples in parallel).
@@ -1140,7 +1140,177 @@ class Circuit:
             lines.append(f"    out[{k}] = {expr_of(gid)};")
 
         lines.append("}")
+
+        r = self.output_reduction
+        if r is not None:
+            lines.append("")
+            lines.append("// --- GroupSum reduction ---")
+            lines.append(f"#define GROUPSUM_K          {r.k}")
+            lines.append(f"#define GROUPSUM_GROUP_SIZE {r.group_size}")
+            lines.append("")
+            lines.append(f"void circuit_scores(")
+            lines.append(f"    const bool in[{n_in}],")
+            lines.append(f"    float      scores[GROUPSUM_K])")
+            lines.append("{")
+            lines.append(f"    bool raw[{n_out}];")
+            lines.append(f"    circuit(in, raw);")
+            lines.append(f"    for (int j = 0; j < GROUPSUM_K; j++) {{")
+            lines.append(f"        int s = 0;")
+            lines.append(f"        for (int i = 0; i < GROUPSUM_GROUP_SIZE; i++)")
+            lines.append(f"            s += (int)raw[j * GROUPSUM_GROUP_SIZE + i];")
+            lines.append(f"        scores[j] = ((float)s + {r.beta}f) / {r.tau}f;")
+            lines.append(f"    }}")
+            lines.append("}")
+
         return "\n".join(lines)
+
+
+    def turn_group_sum_into_argmax(self) -> None:
+        """
+        Replace the GroupSum output reduction with pure gate logic that computes
+        the argmax of the k group sums. Ties are broken in favour of the
+        lowest-index class. After this call output_reduction is None and the
+        circuit has k boolean outputs (one-hot: winning class bit is 1).
+        """
+        r = self.output_reduction
+        if r is None:
+            raise ValueError("Circuit has no output_reduction to convert")
+
+        k, gs = r.k, r.group_size
+        argmax_layer = max((g.layer for g in self.gates), default=-1) + 1
+        next_id = self.n_inputs + len(self.gates)
+
+        # A lazily-created CONST_TRUE gate (needed only if NOT(always-false) appears).
+        _const_true_id: list[int] = []
+
+        def get_const_true() -> int:
+            nonlocal next_id
+            if not _const_true_id:
+                gid = next_id
+                self.gates.append(Gate(gate_id=gid, op=GateOp.CONST_TRUE, layer=argmax_layer))
+                next_id += 1
+                _const_true_id.append(gid)
+            return _const_true_id[0]
+
+        def emit(op: GateOp, a: int = -1, b: int = -1) -> int:
+            """Emit a gate with constant folding for -1 (constant false) inputs."""
+            nonlocal next_id
+            if op == GateOp.WIRE:      return a
+            if op == GateOp.NOT:
+                if a == -1:            return get_const_true()
+            if op == GateOp.AND:
+                if a == -1 or b == -1: return -1
+            if op == GateOp.OR:
+                if a == -1 and b == -1: return -1
+                if a == -1:            return b
+                if b == -1:            return a
+            if op == GateOp.XOR:
+                if a == -1:            return b
+                if b == -1:            return a
+            if op == GateOp.AND_NOT_B:   # a AND NOT b
+                if a == -1:            return -1
+                if b == -1:            return a   # a AND true = a
+            if op == GateOp.AND_NOT_A:   # NOT a AND b
+                if b == -1:            return -1
+                if a == -1:            return b   # true AND b = b
+            if op == GateOp.XNOR:
+                if a == -1 and b == -1: return get_const_true()
+                if a == -1:            return emit(GateOp.NOT, b)
+                if b == -1:            return emit(GateOp.NOT, a)
+            gid = next_id
+            self.gates.append(Gate(gate_id=gid, op=op, in0=a, in1=b, layer=argmax_layer))
+            next_id += 1
+            return gid
+
+        def add_bits(a_bits: list[int], b_bits: list[int]) -> list[int]:
+            """Add two unsigned binary numbers (LSB first). Returns sum bits."""
+            n = max(len(a_bits), len(b_bits))
+            a = a_bits + [-1] * (n - len(a_bits))
+            b = b_bits + [-1] * (n - len(b_bits))
+            result = []
+            carry = -1
+            for ai, bi in zip(a, b):
+                xab   = emit(GateOp.XOR, ai, bi)
+                s     = emit(GateOp.XOR, xab, carry)
+                c_ab  = emit(GateOp.AND, ai, bi)
+                c_xc  = emit(GateOp.AND, xab, carry)
+                carry = emit(GateOp.OR, c_ab, c_xc)
+                result.append(s)
+            result.append(carry)
+            return result
+
+        def popcount(bit_ids: list[int]) -> list[int]:
+            """Binary-tree popcount. Returns count as binary number (LSB first)."""
+            if not bit_ids:
+                return [-1]
+            numbers = [[b] for b in bit_ids]
+            while len(numbers) > 1:
+                new_numbers = []
+                for i in range(0, len(numbers) - 1, 2):
+                    new_numbers.append(add_bits(numbers[i], numbers[i + 1]))
+                if len(numbers) % 2 == 1:
+                    new_numbers.append(numbers[-1])
+                numbers = new_numbers
+            return numbers[0]
+
+        def compare_gt(a_bits: list[int], b_bits: list[int]) -> int:
+            """Return gate ID for (unsigned(a) > unsigned(b)).
+
+            Standard ripple comparator: scan MSB→LSB tracking 'greater so far'
+            and 'equal so far'. Equal is true until any bit differs.
+              greater_new = greater OR (equal AND a_wins)
+              equal_new   = equal AND (a[i] XNOR b[i])
+            """
+            n = max(len(a_bits), len(b_bits))
+            a = a_bits + [-1] * (n - len(a_bits))
+            b = b_bits + [-1] * (n - len(b_bits))
+            greater = -1   # false: a not greater so far
+            equal   = None  # None = implicitly true (before first bit)
+            for i in range(n - 1, -1, -1):
+                ai, bi = a[i], b[i]
+                a_wins = emit(GateOp.AND_NOT_B, ai, bi)
+                a_eq   = emit(GateOp.XNOR, ai, bi)
+                if equal is None:
+                    # First bit: equal is implicitly true, so AND(true, a_wins) = a_wins
+                    greater = emit(GateOp.OR, greater, a_wins)
+                    equal   = a_eq
+                else:
+                    greater = emit(GateOp.OR, greater, emit(GateOp.AND, equal, a_wins))
+                    equal   = emit(GateOp.AND, equal, a_eq)
+            return greater
+
+        # 1. Popcount for each group.
+        counts = [
+            popcount(self.output_ids[j * gs : (j + 1) * gs])
+            for j in range(k)
+        ]
+
+        # 2. Pairwise comparisons: gt[(a, b)] = gate for "a strictly beats b", a > b.
+        gt: dict[tuple[int, int], int] = {}
+        for a in range(k):
+            for b in range(a):
+                gt[(a, b)] = compare_gt(counts[a], counts[b])
+
+        # 3. One-hot output.
+        # out[j] = AND(j > m for all m < j) AND AND(NOT (m > j) for all m > j)
+        out_ids = []
+        for j in range(k):
+            conditions = []
+            for m in range(j):
+                conditions.append(gt[(j, m)])
+            for m in range(j + 1, k):
+                conditions.append(emit(GateOp.NOT, gt[(m, j)]))
+            if not conditions:
+                out_ids.append(get_const_true())
+            else:
+                result = conditions[0]
+                for c in conditions[1:]:
+                    result = emit(GateOp.AND, result, c)
+                out_ids.append(result)
+
+        self.output_ids       = out_ids
+        self.output_shape     = [k]
+        self.output_reduction = None
 
 
     def to_dict(self) -> dict:
@@ -1294,6 +1464,32 @@ class Circuit:
 
         lines.append("")
         lines.append("endmodule")
+
+        r = self.output_reduction
+        if r is not None:
+            lines.append("")
+            lines.append("// --- GroupSum reduction (simulation model) ---")
+            lines.append(f"// k={r.k}  group_size={r.group_size}  tau={r.tau}  beta={r.beta}")
+            lines.append(f"// For synthesis: replace the always block with an adder tree per group.")
+            lines.append(f"module circuit_scores (")
+            lines.append(f"    input  wire [{n_in - 1}:0]  inp,")
+            lines.append(f"    output reg  [{r.k * 32 - 1}:0] scores_flat  // {r.k} x 32-bit packed integer scores")
+            lines.append(f");")
+            lines.append(f"    wire [{n_out - 1}:0] raw;")
+            lines.append(f"    circuit u_circuit(.inp(inp), .out(raw));")
+            lines.append(f"    localparam K  = {r.k};")
+            lines.append(f"    localparam GS = {r.group_size};")
+            lines.append(f"    integer j, i, s;")
+            lines.append(f"    always @(*) begin")
+            lines.append(f"        for (j = 0; j < K; j = j + 1) begin")
+            lines.append(f"            s = 0;")
+            lines.append(f"            for (i = 0; i < GS; i = i + 1)")
+            lines.append(f"                s = s + raw[j * GS + i];")
+            lines.append(f"            scores_flat[j*32 +: 32] = s;")
+            lines.append(f"        end")
+            lines.append(f"    end")
+            lines.append(f"endmodule")
+
         return "\n".join(lines)
 
 
