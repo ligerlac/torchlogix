@@ -676,6 +676,7 @@ class Circuit:
             self.dedup()
             self.eliminate_dead_gates()
             after = len(self.gates)
+            print(f"Simplify pass: {before} -> {after} gates")
             if after == before:
                 break
 
@@ -901,7 +902,7 @@ class Circuit:
         self.gates = [g for g in self.gates if g.gate_id not in replace]
         
 
-    def compile(self, pack_bits: int = None) -> None:
+    def compile(self, opt_level: int = 1, pack_bits: int = None) -> None:
         """
         Write C code to a temp file, compile to a shared library, and load it.
         After calling this, circuit(x) will use the compiled implementation.
@@ -917,9 +918,10 @@ class Circuit:
         so_path = tmp_c.name.replace('.c', '.so')
 
         result = subprocess.run(
-            ['gcc', '-O2', '-shared', '-fPIC', '-o', so_path, tmp_c.name],
+            ['gcc', f"-O{opt_level}", '-shared', '-fPIC', '-o', so_path, tmp_c.name],
             capture_output=True, text=True,
         )
+
         if result.returncode != 0:
             raise RuntimeError(f"Compilation failed:\n{result.stderr}")
 
@@ -930,13 +932,20 @@ class Circuit:
             32:   ctypes.c_uint32,
             64:   ctypes.c_uint64,
         }
-        ctype = _ctype_map[pack_bits]
+        in_ctype  = _ctype_map[pack_bits]
+        out_ctype = ctypes.c_float if self.output_reduction is not None else in_ctype
         lib = ctypes.CDLL(so_path)
         lib.circuit.argtypes = [
-            ctypes.POINTER(ctype),
-            ctypes.POINTER(ctype),
+            ctypes.POINTER(in_ctype),
+            ctypes.POINTER(out_ctype),
         ]
         lib.circuit.restype = None
+        lib.circuit_bench.argtypes = [
+            ctypes.POINTER(in_ctype),
+            ctypes.POINTER(out_ctype),
+            ctypes.c_int,
+        ]
+        lib.circuit_bench.restype = None
         self._lib = lib
         self._pack_bits = pack_bits
 
@@ -959,60 +968,75 @@ class Circuit:
         import ctypes
 
         batch_size = input.shape[0]
-        n_out = len(self.output_ids)
 
         if use_compiled:
 
             pack = self._pack_bits
+            
+            if self.output_reduction is None:
+                n_out = len(self.output_ids)
+                np_dtype_out = np.bool_
+                c_dtype_out = ctypes.c_bool
+            else:
+                n_out = self.output_reduction.k
+                np_dtype_out = np.float32
+                c_dtype_out = ctypes.c_float
 
             if not hasattr(self, '_lib'):
                 raise RuntimeError("Circuit not compiled yet. Call compile() first.")
             
-            assert batch_size in (1, pack), (
-                "pack_bits={pack} mode requires batch_size == 1 or {pack}, "
-                "got {batch_size}".format(pack=pack, batch_size=batch_size)
-            )
-
             # check input is boolean numpy array (not torch)
             assert isinstance(input, np.ndarray) and input.dtype == np.bool_, (
                 "Compiled circuit expects boolean numpy array input, "
                 "got {t} with dtype {dt}".format(t=type(input), dt=input.dtype)
             )
 
+            assert batch_size % pack == 0 if pack is not None else True, (
+                f"batch_size={batch_size} must be a multiple of pack_bits={pack}"
+            )
+            
             if pack is None:
-                in_arr = input.ctypes.data_as(ctypes.POINTER(ctypes.c_bool))
-                out_arr = (ctypes.c_bool * n_out)()
-                self._lib.circuit(in_arr, out_arr)
-                raw = np.ctypeslib.as_array(out_arr)
+                n_iter = batch_size
+                flat = input.reshape(batch_size, -1)  # (batch_size, n_in), C-contiguous
+                in_arr = flat.ctypes.data_as(ctypes.POINTER(ctypes.c_bool))
+                out_np = np.zeros(batch_size * n_out, dtype=np_dtype_out)
+                out_arr = out_np.ctypes.data_as(ctypes.POINTER(c_dtype_out))
+                self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
+                return out_np.reshape(batch_size, n_out)
 
             else:
-                assert batch_size in (1, pack), (
-                    f"pack_bits={pack} mode requires batch_size == 1 or {pack}, "
-                    f"got {batch_size}"
-                )
+                n_iter = batch_size // pack
                 _np_dtype = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}[pack]
                 _CType    = {8: ctypes.c_uint8, 16: ctypes.c_uint16,
                              32: ctypes.c_uint32, 64: ctypes.c_uint64}[pack]
 
-                flat = input.reshape(batch_size, -1)
+                flat = input.reshape(batch_size, -1)          # (batch_size, n_in)
+                flat3d = flat.reshape(n_iter, pack, -1)        # (n_iter, pack, n_in)
 
-                # Pack: packed_in[k] = OR_j( flat[j,k] << j ) — no Python for-loop
-                shifts_pow = (np.uint64(1) << np.arange(batch_size, dtype=np.uint64))
-                packed_in = (flat.astype(np.uint64) * shifts_pow[:, np.newaxis]) \
-                                 .sum(axis=0, dtype=np.uint64).astype(_np_dtype)
-                in_arr  = packed_in.ctypes.data_as(ctypes.POINTER(_CType))
+                # Pack n_iter chunks: packed_in[chunk, k] = OR_j(flat3d[chunk, j, k] << j)
+                shifts_pow = (np.uint64(1) << np.arange(pack, dtype=np.uint64))
+                packed_in = (flat3d.astype(np.uint64) * shifts_pow[np.newaxis, :, np.newaxis]) \
+                                 .sum(axis=1, dtype=np.uint64).astype(_np_dtype)  # (n_iter, n_in)
+                in_arr = packed_in.ctypes.data_as(ctypes.POINTER(_CType))
 
-                out_packed = np.zeros(n_out, dtype=_np_dtype)
+                if self.output_reduction is not None:
+                    out_np = np.zeros(n_iter * n_out * pack, dtype=np.float32)
+                    out_arr = out_np.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+                    self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
+                    return out_np.reshape(batch_size, n_out)
+
+                out_packed = np.zeros((n_iter, n_out), dtype=_np_dtype)
                 out_arr = out_packed.ctypes.data_as(ctypes.POINTER(_CType))
-                self._lib.circuit(in_arr, out_arr)
+                self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
 
-                # Unpack: raw[j,k] = (out_packed[k] >> j) & 1 — no Python for-loop
-                shifts = np.arange(batch_size, dtype=np.uint64)
-                raw = ((out_packed[np.newaxis, :].astype(np.uint64)
-                         >> shifts[:, np.newaxis]) & 1).astype(bool)
-                       
+                # Unpack: raw[chunk, j, k] = (out_packed[chunk, k] >> j) & 1
+                shifts = np.arange(pack, dtype=np.uint64)
+                return ((out_packed[:, np.newaxis, :].astype(np.uint64)
+                         >> shifts[np.newaxis, :, np.newaxis]) & 1).astype(bool) \
+                         .reshape(batch_size, n_out)
+
         else:
-            raw = torch.zeros(batch_size, n_out, dtype=torch.bool)
+            raw = torch.zeros(batch_size, len(self.output_ids), dtype=torch.bool)
             for i in range(batch_size):
                 gate_vals: dict[int, bool] = {
                     gid: bool(input[i].flatten()[gid].item())
@@ -1025,15 +1049,14 @@ class Circuit:
                 for k, gid in enumerate(self.output_ids):
                     raw[i, k] = gate_vals[gid]
 
-        r = self.output_reduction
-        if r is not None:
-            # return (raw.reshape(batch_size, r.k, r.group_size).sum(-1).float() + r.beta) / r.tau
-            return (raw.reshape(batch_size, r.k, r.group_size).sum(-1) + r.beta) / r.tau
+            r = self.output_reduction
+            if r is not None:
+                return (raw.reshape(batch_size, r.k, r.group_size).sum(-1) + r.beta) / r.tau
 
-        return raw.float()
+            return raw
 
 
-    def get_c_code(self, inline_single_use: bool = True, pack_bits=None) -> str:
+    def get_c_code(self, inline_single_use: bool = False, pack_bits=None) -> str:
         """
         Generate a self-contained C function that evaluates the circuit.
 
@@ -1100,69 +1123,102 @@ class Circuit:
             _expr_cache[gid] = result
             return result
 
-        lines = []
-        lines.append("// Auto-generated circuit — do not edit")
-        lines.append("// Gate IDs 0..{} are inputs, {}..{} are gates".format(
-            n_in - 1, n_in, n_in + n_g - 1))
-        lines.append("")
-        lines.append("#include <stdbool.h>")
-        lines.append("#include <stdint.h>")
-        lines.append("")
-        lines.append(f"// Input shape:  {self.input_shape}")
-        lines.append(f"// Output shape: {self.output_shape}")
         pack_str = f"  pack_bits={pack_bits}" if pack_bits else ""
-        lines.append(f"// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_out}{pack_str}")
-        lines.append("")
-        lines.append(f"void circuit(")
-        lines.append(f"    const {ctype} in[{n_in}],")
-        lines.append(f"    {ctype}       out[{n_out}])")
-        lines.append("{")
+        r = self.output_reduction
+        has_inline_reduction = (r is not None)
+        out_ctype = "float" if has_inline_reduction else ctype
+        if has_inline_reduction:
+            out_n = r.k * pack_bits if pack_bits is not None else r.k
+        else:
+            out_n = n_out
 
+        gate_lines = []
         current_layer = -1
         for gate in self.gates:
             if should_inline(gate.gate_id):
-                continue  # will be inlined at use site
-
+                continue
             if gate.layer != current_layer:
                 if current_layer >= 0:
-                    lines.append("")
+                    gate_lines.append("")
                 current_layer = gate.layer
-                lines.append(f"    // --- layer {current_layer} ---")
-
+                gate_lines.append(f"    // --- layer {current_layer} ---")
             a = expr_of(gate.in0)
             b = expr_of(gate.in1)
             expr = gate_ops[gate.op].format(a=a, b=b)
-            lines.append(f"    {ctype} g{gate.gate_id} = {expr};")
+            gate_lines.append(f"    {ctype} g{gate.gate_id} = {expr};")
+        gates_str = "\n".join(gate_lines)
 
-        lines.append("")
-        lines.append("    // --- outputs ---")
-        for k, gid in enumerate(self.output_ids):
-            lines.append(f"    out[{k}] = {expr_of(gid)};")
+        if has_inline_reduction:
+            raw_assigns = "\n".join(
+                f"    raw[{k}] = {expr_of(gid)};"
+                for k, gid in enumerate(self.output_ids)
+            )
+            if pack_bits is None:
+                output_section = f"""
 
-        lines.append("}")
+    // --- raw outputs ---
+    bool raw[{n_out}];
+{raw_assigns}
 
-        r = self.output_reduction
-        if r is not None:
-            lines.append("")
-            lines.append("// --- GroupSum reduction ---")
-            lines.append(f"#define GROUPSUM_K          {r.k}")
-            lines.append(f"#define GROUPSUM_GROUP_SIZE {r.group_size}")
-            lines.append("")
-            lines.append(f"void circuit_scores(")
-            lines.append(f"    const bool in[{n_in}],")
-            lines.append(f"    float      scores[GROUPSUM_K])")
-            lines.append("{")
-            lines.append(f"    bool raw[{n_out}];")
-            lines.append(f"    circuit(in, raw);")
-            lines.append(f"    for (int j = 0; j < GROUPSUM_K; j++) {{")
-            lines.append(f"        int s = 0;")
-            lines.append(f"        for (int i = 0; i < GROUPSUM_GROUP_SIZE; i++)")
-            lines.append(f"            s += (int)raw[j * GROUPSUM_GROUP_SIZE + i];")
-            lines.append(f"        scores[j] = ((float)s + {r.beta}f) / {r.tau}f;")
-            lines.append(f"    }}")
-            lines.append("}")
+    // --- GroupSum reduction ---
+    for (int j = 0; j < {r.k}; j++) {{
+        int s = 0;
+        for (int i = 0; i < {r.group_size}; i++)
+            s += (int)raw[j * {r.group_size} + i];
+        out[j] = ((float)s + {r.beta}f) / {r.tau}f;
+    }}"""
+            else:
+                output_section = f"""
 
-        return "\n".join(lines)
+    // --- raw packed outputs ---
+    {ctype} raw[{n_out}];
+{raw_assigns}
+
+    // --- unpack + GroupSum per sample in pack ---
+    for (int p = 0; p < {pack_bits}; p++) {{
+        for (int c = 0; c < {r.k}; c++) {{
+            int s = 0;
+            for (int g = 0; g < {r.group_size}; g++)
+                s += (int)((raw[c * {r.group_size} + g] >> p) & 1);
+            out[p * {r.k} + c] = ((float)s + {r.beta}f) / {r.tau}f;
+        }}
+    }}"""
+        else:
+            out_assigns = "\n".join(
+                f"    out[{k}] = {expr_of(gid)};"
+                for k, gid in enumerate(self.output_ids)
+            )
+            output_section = f"""
+
+    // --- outputs ---
+{out_assigns}"""
+
+        return f"""\
+// Auto-generated circuit — do not edit
+// Gate IDs 0..{n_in - 1} are inputs, {n_in}..{n_in + n_g - 1} are gates
+
+#include <stdbool.h>
+#include <stdint.h>
+
+// Input shape:  {self.input_shape}
+// Output shape: {self.output_shape}
+// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_out}{pack_str}
+
+void circuit(
+    const {ctype} in[{n_in}],
+    {out_ctype}   out[{out_n}])
+{{
+{gates_str}{output_section}
+}}
+
+void circuit_bench(
+    const {ctype} in[{n_in}],
+    {out_ctype}   out[{out_n}],
+    int           n_iter)
+{{
+    for (int i = 0; i < n_iter; i++)
+        circuit(in + i * {n_in}, out + i * {out_n});
+}}"""
 
 
     def turn_group_sum_into_argmax(self) -> None:
@@ -1178,7 +1234,7 @@ class Circuit:
 
         k, gs = r.k, r.group_size
         argmax_layer = max((g.layer for g in self.gates), default=-1) + 1
-        next_id = self.n_inputs + len(self.gates)
+        next_id = max((g.gate_id for g in self.gates), default=self.n_inputs - 1) + 1
 
         # A lazily-created CONST_TRUE gate (needed only if NOT(always-false) appears).
         _const_true_id: list[int] = []
@@ -1313,6 +1369,150 @@ class Circuit:
         self.output_reduction = None
 
 
+    def turn_group_sum_into_argmax_wo_pop_count(self) -> None:
+        """
+        Compute argmax over groups WITHOUT constructing per-group popcounts.
+
+        Uses all-pairs direct comparison: for each pair (a, b) of groups,
+        computes sum(a) > sum(b) by comparing advantage bits directly,
+        avoiding explicit binary-count materialization per group.
+        """
+
+        r = self.output_reduction
+        if r is None:
+            raise ValueError("Circuit has no output_reduction to convert")
+
+        k, gs = r.k, r.group_size
+
+        argmax_layer = max((g.layer for g in self.gates), default=-1) + 1
+        next_id = max((g.gate_id for g in self.gates), default=self.n_inputs - 1) + 1
+
+        _const_true_id: list[int] = []
+
+        def get_const_true() -> int:
+            nonlocal next_id
+            if not _const_true_id:
+                gid = next_id
+                self.gates.append(Gate(gate_id=gid, op=GateOp.CONST_TRUE, layer=argmax_layer))
+                next_id += 1
+                _const_true_id.append(gid)
+            return _const_true_id[0]
+
+        def emit(op: GateOp, a: int = -1, b: int = -1) -> int:
+            nonlocal next_id
+            if op == GateOp.WIRE:      return a
+            if op == GateOp.NOT:
+                if a == -1:            return get_const_true()
+            if op == GateOp.AND:
+                if a == -1 or b == -1: return -1
+            if op == GateOp.OR:
+                if a == -1 and b == -1: return -1
+                if a == -1:            return b
+                if b == -1:            return a
+            if op == GateOp.XOR:
+                if a == -1:            return b
+                if b == -1:            return a
+            if op == GateOp.AND_NOT_B:
+                if a == -1:            return -1
+                if b == -1:            return a
+            if op == GateOp.AND_NOT_A:
+                if b == -1:            return -1
+                if a == -1:            return b
+            if op == GateOp.XNOR:
+                if a == -1 and b == -1: return get_const_true()
+                if a == -1:            return emit(GateOp.NOT, b)
+                if b == -1:            return emit(GateOp.NOT, a)
+            gid = next_id
+            self.gates.append(Gate(gate_id=gid, op=op, in0=a, in1=b, layer=argmax_layer))
+            next_id += 1
+            return gid
+
+        def add_bits(a_bits: list[int], b_bits: list[int]) -> list[int]:
+            n = max(len(a_bits), len(b_bits))
+            a = a_bits + [-1] * (n - len(a_bits))
+            b = b_bits + [-1] * (n - len(b_bits))
+            result = []
+            carry = -1
+            for ai, bi in zip(a, b):
+                xab   = emit(GateOp.XOR, ai, bi)
+                s     = emit(GateOp.XOR, xab, carry)
+                c_ab  = emit(GateOp.AND, ai, bi)
+                c_xc  = emit(GateOp.AND, xab, carry)
+                carry = emit(GateOp.OR, c_ab, c_xc)
+                result.append(s)
+            result.append(carry)
+            return result
+
+        def popcount(bit_ids: list[int]) -> list[int]:
+            if not bit_ids:
+                return [-1]
+            numbers = [[b] for b in bit_ids]
+            while len(numbers) > 1:
+                new_numbers = []
+                for i in range(0, len(numbers) - 1, 2):
+                    new_numbers.append(add_bits(numbers[i], numbers[i + 1]))
+                if len(numbers) % 2 == 1:
+                    new_numbers.append(numbers[-1])
+                numbers = new_numbers
+            return numbers[0]
+
+        def compare_gt(a_bits: list[int], b_bits: list[int]) -> int:
+            n = max(len(a_bits), len(b_bits))
+            a = a_bits + [-1] * (n - len(a_bits))
+            b = b_bits + [-1] * (n - len(b_bits))
+            greater = -1
+            equal   = None
+            for i in range(n - 1, -1, -1):
+                ai, bi = a[i], b[i]
+                a_wins = emit(GateOp.AND_NOT_B, ai, bi)
+                a_eq   = emit(GateOp.XNOR, ai, bi)
+                if equal is None:
+                    greater = emit(GateOp.OR, greater, a_wins)
+                    equal   = a_eq
+                else:
+                    greater = emit(GateOp.OR, greater, emit(GateOp.AND, equal, a_wins))
+                    equal   = emit(GateOp.AND, equal, a_eq)
+            return greater
+
+        def compare_groups_gt(a_bits: list[int], b_bits: list[int]) -> int:
+            """Return gate for sum(a) > sum(b), working directly on the raw bit vectors."""
+            n = max(len(a_bits), len(b_bits))
+            a = a_bits + [-1] * (n - len(a_bits))
+            b = b_bits + [-1] * (n - len(b_bits))
+            # Positions where a is ahead (a=1, b=0) vs b is ahead (b=1, a=0)
+            a_adv = [emit(GateOp.AND_NOT_B, ai, bi) for ai, bi in zip(a, b)]
+            b_adv = [emit(GateOp.AND_NOT_A, ai, bi) for ai, bi in zip(a, b)]
+            return compare_gt(popcount(a_adv), popcount(b_adv))
+
+        groups = [self.output_ids[j * gs : (j + 1) * gs] for j in range(k)]
+
+        # Pairwise comparisons: gt[(a, b)] = gate for "sum(groups[a]) > sum(groups[b])"
+        gt: dict[tuple[int, int], int] = {}
+        for a in range(k):
+            for b in range(a):
+                gt[(a, b)] = compare_groups_gt(groups[a], groups[b])
+
+        # One-hot output: out[j] = 1 iff j beats all lower and is not beaten by any higher
+        out_ids = []
+        for j in range(k):
+            conditions = []
+            for m in range(j):
+                conditions.append(gt[(j, m)])
+            for m in range(j + 1, k):
+                conditions.append(emit(GateOp.NOT, gt[(m, j)]))
+            if not conditions:
+                out_ids.append(get_const_true())
+            else:
+                result = conditions[0]
+                for c in conditions[1:]:
+                    result = emit(GateOp.AND, result, c)
+                out_ids.append(result)
+
+        self.output_ids       = out_ids
+        self.output_shape     = [k]
+        self.output_reduction = None
+
+        
     def to_dict(self) -> dict:
         """
         Convert the circuit representation to a JSON-serializable format.
@@ -1431,66 +1631,78 @@ class Circuit:
             _expr_cache[gid] = result
             return result
 
-        lines = []
-        lines.append(f"// Auto-generated by circuit_ir — do not edit")
-        lines.append(f"// Input shape:  {self.input_shape}")
-        lines.append(f"// Output shape: {self.output_shape}")
-        lines.append(f"// n_inputs={n_in}  n_gates={len(self.gates)}  n_outputs={n_out}")
-        lines.append("")
-        lines.append(f"module circuit (")
-        lines.append(f"    input  wire [{n_in - 1}:0] inp,")
-        lines.append(f"    output wire [{n_out - 1}:0] out")
-        lines.append(f");")
+        r = self.output_reduction
 
+        gate_lines = []
         current_layer = -1
         for gate in self.gates:
             if should_inline(gate.gate_id):
                 continue
-
             if gate.layer != current_layer:
-                lines.append("")
+                gate_lines.append("")
                 current_layer = gate.layer
-                lines.append(f"    // --- layer {current_layer} ---")
-
+                gate_lines.append(f"    // --- layer {current_layer} ---")
             a = vexpr(gate.in0)
             b = vexpr(gate.in1)
             expr = GATE_OP_VERILOG[gate.op].format(a=a, b=b)
-            lines.append(f"    wire g{gate.gate_id} = {expr};")
+            gate_lines.append(f"    wire g{gate.gate_id} = {expr};")
+        gates_str = "\n".join(gate_lines)
 
-        lines.append("")
-        lines.append("    // --- outputs ---")
-        for k, gid in enumerate(self.output_ids):
-            lines.append(f"    assign out[{k}] = {vexpr(gid)};")
-
-        lines.append("")
-        lines.append("endmodule")
-
-        r = self.output_reduction
         if r is not None:
-            lines.append("")
-            lines.append("// --- GroupSum reduction (simulation model) ---")
-            lines.append(f"// k={r.k}  group_size={r.group_size}  tau={r.tau}  beta={r.beta}")
-            lines.append(f"// For synthesis: replace the always block with an adder tree per group.")
-            lines.append(f"module circuit_scores (")
-            lines.append(f"    input  wire [{n_in - 1}:0]  inp,")
-            lines.append(f"    output reg  [{r.k * 32 - 1}:0] scores_flat  // {r.k} x 32-bit packed integer scores")
-            lines.append(f");")
-            lines.append(f"    wire [{n_out - 1}:0] raw;")
-            lines.append(f"    circuit u_circuit(.inp(inp), .out(raw));")
-            lines.append(f"    localparam K  = {r.k};")
-            lines.append(f"    localparam GS = {r.group_size};")
-            lines.append(f"    integer j, i, s;")
-            lines.append(f"    always @(*) begin")
-            lines.append(f"        for (j = 0; j < K; j = j + 1) begin")
-            lines.append(f"            s = 0;")
-            lines.append(f"            for (i = 0; i < GS; i = i + 1)")
-            lines.append(f"                s = s + raw[j * GS + i];")
-            lines.append(f"            scores_flat[j*32 +: 32] = s;")
-            lines.append(f"        end")
-            lines.append(f"    end")
-            lines.append(f"endmodule")
+            groupsum_comment = (
+                f"// GroupSum k={r.k}  group_size={r.group_size}  "
+                f"tau={r.tau}  beta={r.beta}\n"
+                f"// scores_flat = {r.k} x 32-bit packed integer scores\n"
+            )
+            module_port = f"    output reg  [{r.k * 32 - 1}:0] scores_flat"
+            raw_assigns = "\n".join(
+                f"    assign raw[{k}] = {vexpr(gid)};"
+                for k, gid in enumerate(self.output_ids)
+            )
+            output_section = f"""
 
-        return "\n".join(lines)
+    // --- raw outputs ---
+    wire [{n_out - 1}:0] raw;
+{raw_assigns}
+
+    // --- GroupSum reduction ---
+    // For synthesis: replace the always block with an adder tree per group.
+    localparam K  = {r.k};
+    localparam GS = {r.group_size};
+    integer j, i, s;
+    always @(*) begin
+        for (j = 0; j < K; j = j + 1) begin
+            s = 0;
+            for (i = 0; i < GS; i = i + 1)
+                s = s + raw[j * GS + i];
+            scores_flat[j*32 +: 32] = s;
+        end
+    end"""
+        else:
+            groupsum_comment = ""
+            module_port = f"    output wire [{n_out - 1}:0] out"
+            out_assigns = "\n".join(
+                f"    assign out[{k}] = {vexpr(gid)};"
+                for k, gid in enumerate(self.output_ids)
+            )
+            output_section = f"""
+
+    // --- outputs ---
+{out_assigns}"""
+
+        return f"""\
+// Auto-generated by circuit_ir — do not edit
+// Input shape:  {self.input_shape}
+// Output shape: {self.output_shape}
+// n_inputs={n_in}  n_gates={len(self.gates)}  n_outputs={n_out}
+
+{groupsum_comment}module circuit (
+    input  wire [{n_in - 1}:0] inp,
+{module_port}
+);
+{gates_str}{output_section}
+
+endmodule"""
 
 
     def write_c_code(self, path: str) -> None:

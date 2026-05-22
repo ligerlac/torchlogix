@@ -57,24 +57,25 @@ class BranchModel(nn.Module):
  
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
-def test_circuit_compilation(model_cls, pack_bits):
+@pytest.mark.parametrize("relative_batch_size", [1, 10])
+def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
     model = model_cls()
 
-    batch_size = 1 if pack_bits is None else pack_bits
+    batch_size = (1 if pack_bits is None else pack_bits) * relative_batch_size
     x = torch.randint(0, 2, (batch_size, *model.input_shape), dtype=torch.bool)
 
     set_export_mode(model)
-    preds_eager = model(x)
+    preds_model = model(x)
     
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
-    preds_circuit = circuit(x.reshape(x.shape[0], -1))
-    assert torch.equal(preds_eager, preds_circuit), "Circuit predictions differ from Eval-mode predictions"
+    preds_circuit = circuit(x)
+    assert torch.equal(preds_model, preds_circuit), "Circuit predictions differ from Eval-mode model predictions"
 
     circuit.compile(pack_bits=pack_bits)
-    input_np = x.reshape(x.shape[0], -1).numpy()
+    input_np = x.numpy()
     preds_circuit_compiled = circuit(input_np, use_compiled=True)
     preds_circuit_compiled_torch = torch.from_numpy(preds_circuit_compiled)
-    assert torch.equal(preds_eager, preds_circuit_compiled_torch), "Compiled circuit predictions differ from Eval-mode predictions"
+    assert torch.equal(preds_model, preds_circuit_compiled_torch), "Compiled circuit predictions differ from Eval-mode predictions"
 
 
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
@@ -108,3 +109,71 @@ def test_json_roundtrip(model_cls):
 
     preds_after = circuit_loaded(x.reshape(x.shape[0], -1))
     assert torch.equal(preds_before, preds_after), "Predictions differ after export/import roundtrip!"
+
+
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+def test_c_codegen_group_sum_scores(model_cls):
+    """GroupSum reduction is inlined into circuit and compiles cleanly."""
+    model = model_cls()
+    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
+
+    circuit = Circuit.from_model(model, input_shape=model.input_shape)
+    assert circuit.output_reduction is not None
+
+    r = circuit.output_reduction
+    c_code = circuit.get_c_code()
+
+    # GroupSum is now inlined: circuit outputs float scores, no separate circuit_scores.
+    assert "float   out[" in c_code
+    assert f"for (int j = 0; j < {r.k}; j++)" in c_code
+    assert "circuit_scores" not in c_code
+
+    # Verify it compiles cleanly.
+    with tempfile.NamedTemporaryFile(suffix=".c", mode="w", delete=False) as tf:
+        tf.write(c_code)
+        c_path = tf.name
+    result = subprocess.run(
+        ["gcc", "-std=c99", "-fsyntax-only", c_path],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"C compile error:\n{result.stderr}"
+
+    # Verify scores match Python circuit.
+    preds_python = circuit(x.reshape(1, -1))  # shape (1, k)
+    assert preds_python.shape[-1] == r.k
+
+
+@pytest.mark.parametrize("elimination_method", [Circuit.turn_group_sum_into_argmax, Circuit.turn_group_sum_into_argmax_wo_pop_count])
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+def test_turn_group_sum_into_argmax(model_cls, elimination_method):
+    """turn_group_sum_into_argmax produces one-hot outputs that match Python argmax."""
+    model = model_cls()
+    x = torch.randint(0, 2, (8, *model.input_shape), dtype=torch.bool)
+
+    circuit = Circuit.from_model(model, input_shape=model.input_shape)
+    circuit.simplify()
+    assert circuit.output_reduction is not None
+
+    # Scores from the original circuit.
+    scores = circuit(x)
+    expected_argmax = scores.argmax(dim=-1)
+    expected_one_hot = torch.nn.functional.one_hot(expected_argmax, num_classes=scores.shape[-1]).bool()
+
+    print(f"elimination_method: {elimination_method.__name__}")
+    print(f"gates before elimination: {len(circuit.gates)}")
+    elimination_method(circuit)
+    print(f"gates after elimination: {len(circuit.gates)}")
+    circuit.simplify()
+    print(f"gates after simplification: {len(circuit.gates)}")
+    assert circuit.output_reduction is None
+
+    # One-hot from the converted circuit.
+    one_hot = circuit(x)  # (8, k) bool
+
+    # one_hot should equal expected_one_hot
+    assert torch.equal(one_hot, expected_one_hot), "Circuit one-hot output differs from expected one-hot"
+
+    circuit.compile()
+    one_hot_compiled = circuit(x.numpy(), use_compiled=True)
+
+    assert torch.equal(torch.from_numpy(one_hot_compiled), expected_one_hot), "Compiled circuit one-hot output differs from expected one-hot"
