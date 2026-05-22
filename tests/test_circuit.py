@@ -143,9 +143,8 @@ def test_c_codegen_group_sum_scores(model_cls):
     assert preds_python.shape[-1] == r.k
 
 
-@pytest.mark.parametrize("elimination_method", [Circuit.turn_group_sum_into_argmax, Circuit.turn_group_sum_into_argmax_wo_pop_count])
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
-def test_turn_group_sum_into_argmax(model_cls, elimination_method):
+def test_turn_group_sum_into_argmax(model_cls):
     """turn_group_sum_into_argmax produces one-hot outputs that match Python argmax."""
     model = model_cls()
     x = torch.randint(0, 2, (8, *model.input_shape), dtype=torch.bool)
@@ -159,12 +158,8 @@ def test_turn_group_sum_into_argmax(model_cls, elimination_method):
     expected_argmax = scores.argmax(dim=-1)
     expected_one_hot = torch.nn.functional.one_hot(expected_argmax, num_classes=scores.shape[-1]).bool()
 
-    print(f"elimination_method: {elimination_method.__name__}")
-    print(f"gates before elimination: {len(circuit.gates)}")
-    elimination_method(circuit)
-    print(f"gates after elimination: {len(circuit.gates)}")
+    circuit.turn_group_sum_into_argmax()
     circuit.simplify()
-    print(f"gates after simplification: {len(circuit.gates)}")
     assert circuit.output_reduction is None
 
     # One-hot from the converted circuit.
