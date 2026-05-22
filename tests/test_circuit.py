@@ -17,6 +17,15 @@ from torchlogix.layers import (
 )
 
 
+class DenseModel(nn.Sequential):
+    def __init__(self):
+        super().__init__(
+            LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
+            LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
+        )
+        self.input_shape = (1000,)
+
+
 # inherit from sequential
 class ConvModel(nn.Sequential):
     def __init__(self):
@@ -26,7 +35,7 @@ class ConvModel(nn.Sequential):
             nn.Flatten(),  # 8 × 15 x 15 = 1800
             LogicDense(1800, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
             LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-            GroupSum(10),
+            GroupSum(10)# , tau=2.0),
         )
         self.input_shape = (3, 32, 32)
 
@@ -53,9 +62,9 @@ class BranchModel(nn.Module):
         x = self.dense(x)
         x = self.group_sum(x)
         return x
-    
+
  
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
 @pytest.mark.parametrize("relative_batch_size", [1, 10])
 def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
@@ -80,17 +89,17 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
 
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
 @pytest.mark.parametrize("simplification", [
-    Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup
+    Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup, Circuit.fuse_not_inputs
 ])
 def test_circuit_simplifications(model_cls, simplification):
     model = model_cls()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
-    preds_before = circuit(x.reshape(x.shape[0], -1))
+    preds_before = circuit(x)
 
     simplification(circuit)
-    preds_after = circuit(x.reshape(x.shape[0], -1))
+    preds_after = circuit(x)
     assert torch.equal(preds_before, preds_after), f"Predictions differ after {simplification.__name__}!"
 
 

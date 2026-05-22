@@ -1,35 +1,7 @@
 import torch
-import torch.library as _tlib
 
 from torchlogix.packbitstensor import PackBitsTensor
-
-
-@_tlib.custom_op("torchlogix::group_sum", mutates_args=())
-def _group_sum_op(x: torch.Tensor, k: int, tau: float, beta: float) -> torch.Tensor:
-    result = x.reshape(*x.shape[:-1], k, x.shape[-1] // k).sum(-1).float()
-    if beta != 0.0:
-        result = result + beta
-    if tau != 1.0:
-        result = result / tau
-    return result
-
-
-@_group_sum_op.register_fake
-def _group_sum_fake(x, k, tau, beta):
-    return x.new_empty(list(x.shape[:-1]) + [k], dtype=torch.float32)
-
-
-from torch._decomp import register_decomposition as _reg_decomp
-
-
-@_reg_decomp(torch.ops.torchlogix.group_sum.default)
-def _group_sum_decomp(x: torch.Tensor, k: int, tau: float, beta: float) -> torch.Tensor:
-    result = x.reshape(*x.shape[:-1], k, x.shape[-1] // k).sum(-1).float()
-    if beta != 0.0:
-        result = result + beta
-    if tau != 1.0:
-        result = result / tau
-    return result
+import numpy as np
 
 
 class GroupSum(torch.nn.Module):
@@ -69,7 +41,12 @@ class GroupSum(torch.nn.Module):
         except ImportError:
             pass
 
-        return torch.ops.torchlogix.group_sum(x, self.k, float(self.tau), float(self.beta))
+        result = x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1)
+        if self.beta != 0.0:
+            result = result + self.beta
+        if self.tau != 1.0:
+            result = result / self.tau
+        return result
 
     def extra_repr(self):
         return "k={}, tau={}".format(self.k, self.tau)

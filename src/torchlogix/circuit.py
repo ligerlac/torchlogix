@@ -20,14 +20,13 @@ Each gate:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import ClassVar
 import operator
 import json
 import numpy as np
 
 import torch
 import torch.fx
-
-from torchlogix.utils import set_export_mode
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +200,20 @@ class Circuit:
     output_shape: list[int] = field(default_factory=list)
     output_reduction: GroupSumReduction | None = field(default=None)
 
+    # Registry for custom op handlers registered by downstream code (e.g. torchlogix layers).
+    # Each entry: op_target -> fn(node, wire_map, circuit, next_id, gm, layer_idx) -> (next_id, layer_idx)
+    _op_handlers: ClassVar[dict] = {}
+
+    @classmethod
+    def register_op_handler(cls, op_target, fn) -> None:
+        """Register a handler for a custom FX op so from_fx_graph can process it.
+
+        fn signature: (node, wire_map, circuit, next_id, gm, layer_idx) -> (next_id, layer_idx)
+        The handler should update wire_map and circuit.gates in-place and return
+        the new (next_id, layer_idx) pair.  Return None to leave them unchanged.
+        """
+        cls._op_handlers[op_target] = fn
+
     @classmethod
     def from_model(cls, model: torch.nn.Module, input_shape: list[int]) -> Circuit:
         """
@@ -210,11 +223,12 @@ class Circuit:
         been traced and folded with the appropriate utilities to ensure the
         FX graph is in the expected form.
         """
+        from torchlogix.utils import set_export_mode  # local import — keeps Circuit standalone
+        from torch.fx.experimental.proxy_tensor import make_fx
         model.eval()
         set_export_mode(model, enabled=True)
         x_dummy = torch.zeros(1, *input_shape, dtype=torch.bool)
-        exported = torch.export.export(model, (x_dummy,), strict=False)
-        gm = exported.module()
+        gm = make_fx(model)(x_dummy)
         # Trace with (1, *input_shape) so the FX graph's batch-dimension ops
         # resolve correctly; then strip the leading 1 from the stored shape.
         circuit = cls.from_fx_graph(gm, [1, *input_shape])
@@ -245,6 +259,9 @@ class Circuit:
 
         # node_name -> list[int]  (flat list of gate/input IDs produced by that node)
         wire_map: dict[str, list[int]] = {}
+        # Tracks nodes that are part of the GroupSum output-reduction chain so
+        # that tau/beta scalar ops following the sum can update output_reduction.
+        _reduction_chain: set[str] = set()
 
         nodes = list(gm.graph.nodes)
 
@@ -287,14 +304,18 @@ class Circuit:
             # ---- output ----
             if node.op == 'output':
                 ret = node.args[0]
-                if isinstance(ret, (tuple, list)):
+                if isinstance(ret, torch.fx.Node) and ret.name in wire_map:
+                    # make_fx returns a single Node; torch.export wraps in a tuple
+                    circuit.output_ids   = wire_map[ret.name]
+                    circuit.output_shape = list(wire_map.get(f'__shape_{ret.name}',
+                                                             [len(circuit.output_ids)]))
+                elif isinstance(ret, (tuple, list)):
                     out_ids = []
                     for r in ret:
                         if isinstance(r, torch.fx.Node) and r.name in wire_map:
                             out_ids.extend(wire_map[r.name])
                     if out_ids:
                         circuit.output_ids = out_ids
-                        # use stored shape if available, else flat
                         if len(ret) == 1 and isinstance(ret[0], torch.fx.Node):
                             shape = wire_map.get(f'__shape_{ret[0].name}', [len(out_ids)])
                             circuit.output_shape = list(shape)
@@ -317,47 +338,45 @@ class Circuit:
             # us which upstream gate ID to use for each position.
             # ----------------------------------------------------------------
             if tgt == torch.ops.aten.index.Tensor:
-                src_ids = resolve(node.args[0])
-                idx_list = node.args[1]   # list of None | fx.Node
+                src_node = node.args[0]
+                if not isinstance(src_node, torch.fx.Node) or src_node.name not in wire_map:
+                    i += 1
+                    continue
+                src_ids   = resolve(src_node)
+                idx_list  = node.args[1]   # list of None | fx.Node
 
-                # Find the non-None index tensors
-                active = [(dim, idx) for dim, idx in enumerate(idx_list) if idx is not None]
-
-                if len(active) == 0:
-                    # Identity gather — pass through
+                has_non_none = any(idx is not None for idx in idx_list)
+                if not has_non_none:
                     wire_map[node.name] = src_ids
+                    wire_map[f'__shape_{node.name}'] = wire_map.get(
+                        f'__shape_{src_node.name}', list(input_shape))
                 else:
-                    # Evaluate the gathered IDs.
-                    # Each index tensor contains integer positions into src_ids.
-                    # We need to compute the cartesian result.
-                    #
-                    # Strategy: build the full gathered ID tensor by evaluating
-                    # the index operation on the *ID* array (treating gate IDs
-                    # as the "values" to gather).
-                    src_shape = []
-                    # Reconstruct src shape from input_shape or prior layer shape
-                    # We store this alongside wire_map
-                    src_shape = wire_map.get(f'__shape_{node.args[0].name}',
-                                            list(input_shape))
-
-                    # Reconstruct index tensors as concrete tensors
-                    idx_tensors = []
-                    for dim, idx_node in active:
-                        idx_tensors.append((dim, _get_attr_val(gm, idx_node)
-                                            if idx_node.op == 'get_attr'
-                                            else torch.tensor(resolve(idx_node))))
-
-                    # Build a tensor of gate IDs with src_shape, then index it
-                    id_tensor = torch.tensor(src_ids, dtype=torch.long).reshape(src_shape)
-                    # Apply each index in turn (simplified: single multi-dim index)
-                    index_args = [slice(None)] * len(src_shape)
-                    for dim, t in idx_tensors:
-                        index_args[dim] = t
-                    gathered = id_tensor[tuple(index_args)]   # shape: gathered output shape
-
-                    flat_ids = gathered.flatten().tolist()
-                    wire_map[node.name] = [int(x) for x in flat_ids]
-                    wire_map[f'__shape_{node.name}'] = list(gathered.shape)
+                    src_shape = wire_map.get(f'__shape_{src_node.name}', list(input_shape))
+                    # Build the index tuple directly from idx_list, replacing None
+                    # with slice(None).  Using the raw list avoids accidentally
+                    # padding extra slice(None) args after a multi-dimensional
+                    # boolean mask (which implicitly spans several dimensions).
+                    index_args = []
+                    ok = True
+                    for idx_node in idx_list:
+                        if idx_node is None:
+                            index_args.append(slice(None))
+                        elif isinstance(idx_node, torch.fx.Node):
+                            if idx_node.op == 'get_attr':
+                                index_args.append(_get_attr_val(gm, idx_node))
+                            elif idx_node.name in wire_map:
+                                index_args.append(torch.tensor(
+                                    resolve(idx_node), dtype=torch.long))
+                            else:
+                                ok = False
+                                break
+                        else:
+                            index_args.append(idx_node)
+                    if ok:
+                        id_tensor = torch.tensor(src_ids, dtype=torch.long).reshape(src_shape)
+                        gathered  = id_tensor[tuple(index_args)]
+                        wire_map[node.name] = [int(x) for x in gathered.flatten().tolist()]
+                        wire_map[f'__shape_{node.name}'] = list(gathered.shape)
 
                 i += 1
                 continue
@@ -384,9 +403,23 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
+            # aten.clone  ->  identity (no new gates)
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.clone.default:
+                src_node = node.args[0]
+                if isinstance(src_node, torch.fx.Node) and src_node.name in wire_map:
+                    wire_map[node.name] = wire_map[src_node.name]
+                    shape_key = f'__shape_{src_node.name}'
+                    if shape_key in wire_map:
+                        wire_map[f'__shape_{node.name}'] = wire_map[shape_key]
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
             # aten.reshape / aten.view  ->  just reshape the ID list (no new gates)
             # ----------------------------------------------------------------
-            if tgt in (torch.ops.aten.reshape.default, torch.ops.aten.view.default):
+            if tgt in (torch.ops.aten.reshape.default, torch.ops.aten.view.default,
+                       torch.ops.aten._unsafe_view.default):
                 src_ids  = resolve(node.args[0])
                 new_shape = node.args[1]
                 wire_map[node.name] = src_ids
@@ -436,9 +469,11 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
-            # aten.pad  ->  zero-pad (inserts CONST_FALSE/CONST_TRUE gates)
+            # aten.pad / aten.constant_pad_nd  ->  pad (inserts const gates)
+            # make_fx decomposes F.pad to aten.constant_pad_nd.default
             # ----------------------------------------------------------------
-            if tgt == torch.ops.aten.pad.default:
+            if tgt in (torch.ops.aten.pad.default,
+                       torch.ops.aten.constant_pad_nd.default):
                 src_ids   = resolve(node.args[0])
                 src_shape = wire_map.get(f'__shape_{node.args[0].name}')
                 if src_shape is None:
@@ -520,13 +555,120 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
+            # aten.alias  ->  identity / pass-through (no new gates)
+            # Appears when a native-ops lambda returns its input unchanged,
+            # e.g. WIRE A: lambda a, b: a
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.alias.default:
+                src = node.args[0]
+                if isinstance(src, torch.fx.Node) and src.name in wire_map:
+                    wire_map[node.name] = wire_map[src.name]
+                    shape = wire_map.get(f'__shape_{src.name}')
+                    if shape is not None:
+                        wire_map[f'__shape_{node.name}'] = list(shape)
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
+            # aten.empty_like  ->  initialise result buffer (filled by index_put_)
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.empty_like.default:
+                ref = node.args[0]
+                if isinstance(ref, torch.fx.Node) and ref.name in wire_map:
+                    ref_shape = wire_map.get(f'__shape_{ref.name}', [len(resolve(ref))])
+                    n = 1
+                    for d in ref_shape:
+                        n *= d
+                    wire_map[node.name] = [-1] * n
+                    wire_map[f'__shape_{node.name}'] = list(ref_shape)
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
+            # aten.bitwise_{and,or}.Scalar  ->  constant gate or pass-through
+            # Emitted by _map[0] (a & False) and _map[15] (True | a).
+            # ----------------------------------------------------------------
+            if tgt in (torch.ops.aten.bitwise_and.Scalar,
+                       torch.ops.aten.bitwise_or.Scalar):
+                x_arg = node.args[0]
+                scalar = node.args[1]
+                if isinstance(x_arg, torch.fx.Node) and x_arg.name in wire_map:
+                    x_ids = resolve(x_arg)
+                    shape = wire_map.get(f'__shape_{x_arg.name}', [len(x_ids)])
+                    scalar_bool = bool(scalar)
+                    # Determine if this is an identity or a constant op
+                    if tgt == torch.ops.aten.bitwise_and.Scalar:
+                        const_op = GateOp.CONST_FALSE if not scalar_bool else None
+                    else:  # bitwise_or.Scalar
+                        const_op = GateOp.CONST_TRUE if scalar_bool else None
+                    if const_op is None:
+                        # Identity: scalar is 1 for AND or 0 for OR
+                        wire_map[node.name] = x_ids
+                        wire_map[f'__shape_{node.name}'] = shape
+                    else:
+                        gate_ids = []
+                        for _ in x_ids:
+                            g = Gate(gate_id=next_id, op=const_op, layer=layer_idx)
+                            circuit.gates.append(g)
+                            gate_ids.append(next_id)
+                            next_id += 1
+                        wire_map[node.name] = gate_ids
+                        wire_map[f'__shape_{node.name}'] = shape
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
+            # aten.index_put_  ->  scatter gate IDs back into the result buffer
+            # Used by apply_luts_vectorized_export_mode to write per-LUT results.
+            # Assumes the non-None index is a bool mask (folded from aten.eq.Scalar).
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.index_put_.default:
+                result_arg = node.args[0]
+                indices    = node.args[1]
+                value_arg  = node.args[2]
+                if (isinstance(result_arg, torch.fx.Node) and result_arg.name in wire_map
+                        and isinstance(value_arg, torch.fx.Node) and value_arg.name in wire_map):
+                    result_ids   = list(resolve(result_arg))
+                    result_shape = list(wire_map.get(f'__shape_{result_arg.name}',
+                                                     [len(result_ids)]))
+                    value_ids    = resolve(value_arg)
+                    # Find the boolean mask among index args
+                    for idx_node in indices:
+                        if idx_node is None:
+                            continue
+                        if not isinstance(idx_node, torch.fx.Node):
+                            continue
+                        mask_t = (_get_attr_val(gm, idx_node) if idx_node.op == 'get_attr'
+                                  else None)
+                        if mask_t is None or mask_t.dtype != torch.bool:
+                            continue
+                        # Flatten multi-dim mask to get 1-D positions within the
+                        # non-batch dims of the result buffer.
+                        positions = mask_t.reshape(-1).nonzero(as_tuple=False).reshape(-1).tolist()
+                        if positions:
+                            batch   = result_shape[0] if result_shape else 1
+                            out_dim = len(result_ids) // batch   # total non-batch elements
+                            n_pos   = len(positions)
+                            for b in range(batch):
+                                for j, pos in enumerate(positions):
+                                    result_ids[b * out_dim + pos] = value_ids[b * n_pos + j]
+                        break
+                    wire_map[node.name] = [int(x) for x in result_ids]
+                    wire_map[f'__shape_{node.name}'] = result_shape
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
             # Direct boolean binary/unary ops (e.g. OrPooling2d)
             # These appear outside LUT cascades with both operands in wire_map.
             # ----------------------------------------------------------------
             _DIRECT_BINARY_GATE = {
-                torch.ops.aten.__or__.Tensor:  GateOp.OR,
-                torch.ops.aten.__and__.Tensor: GateOp.AND,
-                torch.ops.aten.__xor__.Tensor: GateOp.XOR,
+                torch.ops.aten.__or__.Tensor:       GateOp.OR,
+                torch.ops.aten.__and__.Tensor:      GateOp.AND,
+                torch.ops.aten.__xor__.Tensor:      GateOp.XOR,
+                torch.ops.aten.bitwise_or.Tensor:   GateOp.OR,
+                torch.ops.aten.bitwise_and.Tensor:  GateOp.AND,
+                torch.ops.aten.bitwise_xor.Tensor:  GateOp.XOR,
             }
             if tgt in _DIRECT_BINARY_GATE:
                 a_node_arg = node.args[0]
@@ -586,71 +728,90 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
-            # torchlogix::lut_layer(a, b, lut_ids)  ->  one gate per position
+            # GroupSum pattern: reshape(..., k, g) -> sum(-1) -> float -> ?+beta ?/tau
+            # Detected from the native decomposition of GroupSum; no custom op needed.
             # ----------------------------------------------------------------
-            if tgt == torch.ops.torchlogix.lut_layer.default:
-                a_ids        = resolve(node.args[0])
-                b_ids        = resolve(node.args[1])
-                lut_ids_node = node.args[2]
-                lut_ids_vals = _get_attr_val(gm, lut_ids_node).flatten().tolist()
-
-                result_ids = []
-                for nidx, lut_id in enumerate(lut_ids_vals):
-                    lut_id = int(lut_id)
-                    op, uses_a, uses_b = LUT_ID_TO_GATE[lut_id]
-                    in0 = a_ids[nidx] if uses_a else -1
-                    in1 = b_ids[nidx] if uses_b else -1
-                    # LUT 5 (wire b) and LUT 10 (not b): in0 must be b
-                    if lut_id in (5, 10):
-                        in0 = b_ids[nidx]
-                        in1 = -1
-                    g = Gate(gate_id=next_id, op=op, in0=in0, in1=in1,
-                             layer=layer_idx, node_idx=nidx)
-                    circuit.gates.append(g)
-                    result_ids.append(next_id)
-                    next_id += 1
-
-                # Output shape matches `a`'s shape (lut_layer returns empty_like(a)).
-                # The lut_ids buffer may have fewer dims than the actual output (no
-                # batch dim), so prefer a's wire_map shape over the buffer's shape.
-                # a_shape = wire_map.get(f'__shape_{node.args[0].name}')
-                # out_shape = a_shape if a_shape is not None \
-                #     else list(_get_attr_val(gm, lut_ids_node).shape)
-                out_shape = node.meta['val'].shape
-                wire_map[node.name]              = result_ids
-                wire_map[f'__shape_{node.name}'] = out_shape
-                layer_idx += 1
+            if tgt == torch.ops.aten.sum.dim_IntList:
+                x_node = node.args[0]
+                dim_list = node.args[1]
+                if isinstance(x_node, torch.fx.Node) and x_node.name in wire_map:
+                    x_shape = wire_map.get(f'__shape_{x_node.name}', [])
+                    last_dim = len(x_shape) - 1
+                    if dim_list in ([-1], [last_dim]) and len(x_shape) >= 2:
+                        x_ids = resolve(x_node)
+                        k = int(x_shape[-2])
+                        g = len(x_ids) // k
+                        circuit.output_reduction = GroupSumReduction(
+                            k=k, group_size=g, tau=1.0, beta=0.0)
+                        circuit.output_ids = x_ids
+                        wire_map[node.name] = x_ids
+                        wire_map[f'__shape_{node.name}'] = list(x_shape[:-1])
+                        _reduction_chain.add(node.name)
                 i += 1
                 continue
 
-            # ----------------------------------------------------------------
-            # torchlogix::group_sum(x, k, tau, beta)  ->  reduction metadata
-            # ----------------------------------------------------------------
-            if tgt == torch.ops.torchlogix.group_sum.default:
+            if tgt == torch.ops.aten.to.dtype:
+                src = node.args[0]
+                if isinstance(src, torch.fx.Node) and src.name in wire_map:
+                    wire_map[node.name] = wire_map[src.name]
+                    shape = wire_map.get(f'__shape_{src.name}')
+                    if shape is not None:
+                        wire_map[f'__shape_{node.name}'] = list(shape)
+                    if src.name in _reduction_chain:
+                        _reduction_chain.add(node.name)
+                i += 1
+                continue
+
+            # Scalar add/div/mul following a GroupSum sum node (tau/beta adjustment)
+            _SCALAR_OPS = (
+                torch.ops.aten.add.Tensor,  torch.ops.aten.add.Scalar,
+                torch.ops.aten.div.Tensor,  torch.ops.aten.div.Scalar,
+                torch.ops.aten.mul.Tensor,  torch.ops.aten.mul.Scalar,
+            )
+            if tgt in _SCALAR_OPS:
                 x_node = node.args[0]
-                k      = int(node.args[1])
-                tau    = float(node.args[2])
-                beta   = float(node.args[3])
-                if isinstance(x_node, torch.fx.Node) and x_node.name in wire_map:
-                    x_ids = resolve(x_node)
-                    circuit.output_reduction = GroupSumReduction(
-                        k=k, group_size=len(x_ids) // k, tau=tau, beta=beta,
-                    )
-                    wire_map[node.name]              = x_ids
-                    wire_map[f'__shape_{node.name}'] = [k]
-                    circuit.output_ids               = x_ids
+                if (isinstance(x_node, torch.fx.Node) and x_node.name in _reduction_chain
+                        and circuit.output_reduction is not None):
+                    scalar = node.args[1]
+                    if isinstance(scalar, (int, float)):
+                        if tgt in (torch.ops.aten.add.Tensor, torch.ops.aten.add.Scalar):
+                            circuit.output_reduction.beta += float(scalar)
+                        elif tgt in (torch.ops.aten.div.Tensor, torch.ops.aten.div.Scalar):
+                            circuit.output_reduction.tau *= float(scalar)
+                        elif tgt in (torch.ops.aten.mul.Tensor, torch.ops.aten.mul.Scalar):
+                            circuit.output_reduction.tau /= float(scalar)
+                    wire_map[node.name] = wire_map[x_node.name]
+                    shape = wire_map.get(f'__shape_{x_node.name}')
+                    if shape is not None:
+                        wire_map[f'__shape_{node.name}'] = list(shape)
+                    _reduction_chain.add(node.name)
+                    i += 1
+                    continue
+
+            # ---------------------------------------------------------------------
+            # Registered custom op handlers (e.g. torchlogix lut_layer / group_sum)
+            # ---------------------------------------------------------------------
+            if tgt in Circuit._op_handlers:
+                result = Circuit._op_handlers[tgt](
+                    node, wire_map, circuit, next_id, gm, layer_idx)
+                if result is not None:
+                    next_id, layer_idx = result
                 i += 1
                 continue
 
             # ---- skip everything else (sym_size, asserts, etc.) ----
             i += 1
 
-        # If output_ids were not set by a group_sum handler, resolve from the output node.
+        # Fallback: resolve output_ids from the output node if not already set.
         if not circuit.output_ids:
             for node in nodes:
                 if node.op == 'output':
                     ret = node.args[0]
-                    if isinstance(ret, (tuple, list)):
+                    if isinstance(ret, torch.fx.Node) and ret.name in wire_map:
+                        circuit.output_ids   = wire_map[ret.name]
+                        circuit.output_shape = list(wire_map.get(f'__shape_{ret.name}',
+                                                                 [len(circuit.output_ids)]))
+                    elif isinstance(ret, (tuple, list)):
                         out_ids = []
                         for r in ret:
                             if isinstance(r, torch.fx.Node) and r.name in wire_map:
@@ -673,12 +834,68 @@ class Circuit:
             before = len(self.gates)
             self.constant_fold_gates()
             self.bypass_wires()
+            self.fuse_not_inputs()
             self.dedup()
             self.eliminate_dead_gates()
             after = len(self.gates)
             print(f"Simplify pass: {before} -> {after} gates")
             if after == before:
                 break
+
+    def fuse_not_inputs(self) -> None:
+        """Absorb NOT gates into their single downstream consumer.
+
+        Recognises patterns that arise when native-torch boolean ops are used
+        instead of all 16 gates, and folds them into the equivalent single-gate form:
+            AND(x, NOT_1use(y))  -> AND_NOT_B(x, y)
+            AND(NOT_1use(x), y)  -> AND_NOT_A(x, y)
+            OR(x,  NOT_1use(y))  -> OR_NOT_B(x, y)
+            OR(NOT_1use(x), y)   -> OR_NOT_A(x, y)
+            NOT(AND(x, y))_1use  -> NAND(x, y)
+            NOT(OR(x, y))_1use   -> NOR(x, y)
+            NOT(XOR(x, y))_1use  -> XNOR(x, y)
+
+        After fusion the absorbed NOT gates become dead and are removed by the
+        next eliminate_dead_gates() call (which simplify() already calls).
+        """
+        gate_by_id = {g.gate_id: g for g in self.gates}
+
+        # Count uses of each gate so we only absorb single-use NOTs.
+        use_count: dict[int, int] = {}
+        for gid in self.output_ids:
+            use_count[gid] = use_count.get(gid, 0) + 1
+        for g in self.gates:
+            for inp in (g.in0, g.in1):
+                if inp >= 0:
+                    use_count[inp] = use_count.get(inp, 0) + 1
+
+        for g in self.gates:
+            # --- AND / OR: absorb a NOT on one input ---
+            if g.op in (GateOp.AND, GateOp.OR):
+                in0_g = gate_by_id.get(g.in0)
+                in1_g = gate_by_id.get(g.in1)
+                if in1_g is not None and in1_g.op == GateOp.NOT and use_count.get(g.in1, 0) == 1:
+                    g.op  = GateOp.AND_NOT_B if g.op == GateOp.AND else GateOp.OR_NOT_B
+                    g.in1 = in1_g.in0
+                    in1_g.op = GateOp.WIRE   # will be dead after eliminate_dead_gates
+                elif in0_g is not None and in0_g.op == GateOp.NOT and use_count.get(g.in0, 0) == 1:
+                    g.op  = GateOp.AND_NOT_A if g.op == GateOp.AND else GateOp.OR_NOT_A
+                    g.in0 = in0_g.in0
+                    in0_g.op = GateOp.WIRE
+
+            # --- NOT(binary): fold into NAND / NOR / XNOR ---
+            elif g.op == GateOp.NOT and g.in0 >= 0 and use_count.get(g.gate_id, 0) >= 1:
+                src = gate_by_id.get(g.in0)
+                if src is not None and use_count.get(g.in0, 0) == 1:
+                    if src.op == GateOp.AND:
+                        g.op, g.in0, g.in1 = GateOp.NAND, src.in0, src.in1
+                        src.op = GateOp.WIRE
+                    elif src.op == GateOp.OR:
+                        g.op, g.in0, g.in1 = GateOp.NOR, src.in0, src.in1
+                        src.op = GateOp.WIRE
+                    elif src.op == GateOp.XOR:
+                        g.op, g.in0, g.in1 = GateOp.XNOR, src.in0, src.in1
+                        src.op = GateOp.WIRE
 
 
     def eliminate_dead_gates(self) -> None:
@@ -1624,11 +1841,13 @@ def constant_fold_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
     VIEW_OPS = {
         torch.ops.aten.movedim.int,
         torch.ops.aten.reshape.default,
+        torch.ops.aten.permute.default,   # needed for conv wiring (permute → unbind chain)
         torch.ops.aten.select.int,
         torch.ops.aten.slice.Tensor,
         torch.ops.aten.moveaxis.int,
         torch.ops.aten.unbind.int,
         torch.ops.aten.lift_fresh_copy.default,
+        torch.ops.aten.eq.Scalar,         # folds lut_ids == k → concrete bool mask
     }
 
     for node in gm.graph.nodes:
@@ -1652,6 +1871,30 @@ def constant_fold_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
             if all_const:
                 result = node.target(*args_resolved, **node.kwargs)
                 env[node] = result
+        # aten.index.Tensor has a list-of-(None|Node) as second arg;
+        # fold it when every element is also a constant.
+        elif node.op == 'call_function' and node.target == torch.ops.aten.index.Tensor:
+            tensor_arg = node.args[0]
+            indices    = node.args[1]
+            if isinstance(tensor_arg, torch.fx.Node) and tensor_arg in env:
+                idx_vals   = []
+                all_idx_const = True
+                for idx in indices:
+                    if idx is None:
+                        idx_vals.append(None)
+                    elif isinstance(idx, torch.fx.Node):
+                        if idx in env:
+                            idx_vals.append(env[idx])
+                        else:
+                            all_idx_const = False
+                            break
+                    else:
+                        idx_vals.append(idx)
+                if all_idx_const:
+                    src = env[tensor_arg]
+                    env[node] = src[tuple(
+                        slice(None) if v is None else v for v in idx_vals
+                    )]
 
     for node, value in env.items():
         if node.op in ('placeholder', 'get_attr'):

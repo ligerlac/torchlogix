@@ -8,7 +8,6 @@ gate networks.
 import math
 import random
 import torch
-import torch.library as _tlib
 import numpy as np
 
 
@@ -142,11 +141,17 @@ def apply_luts_vectorized_export_mode(
     if isinstance(a, np.ndarray):
         return _apply_luts_export_numpy(a, b, lut_ids)
     else:
-        return torch.ops.torchlogix.lut_layer(a, b, lut_ids)
+        return _apply_luts_export_torch(a, b, lut_ids)
 
+
+def _const_false(a, b):
+    return np.zeros_like(a, dtype=bool) if isinstance(a, np.ndarray) else torch.zeros_like(a)
+
+def _const_true(a, b):
+    return np.ones_like(a, dtype=bool) if isinstance(a, np.ndarray) else torch.ones_like(a)
 
 _map = [
-    lambda a, b: a & False,  # constant False
+    _const_false,              # 0:  CONST_FALSE
     lambda a, b: a & b,
     lambda a, b: a & ~b,
     lambda a, b: a,
@@ -161,23 +166,9 @@ _map = [
     lambda a, b: ~a,
     lambda a, b: ~(a & ~b),
     lambda a, b: ~(a & b),
-    lambda a, b: True | a,
+    _const_true,               # 15: CONST_TRUE
 ]
 
-
-@_tlib.custom_op("torchlogix::lut_layer", mutates_args=())
-def _lut_layer_op(a: torch.Tensor, b: torch.Tensor,
-                  lut_ids: torch.Tensor) -> torch.Tensor:
-    result = torch.empty_like(a, dtype=torch.bool)
-    for lut_id in range(16):
-        mask = (lut_ids == lut_id)
-        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
-    return result
-
-
-@_lut_layer_op.register_fake
-def _lut_layer_fake(a, b, lut_ids):
-    return torch.empty_like(a, dtype=torch.bool)
 
 
 def _apply_luts_export_numpy(
@@ -186,6 +177,18 @@ def _apply_luts_export_numpy(
     lut_ids: np.ndarray[int]
 ) -> np.ndarray:
     result = np.empty_like(a)
+    for lut_id in range(16):
+        mask = (lut_ids == lut_id)
+        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+    return result
+
+
+def _apply_luts_export_torch(
+    a: torch.BoolTensor,
+    b: torch.BoolTensor,
+    lut_ids: torch.IntTensor
+) -> torch.BoolTensor:
+    result = torch.empty_like(a, dtype=torch.bool)
     for lut_id in range(16):
         mask = (lut_ids == lut_id)
         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])

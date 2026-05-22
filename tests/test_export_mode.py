@@ -148,16 +148,19 @@ class TestExportModeEquivalence:
 
 
 ALLOWED_FX_TARGETS = {
-    # Logic ops
+    # Logic ops — dunder and explicit bitwise forms (both may appear after export lowering)
     torch.ops.aten.__and__.Tensor,
     torch.ops.aten.__or__.Tensor,
     torch.ops.aten.__xor__.Tensor,
+    torch.ops.aten.bitwise_and.Tensor,
+    torch.ops.aten.bitwise_or.Tensor,
+    torch.ops.aten.bitwise_xor.Tensor,
     torch.ops.aten.bitwise_not.default,
 
-    # Custom torchlogix ops (registered via torch.library.custom_op)
-    torch.ops.torchlogix.lut_layer.default,
+    # Alias — emitted for identity wire ops (WIRE A / WIRE B) in native decomposition
+    torch.ops.aten.alias.default,
 
-    # LUT ops (kept for backward compat; not emitted with custom ops)
+    # LUT ops (kept for backward compat; not emitted with native ops)
     torch.ops.aten.where.self,
     torch.ops.aten.eq.Scalar,
 
@@ -211,12 +214,12 @@ ALLOWED_FX_TARGETS = {
 }
 
 ALLOWED_FX_TARGETS_GROUP_SUM = {
-    # Custom torchlogix group_sum op
-    torch.ops.torchlogix.group_sum.default,
-    # Fallback aten ops (kept for backward compat)
+    # Native decomposition of group_sum: reshape + sum + float + optional scale
+    torch.ops.aten.sum.dim_IntList,
+    torch.ops.aten.to.dtype,
     torch.ops.aten.add.Tensor,
     torch.ops.aten.div.Tensor,
-    torch.ops.aten.sum.dim_IntList,
+    torch.ops.aten._assert_tensor_metadata.default,
 }
 
 
