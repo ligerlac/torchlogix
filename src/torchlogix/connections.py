@@ -102,7 +102,7 @@ class FixedDenseConnections(Connections):
         )
         self.in_dim = in_dim
         self.out_dim = out_dim
-        self.indices = self._init_connections()
+        self.register_buffer('indices', self._init_connections())
 
     def _init_connections(self):
         """Constructs possible input–neuron connection indices.
@@ -223,12 +223,12 @@ class LearnableDenseConnections(Connections):
         if num_candidates == -1:
             num_candidates = in_dim
             self.num_candidates = num_candidates
-            self.indices = torch.arange(in_dim, device=self.device).view(
-                in_dim, 1, 1).expand(in_dim, lut_rank, out_dim)
+            self.register_buffer('indices', torch.arange(in_dim, device=self.device).view(
+                in_dim, 1, 1).expand(in_dim, lut_rank, out_dim).contiguous())
         else:
             assert num_candidates > 0, "num_candidates must be bigger than 0"
             self.num_candidates = num_candidates
-            self.indices = self._init_connections()
+            self.register_buffer('indices', self._init_connections())
         self.weights = torch.nn.Parameter(torch.rand(
             num_candidates, lut_rank, out_dim, dtype=torch.float32), requires_grad=True)
         
