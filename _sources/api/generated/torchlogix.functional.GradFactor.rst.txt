@@ -40,6 +40,7 @@
 
    .. autosummary::
    
+      ~GradFactor.clear_saved_tensors_on_access
       ~GradFactor.dirty_tensors
       ~GradFactor.generate_vmap_rule
       ~GradFactor.materialize_grads
