@@ -1,8 +1,5 @@
 import torch
 
-from torchlogix.packbitstensor import PackBitsTensor
-import numpy as np
-
 
 class GroupSum(torch.nn.Module):
     """
@@ -24,22 +21,7 @@ class GroupSum(torch.nn.Module):
         self.export_mode = export_mode
 
     def forward(self, x):
-        if isinstance(x, PackBitsTensor):
-            return x.group_sum(self.k)
-
         assert x.shape[-1] % self.k == 0, "The number of input features must be divisible by k."
-
-        try:
-            import numpy as np
-            if isinstance(x, np.ndarray):
-                result = x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1).astype(np.float32)
-                if self.beta != 0.0:
-                    result = result + self.beta
-                if self.tau != 1.0:
-                    result = result / self.tau
-                return result
-        except ImportError:
-            pass
 
         result = x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1)
         if self.beta != 0.0:

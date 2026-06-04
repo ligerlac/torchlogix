@@ -286,8 +286,20 @@ class Circuit:
         while i < len(nodes):
             node = nodes[i]
 
-            # ---- get_attr: lut_ids tensors we need later; skip others ----
+            # ---- get_attr: fold constant bool tensors into CONST gates; skip others ----
             if node.op == 'get_attr':
+                val = _get_attr_val(gm, node)
+                if isinstance(val, torch.Tensor) and val.dtype == torch.bool:
+                    flat = val.flatten().tolist()
+                    gate_ids = []
+                    for b in flat:
+                        op = GateOp.CONST_TRUE if b else GateOp.CONST_FALSE
+                        g = Gate(gate_id=next_id, op=op, layer=layer_idx)
+                        circuit.gates.append(g)
+                        gate_ids.append(next_id)
+                        next_id += 1
+                    wire_map[node.name] = gate_ids
+                    wire_map[f'__shape_{node.name}'] = list(val.shape)
                 i += 1
                 continue
 
@@ -416,6 +428,57 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
+            # aten.unsqueeze  ->  insert a size-1 dim in the shape (no new gates)
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.unsqueeze.default:
+                src_node = node.args[0]
+                dim      = int(node.args[1])
+                if isinstance(src_node, torch.fx.Node) and src_node.name in wire_map:
+                    src_ids   = resolve(src_node)
+                    src_shape = list(wire_map.get(f'__shape_{src_node.name}', [len(src_ids)]))
+                    new_shape = src_shape[:]
+                    if dim < 0:
+                        dim = len(new_shape) + 1 + dim
+                    new_shape.insert(dim, 1)
+                    wire_map[node.name] = src_ids
+                    wire_map[f'__shape_{node.name}'] = new_shape
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
+            # aten.squeeze.dim  ->  remove a size-1 dim (no new gates)
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.squeeze.dim:
+                src_node = node.args[0]
+                dim      = int(node.args[1])
+                if isinstance(src_node, torch.fx.Node) and src_node.name in wire_map:
+                    src_ids   = resolve(src_node)
+                    src_shape = list(wire_map.get(f'__shape_{src_node.name}', [len(src_ids)]))
+                    if dim < 0:
+                        dim = len(src_shape) + dim
+                    new_shape = [s for idx, s in enumerate(src_shape) if idx != dim or s != 1]
+                    wire_map[node.name] = src_ids
+                    wire_map[f'__shape_{node.name}'] = new_shape
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
+            # aten.flip  ->  reorder gate IDs along the flipped dims
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.flip.default:
+                src_node = node.args[0]
+                dims     = node.args[1]
+                if isinstance(src_node, torch.fx.Node) and src_node.name in wire_map:
+                    src_ids   = resolve(src_node)
+                    src_shape = list(wire_map.get(f'__shape_{src_node.name}', [len(src_ids)]))
+                    id_tensor = torch.tensor(src_ids, dtype=torch.long).reshape(src_shape)
+                    flipped   = torch.flip(id_tensor, dims=dims)
+                    wire_map[node.name] = [int(x) for x in flipped.flatten().tolist()]
+                    wire_map[f'__shape_{node.name}'] = list(flipped.shape)
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
             # aten.reshape / aten.view  ->  just reshape the ID list (no new gates)
             # ----------------------------------------------------------------
             if tgt in (torch.ops.aten.reshape.default, torch.ops.aten.view.default,
@@ -426,6 +489,22 @@ class Circuit:
                 wire_map[f'__shape_{node.name}'] = list(new_shape)
                 circuit.output_ids   = src_ids
                 circuit.output_shape = list(new_shape)
+                i += 1
+                continue
+
+            # ----------------------------------------------------------------
+            # aten.permute  ->  reorder axes of the ID tensor (no new gates)
+            # ----------------------------------------------------------------
+            if tgt == torch.ops.aten.permute.default:
+                src_node = node.args[0]
+                dims     = node.args[1]
+                if isinstance(src_node, torch.fx.Node) and src_node.name in wire_map:
+                    src_ids   = resolve(src_node)
+                    src_shape = list(wire_map.get(f'__shape_{src_node.name}', [len(src_ids)]))
+                    id_tensor = torch.tensor(src_ids, dtype=torch.long).reshape(src_shape)
+                    permuted  = id_tensor.permute(dims)
+                    wire_map[node.name] = [int(x) for x in permuted.contiguous().flatten().tolist()]
+                    wire_map[f'__shape_{node.name}'] = list(permuted.shape)
                 i += 1
                 continue
 
@@ -1871,6 +1950,33 @@ def constant_fold_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
             if all_const:
                 result = node.target(*args_resolved, **node.kwargs)
                 env[node] = result
+        # aten.ones.default / aten.zeros.default: constant tensor creation
+        elif node.op == 'call_function' and node.target in (
+                torch.ops.aten.ones.default, torch.ops.aten.zeros.default):
+            size = node.args[0]
+            if all(isinstance(s, int) for s in size):
+                dtype  = node.kwargs.get('dtype', None)
+                device = node.kwargs.get('device', torch.device('cpu'))
+                if node.target == torch.ops.aten.ones.default:
+                    env[node] = torch.ones(size, dtype=dtype, device=device)
+                else:
+                    env[node] = torch.zeros(size, dtype=dtype, device=device)
+        # aten.fill_.Tensor: in-place fill through a (possibly sliced) view
+        elif node.op == 'call_function' and node.target == torch.ops.aten.fill_.Tensor:
+            target_arg, fill_val_arg = node.args[0], node.args[1]
+            if isinstance(target_arg, torch.fx.Node) and target_arg in env:
+                if isinstance(fill_val_arg, torch.fx.Node) and fill_val_arg in env:
+                    fill_val = env[fill_val_arg]
+                else:
+                    fill_val = fill_val_arg
+                env[target_arg].fill_(fill_val)
+                env[node] = env[target_arg]
+        # aten.triu.default: upper-triangular mask of a constant tensor
+        elif node.op == 'call_function' and node.target == torch.ops.aten.triu.default:
+            input_node = node.args[0]
+            if isinstance(input_node, torch.fx.Node) and input_node in env:
+                diag = node.args[1] if len(node.args) > 1 else 0
+                env[node] = torch.triu(env[input_node], diagonal=diag)
         # aten.index.Tensor has a list-of-(None|Node) as second arg;
         # fold it when every element is also a constant.
         elif node.op == 'call_function' and node.target == torch.ops.aten.index.Tensor:

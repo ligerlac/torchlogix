@@ -1,5 +1,3 @@
-
-
 from abc import ABC, abstractmethod
 import torch
 
@@ -22,7 +20,7 @@ class LogicBase(torch.nn.Module, ABC):
         export_mode (bool): Whether to enable export mode for traceable, fully boolean expression
     """
     def __init__(
-        self, 
+        self,
         device: str = "cpu",
         grad_factor: float = 1.0,
         lut_rank: int = 2,

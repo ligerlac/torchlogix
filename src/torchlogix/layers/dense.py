@@ -5,7 +5,7 @@ from ..functional import (
     GradFactor, get_regularization_loss, rescale_weights
     )
 from .base import LogicBase
-from ..functional import apply_luts_vectorized_export_mode
+from ..functional import apply_luts_export_mode
 
 
 class LogicDense(LogicBase):
@@ -98,7 +98,7 @@ class LogicDense(LogicBase):
             a = x[:, 0]
             b = x[:, 1]
             ids = self._export_lut_ids
-            return apply_luts_vectorized_export_mode(a, b, ids)
+            return apply_luts_export_mode(a, b, ids)
         # Delegate to parametrization with einsum contraction
         # b=batch, n=neurons, k=num_basis
         return self.parametrization.forward(

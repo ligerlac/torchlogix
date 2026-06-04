@@ -63,8 +63,66 @@ class BranchModel(nn.Module):
         x = self.group_sum(x)
         return x
 
- 
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
+
+class AnyLogicModel(nn.Module):
+    """
+    Some random non-torchlogix logic and reshaping operations
+    to test the flexibility of from_model
+    """
+    def __init__(self):
+        super().__init__()
+        self.input_shape = (4, 8, 8)
+
+
+    def forward(self, x):
+        # x: (B, 4, 8, 8) — batch of 4-channel 8×8 bool/int tensors
+
+        # Split along channel dim
+        x1, x2, x3, x4 = x[:, 0], x[:, 1], x[:, 2], x[:, 3]  # each (B, 8, 8)
+
+        # Spatial flip on x1 (replaces the buggy ::-1 step)
+        x1 = torch.flip(x1, dims=[1])                           # flip rows → (B, 8, 8)
+
+        # Permute x2: swap H and W
+        x2 = x2.permute(0, 2, 1)                                # (B, 8, 8) transposed
+
+        # Broadcast a mask over x3 — zero out the bottom half
+        mask = torch.ones(8, 8, dtype=x3.dtype, device=x3.device)
+        mask[4:, :] = 0                                         # (8, 8), broadcasts over batch
+        x3 = x3 & mask
+
+        # Diagonal mask on x4 — keep only upper triangle
+        tri = torch.triu(torch.ones(8, 8, dtype=x4.dtype, device=x4.device))
+        x4 = x4 & tri
+
+        # Logic ops: operator precedence is & > ^ > |  (same as Python/C)
+        # So this reads as:  x1 | (x2 & x3) ^ x4
+        # Use parens to make intent explicit:
+        out = x1 | ((x2 & x3) ^ x4)                            # (B, 8, 8)
+
+        # Add a channel dim back, then roll it to position 1
+        out = out.unsqueeze(1)                                   # (B, 1, 8, 8)
+
+        # Flatten spatial dims only
+        out = out.flatten(2)                                     # (B, 1, 64)
+
+        return out.squeeze(1)                                    # (B, 64)
+
+
+@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
+def test_functional_equivalence(model_cls):
+    model = model_cls()
+    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
+
+    set_export_mode(model)
+    preds_model = model(x)
+    
+    circuit = Circuit.from_model(model, input_shape=model.input_shape)
+    preds_circuit = circuit(x)
+    assert torch.equal(preds_model, preds_circuit), "Circuit predictions differ from Eval-mode model predictions"
+
+
+@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
 @pytest.mark.parametrize("relative_batch_size", [1, 10])
 def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
@@ -77,9 +135,6 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
     preds_model = model(x)
     
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
-    preds_circuit = circuit(x)
-    assert torch.equal(preds_model, preds_circuit), "Circuit predictions differ from Eval-mode model predictions"
-
     circuit.compile(pack_bits=pack_bits)
     input_np = x.numpy()
     preds_circuit_compiled = circuit(input_np, use_compiled=True)
@@ -87,7 +142,7 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
     assert torch.equal(preds_model, preds_circuit_compiled_torch), "Compiled circuit predictions differ from Eval-mode predictions"
 
 
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel, AnyLogicModel])
 @pytest.mark.parametrize("simplification", [
     Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup, Circuit.fuse_not_inputs
 ])

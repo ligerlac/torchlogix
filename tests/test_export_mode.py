@@ -251,31 +251,5 @@ class TestFXGraphPurity:
         )
 
 
-@pytest.mark.parametrize(
-    "layer, input_shape",
-    [
-        (LogicDense(128, 128, parametrization_kwargs={"weight_init": "random"}), (8, 128)),
-        (LogicConv2d(in_dim=(12, 8), channels=3, num_kernels=8, receptive_field_size=(3, 2), tree_depth=2, parametrization_kwargs={"weight_init": "random"}), (7, 3, 12, 8)),
-        (LogicConv3d(in_dim=(16, 14, 12), channels=3, num_kernels=8, receptive_field_size=(4, 3, 2), tree_depth=2, parametrization_kwargs={"weight_init": "random"}), (11, 3, 16, 14, 12)),
-        (OrPooling2d(kernel_size=2, stride=2), (8, 3, 8, 8)),
-        (OrPooling3d(kernel_size=2, stride=2), (8, 3, 8, 8, 8)),
-        (GroupSum(10), (8, 50)),
-    ],
-)
-def test_numpy_export_equivalence(layer, input_shape):
-    """Numpy and torch export-mode must agree on identical inputs."""
-    x = torch.randint(0, 2, input_shape).bool()
-    set_export_mode(layer)
-
-    x_np = x.numpy()
-    result_torch = layer(x)
-    result_numpy = layer(x_np)
-
-    assert isinstance(result_numpy, np.ndarray), "Numpy input should produce numpy output"
-    assert np.allclose(result_torch.numpy(), result_numpy, atol=1e-6), (
-        f"[{layer}] torch and numpy export results diverge"
-    )
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

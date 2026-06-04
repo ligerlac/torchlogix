@@ -115,43 +115,30 @@ def compute_all_logic_ops_vectorized(a, b):
     return ops
 
 
-def apply_luts_vectorized_export_mode(
-    a: torch.BoolTensor | np.ndarray[bool],
-    b: torch.BoolTensor | np.ndarray[bool],
-    lut_ids: torch.IntTensor | np.ndarray[int]
-) -> torch.Tensor | np.ndarray:
-    """Tracer-friendly LUT application for ONNX/TorchScript export.
-
-    Works with both torch tensors and numpy arrays. Detects backend once at entry
-    and routes to the appropriate implementation.
+def apply_luts_export_mode(
+    a: torch.BoolTensor,
+    b: torch.BoolTensor,
+    lut_ids: torch.IntTensor
+) -> torch.BoolTensor:
+    """Tracer-friendly LUT application for TorchScript export.
 
     Args:
         a: First input (batch, neurons) or (batch, spatial, kernels, features)
         b: Second input (same shape as a)
         lut_ids: LUT operation IDs (neurons,) or (kernels, features)
 
-    Returns:
-        Result with same shape and backend as inputs
-
     Note: This function is optimized for export/tracing, not runtime performance.
           For training/eval without export, use the regular forward pass.
     """
+    result = torch.empty_like(a, dtype=torch.bool)
+    for lut_id in range(16):
+        mask = (lut_ids == lut_id)
+        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+    return result
 
-    # Smart dispatch - single isinstance check
-    if isinstance(a, np.ndarray):
-        return _apply_luts_export_numpy(a, b, lut_ids)
-    else:
-        return _apply_luts_export_torch(a, b, lut_ids)
-
-
-def _const_false(a, b):
-    return np.zeros_like(a, dtype=bool) if isinstance(a, np.ndarray) else torch.zeros_like(a)
-
-def _const_true(a, b):
-    return np.ones_like(a, dtype=bool) if isinstance(a, np.ndarray) else torch.ones_like(a)
 
 _map = [
-    _const_false,              # 0:  CONST_FALSE
+    lambda a, b: torch.zeros_like(a),              # 0:  CONST_FALSE
     lambda a, b: a & b,
     lambda a, b: a & ~b,
     lambda a, b: a,
@@ -166,33 +153,8 @@ _map = [
     lambda a, b: ~a,
     lambda a, b: ~(a & ~b),
     lambda a, b: ~(a & b),
-    _const_true,               # 15: CONST_TRUE
+    lambda a, b: torch.ones_like(a),               # 15: CONST_TRUE
 ]
-
-
-
-def _apply_luts_export_numpy(
-    a: np.ndarray[bool],
-    b: np.ndarray[bool],
-    lut_ids: np.ndarray[int]
-) -> np.ndarray:
-    result = np.empty_like(a)
-    for lut_id in range(16):
-        mask = (lut_ids == lut_id)
-        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
-    return result
-
-
-def _apply_luts_export_torch(
-    a: torch.BoolTensor,
-    b: torch.BoolTensor,
-    lut_ids: torch.IntTensor
-) -> torch.BoolTensor:
-    result = torch.empty_like(a, dtype=torch.bool)
-    for lut_id in range(16):
-        mask = (lut_ids == lut_id)
-        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
-    return result
 
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:

@@ -1,6 +1,4 @@
 import math
-import numpy as np
-import random
 from typing import Union
 
 import torch
@@ -9,7 +7,7 @@ from torch.nn.modules.utils import _pair, _triple
 
 from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights, apply_luts_vectorized_export_mode
+    get_regularization_loss, rescale_weights, apply_luts_export_mode
     )
 from .base import LogicBase
 
@@ -187,21 +185,14 @@ class _LogicConvNd(LogicBase):
 
     def _forward_export_mode(self, x):
 
-        is_numpy = isinstance(x, np.ndarray)
-
         # Padding
         if self.padding > 0:
-            if is_numpy:
-                pad_width = [(0, 0), (0, 0)]
-                pad_width.extend([(self.padding, self.padding)] * self.conv_dimension)
-                x = np.pad(x, pad_width, mode='constant', constant_values=0)
-            else:
-                x = torch.nn.functional.pad(
-                    x,
-                    (self.padding, self.padding, self.padding, self.padding, 0, 0),
-                    mode="constant",
-                    value=0
-                )
+            x = torch.nn.functional.pad(
+                x,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
+            )
 
         # First level
         x = self.connections(x, 0)
@@ -209,7 +200,7 @@ class _LogicConvNd(LogicBase):
 
         lut_ids_bc = getattr(self, f'_export_lut_ids_L0')
 
-        x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
+        x = apply_luts_export_mode(a, b, lut_ids_bc)
 
         # Remaining levels
         for level in range(1, self.tree_depth):
@@ -217,7 +208,7 @@ class _LogicConvNd(LogicBase):
             a, b = x[..., 0, :], x[..., 1, :]
             lut_ids_bc = getattr(self, f'_export_lut_ids_L{level}')
 
-            x = apply_luts_vectorized_export_mode(a, b, lut_ids_bc)
+            x = apply_luts_export_mode(a, b, lut_ids_bc)
 
         x = x.reshape(x.shape[0], x.shape[1], *self.kernel_positions)
 
