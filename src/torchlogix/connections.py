@@ -356,6 +356,11 @@ class FixedConvConnections(Connections):
     def indices(self):
         return [getattr(self, f'_indices_L{i}') for i in range(self.tree_depth)]
 
+    @indices.setter
+    def indices(self, value):
+        for i, tensor in enumerate(value):
+            self.register_buffer(f'_indices_L{i}', tensor)
+
     def _init_connections(self):
         # Setup connections
         if self.init_method == "random":
