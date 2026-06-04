@@ -1,8 +1,7 @@
 """The main package for torchlogix."""
 
-from .compiled_model import CompiledLogicNet
-from .packbitstensor import PackBitsTensor
 from .circuit import Circuit
 from . import layers
+from . import utils
 
-__all__ = ["CompiledLogicNet", "PackBitsTensor", "Circuit", "layers"]
+__all__ = ["Circuit", "layers", "utils"]
