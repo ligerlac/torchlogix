@@ -62,8 +62,7 @@ class BranchModel(nn.Module):
         return x
     
 
-# @pytest.mark.parametrize("model_class", [DenseModel, ConvModel, BranchModel])
-@pytest.mark.parametrize("model_class", [DenseModel])
+@pytest.mark.parametrize("model_class", [DenseModel, ConvModel, BranchModel])
 def test_round_trip(model_class):
     # write model to disk, reaload it and assert that the outputs are the same
     x = torch.randn(1, *model_class().input_shape)

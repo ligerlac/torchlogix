@@ -349,9 +349,13 @@ class FixedConvConnections(Connections):
             assert channels > channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"
             )
-        self.indices = self._init_connections()
-        
-        
+        for i, tensor in enumerate(self._init_connections()):
+            self.register_buffer(f'_indices_L{i}', tensor)
+
+    @property
+    def indices(self):
+        return [getattr(self, f'_indices_L{i}') for i in range(self.tree_depth)]
+
     def _init_connections(self):
         # Setup connections
         if self.init_method == "random":
