@@ -124,7 +124,8 @@ def test_functional_equivalence(model_cls):
     
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     preds_circuit = circuit(x)
-    assert torch.equal(preds_model, preds_circuit), "Circuit predictions differ from Eval-mode model predictions"
+    assert torch.equal(preds_model, preds_circuit.to(preds_model.dtype)), \
+        "Circuit predictions differ from Eval-mode model predictions"
 
 
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
@@ -144,7 +145,11 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
     input_np = x.numpy()
     preds_circuit_compiled = circuit(input_np, use_compiled=True)
     preds_circuit_compiled_torch = torch.from_numpy(preds_circuit_compiled)
-    assert torch.equal(preds_model, preds_circuit_compiled_torch), "Compiled circuit predictions differ from Eval-mode predictions"
+    # Cast to a common dtype before comparing: circuit may use a narrower integer
+    # type (e.g. uint16_t) while the model returns float32.
+    target_dtype = preds_model.dtype
+    assert torch.equal(preds_model, preds_circuit_compiled_torch.to(target_dtype)), \
+        "Compiled circuit predictions differ from Eval-mode predictions"
 
 
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel, AnyLogicModel])
@@ -189,10 +194,12 @@ def test_c_codegen_group_sum_scores(model_cls):
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     assert circuit.sum_reductions
 
+    from torchlogix.circuit import SumReduction
     k = len(circuit.sum_reductions)
+    out_dtype = SumReduction.infer_c_dtype(circuit.sum_reductions)
     c_code = circuit.get_c_code()
 
-    assert "float   out[" in c_code
+    assert f"{out_dtype}   out[" in c_code
     assert "bool raw[" in c_code
     assert c_code.count("// --- sum reductions ---") == 1
     assert c_code.count("int s = 0;") == k

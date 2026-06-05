@@ -189,6 +189,28 @@ class SumReduction:
     tau:       float = 1.0
     beta:      float = 0.0
 
+    @classmethod
+    def infer_c_dtype(cls, reductions: list['SumReduction']) -> str:
+        """
+        Infer the narrowest C output type for a collection of SumReduction nodes.
+
+        Returns 'float' when any reduction uses a non-unity tau or fractional beta.
+        Otherwise returns the smallest unsigned integer type that cannot overflow
+        given the statically-known maximum sum per reduction:
+            max_val = len(input_ids) + int(beta)
+        """
+        for sr in reductions:
+            if sr.tau != 1.0 or sr.beta != round(sr.beta):
+                return "float"
+        max_val = max(
+            (len(sr.input_ids) + int(round(sr.beta)) for sr in reductions),
+            default=0,
+        )
+        if max_val <= 0xFF:       return "uint8_t"
+        if max_val <= 0xFFFF:     return "uint16_t"
+        if max_val <= 0xFFFFFFFF: return "uint32_t"
+        return "uint64_t"
+
 
 @dataclass
 class Circuit:
@@ -927,15 +949,17 @@ class Circuit:
 
     def simplify(self, n_max=1000) -> None:
         for _ in range(n_max):
-            before = len(self.gates)
+            before_gates = len(self.gates)
+            before_sr    = sum(len(sr.input_ids) for sr in self.sum_reductions)
             self.constant_fold_gates()
+            self.constant_fold_sum_reductions()
             self.bypass_wires()
             self.fuse_not_inputs()
             self.dedup()
             self.eliminate_dead_gates()
-            after = len(self.gates)
-            print(f"Simplify pass: {before} -> {after} gates")
-            if after == before:
+            after_gates = len(self.gates)
+            after_sr    = sum(len(sr.input_ids) for sr in self.sum_reductions)
+            if after_gates == before_gates and after_sr == before_sr:
                 break
 
     def fuse_not_inputs(self) -> None:
@@ -1021,6 +1045,39 @@ class Circuit:
 
         self.gates = [g for g in self.gates if g.gate_id in visited]
 
+
+    def constant_fold_sum_reductions(self) -> None:
+        """
+        For each SumReduction, fold CONST_TRUE / CONST_FALSE inputs directly into
+        beta, leaving only genuinely variable inputs in input_ids.
+
+        After this pass, a fully-folded reduction has input_ids == [] and beta
+        encodes the entire sum; codegen emits a constant rather than a loop.
+        output_ids is rebuilt from the remaining live inputs so that
+        eliminate_dead_gates can remove the constant gates that were folded away.
+        """
+        if not self.sum_reductions:
+            return
+        gate_by_id = {g.gate_id: g for g in self.gates}
+        for sr in self.sum_reductions:
+            live = []
+            for gid in sr.input_ids:
+                g = gate_by_id.get(gid)
+                if g is not None and g.op == GateOp.CONST_TRUE:
+                    sr.beta += 1.0
+                elif g is not None and g.op == GateOp.CONST_FALSE:
+                    pass  # contributes 0 — drop silently
+                else:
+                    live.append(gid)
+            sr.input_ids = live
+        # Rebuild output_ids so dead-gate elimination sees the updated live set.
+        seen: set[int] = set()
+        self.output_ids = []
+        for sr in self.sum_reductions:
+            for gid in sr.input_ids:
+                if gid not in seen:
+                    seen.add(gid)
+                    self.output_ids.append(gid)
 
     def constant_fold_gates(self) -> None:
         """
@@ -1251,8 +1308,15 @@ class Circuit:
             32:   ctypes.c_uint32,
             64:   ctypes.c_uint64,
         }
+        _reduction_ctype_map = {
+            "float":    ctypes.c_float,
+            "uint8_t":  ctypes.c_uint8,
+            "uint16_t": ctypes.c_uint16,
+            "uint32_t": ctypes.c_uint32,
+            "uint64_t": ctypes.c_uint64,
+        }
         in_ctype  = _ctype_map[pack_bits]
-        out_ctype = ctypes.c_float if self.sum_reductions else in_ctype
+        out_ctype = _reduction_ctype_map[SumReduction.infer_c_dtype(self.sum_reductions)] if self.sum_reductions else in_ctype
         lib = ctypes.CDLL(so_path)
         lib.circuit.argtypes = [
             ctypes.POINTER(in_ctype),
@@ -1292,14 +1356,20 @@ class Circuit:
 
             pack = self._pack_bits
 
+            _reduction_dtype_map = {
+                "float":    (np.float32,  ctypes.c_float),
+                "uint8_t":  (np.uint8,    ctypes.c_uint8),
+                "uint16_t": (np.uint16,   ctypes.c_uint16),
+                "uint32_t": (np.uint32,   ctypes.c_uint32),
+                "uint64_t": (np.uint64,   ctypes.c_uint64),
+            }
             if not self.sum_reductions:
                 n_out = len(self.output_ids)
                 np_dtype_out = np.bool_
                 c_dtype_out = ctypes.c_bool
             else:
                 n_out = len(self.sum_reductions)
-                np_dtype_out = np.float32
-                c_dtype_out = ctypes.c_float
+                np_dtype_out, c_dtype_out = _reduction_dtype_map[SumReduction.infer_c_dtype(self.sum_reductions)]
 
             if not hasattr(self, '_lib'):
                 raise RuntimeError("Circuit not compiled yet. Call compile() first.")
@@ -1339,8 +1409,8 @@ class Circuit:
                 in_arr = packed_in.ctypes.data_as(ctypes.POINTER(_CType))
 
                 if self.sum_reductions:
-                    out_np = np.zeros(n_iter * n_out * pack, dtype=np.float32)
-                    out_arr = out_np.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+                    out_np = np.zeros(n_iter * n_out * pack, dtype=np_dtype_out)
+                    out_arr = out_np.ctypes.data_as(ctypes.POINTER(c_dtype_out))
                     self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
                     return out_np.reshape(batch_size, n_out)
 
@@ -1367,12 +1437,21 @@ class Circuit:
                 return gate_vals
 
             if self.sum_reductions:
-                results = torch.zeros(batch_size, len(self.sum_reductions), dtype=torch.float32)
+                _torch_dtype_map = {
+                    "float":    torch.float32,
+                    "uint8_t":  torch.uint8,
+                    "uint16_t": torch.int32,   # torch has no uint16
+                    "uint32_t": torch.int32,
+                    "uint64_t": torch.int64,
+                }
+                out_dtype = _torch_dtype_map[SumReduction.infer_c_dtype(self.sum_reductions)]
+                results = torch.zeros(batch_size, len(self.sum_reductions), dtype=out_dtype)
+                is_int = out_dtype != torch.float32
                 for i in range(batch_size):
                     gate_vals = _eval_gates(input[i])
                     for j, sr in enumerate(self.sum_reductions):
                         s = sum(int(gate_vals.get(gid, False)) for gid in sr.input_ids)
-                        results[i, j] = (s + sr.beta) / sr.tau
+                        results[i, j] = s + int(round(sr.beta)) if is_int else (s + sr.beta) / sr.tau
                 return results
 
             raw = torch.zeros(batch_size, len(self.output_ids), dtype=torch.bool)
@@ -1452,7 +1531,9 @@ class Circuit:
 
         pack_str = f"  pack_bits={pack_bits}" if pack_bits else ""
         has_reductions = bool(self.sum_reductions)
-        out_ctype = "float" if has_reductions else ctype
+        red_dtype  = SumReduction.infer_c_dtype(self.sum_reductions) if has_reductions else "float"
+        out_ctype  = red_dtype if has_reductions else ctype
+        is_int_red = has_reductions and red_dtype != "float"
         k_red = len(self.sum_reductions)
         if has_reductions:
             out_n = k_red * pack_bits if pack_bits is not None else k_red
@@ -1481,44 +1562,70 @@ class Circuit:
             gate_lines.append(f"    {ctype} g{gate.gate_id} = {expr};")
         gates_str = "\n".join(gate_lines)
 
+        def _c_float(v: float) -> str:
+            s = f"{v:.9g}"
+            if '.' not in s and 'e' not in s and 'E' not in s:
+                s += '.0'
+            return s + 'f'
+
         if has_reductions:
-            raw_assigns = "\n".join(
-                f"    raw[{k}] = {expr_of(gid)};"
-                for k, gid in enumerate(self.output_ids)
-            )
+            def _assign(dest: str, sr: SumReduction, s_expr: str) -> str:
+                if is_int_red:
+                    b = int(round(sr.beta))
+                    return f"{dest} = {s_expr}{f' + {b}' if b else ''};"
+                return f"{dest} = ((float){s_expr} + {_c_float(sr.beta)}) / {_c_float(sr.tau)};"
+
             if pack_bits is None:
-                reduction_loops = "\n".join(
-                    f"    {{\n"
-                    f"        int s = 0;\n"
-                    f"        for (int i = {offsets[j]}; i < {offsets[j+1]}; i++) s += (int)raw[i];\n"
-                    f"        out[{j}] = ((float)s + {sr.beta}f) / {sr.tau}f;\n"
-                    f"    }}"
-                    for j, sr in enumerate(self.sum_reductions)
-                )
+                def _loop(j, sr):
+                    if offsets[j] == offsets[j + 1]:
+                        val = int(round(sr.beta)) if is_int_red else _c_float(sr.beta / sr.tau)
+                        return f"    out[{j}] = {val};"
+                    return (
+                        f"    {{\n"
+                        f"        int s = 0;\n"
+                        f"        for (int i = {offsets[j]}; i < {offsets[j+1]}; i++) s += (int)raw[i];\n"
+                        f"        {_assign(f'out[{j}]', sr, 's')}\n"
+                        f"    }}"
+                    )
+                reduction_loops = "\n".join(_loop(j, sr) for j, sr in enumerate(self.sum_reductions))
+                if n_out > 0:
+                    raw_assigns = "\n".join(
+                        f"    raw[{k}] = {expr_of(gid)};"
+                        for k, gid in enumerate(self.output_ids)
+                    )
+                    raw_section = f"\n    // --- raw outputs ---\n    bool raw[{n_out}];\n{raw_assigns}\n"
+                else:
+                    raw_section = ""
                 output_section = f"""
-
-    // --- raw outputs ---
-    bool raw[{n_out}];
-{raw_assigns}
-
+{raw_section}
     // --- sum reductions ---
 {reduction_loops}"""
             else:
+                def _loop_packed(j, sr):
+                    if offsets[j] == offsets[j + 1]:
+                        val = int(round(sr.beta)) if is_int_red else sr.beta / sr.tau
+                        return f"        out[p * {k_red} + {j}] = {val if is_int_red else _c_float(val)};"
+                    return (
+                        f"        {{\n"
+                        f"            int s = 0;\n"
+                        f"            for (int i = {offsets[j]}; i < {offsets[j+1]}; i++)"
+                        f" s += (int)((raw[i] >> p) & 1);\n"
+                        f"            {_assign(f'out[p * {k_red} + {j}]', sr, 's')}\n"
+                        f"        }}"
+                    )
                 reduction_loops = "\n".join(
-                    f"        {{\n"
-                    f"            int s = 0;\n"
-                    f"            for (int i = {offsets[j]}; i < {offsets[j+1]}; i++)"
-                    f" s += (int)((raw[i] >> p) & 1);\n"
-                    f"            out[p * {k_red} + {j}] = ((float)s + {sr.beta}f) / {sr.tau}f;\n"
-                    f"        }}"
-                    for j, sr in enumerate(self.sum_reductions)
+                    _loop_packed(j, sr) for j, sr in enumerate(self.sum_reductions)
                 )
+                if n_out > 0:
+                    raw_assigns = "\n".join(
+                        f"    raw[{k}] = {expr_of(gid)};"
+                        for k, gid in enumerate(self.output_ids)
+                    )
+                    raw_section = f"\n    // --- raw packed outputs ---\n    {ctype} raw[{n_out}];\n{raw_assigns}\n"
+                else:
+                    raw_section = ""
                 output_section = f"""
-
-    // --- raw packed outputs ---
-    {ctype} raw[{n_out}];
-{raw_assigns}
-
+{raw_section}
     // --- unpack + sum reductions per sample in pack ---
     for (int p = 0; p < {pack_bits}; p++) {{
 {reduction_loops}
@@ -1674,8 +1781,17 @@ void circuit_bench(
                     equal   = emit(GateOp.AND, equal, a_eq)
             return greater
 
-        # 1. Popcount for each SumReduction's input bits.
-        counts = [popcount(sr.input_ids) for sr in self.sum_reductions]
+        # 1. Popcount for each SumReduction's input bits, including any constant
+        # contribution that was folded into beta by constant_fold_sum_reductions.
+        # We add int(beta) CONST_TRUE wires so the comparators see the full sum;
+        # the subsequent simplify() will fold those constants back out of the adder.
+        def _bits_with_const(sr: SumReduction) -> list[int]:
+            bits = list(sr.input_ids)
+            ct = get_const_true()
+            bits.extend([ct] * int(round(sr.beta)))
+            return bits
+
+        counts = [popcount(_bits_with_const(sr)) for sr in self.sum_reductions]
 
         # 2. Pairwise comparisons: gt[(a, b)] = gate for "a strictly beats b", a > b.
         gt: dict[tuple[int, int], int] = {}
@@ -1846,26 +1962,42 @@ void circuit_bench(
             for sr in self.sum_reductions:
                 offsets.append(offsets[-1] + len(sr.input_ids))
 
-            reduction_comment = f"// {k_red} sum reduction(s) — scores_flat = {k_red} x 32-bit integer scores\n"
-            module_port = f"    output reg  [{k_red * 32 - 1}:0] scores_flat"
-            raw_assigns = "\n".join(
-                f"    assign raw[{k}] = {vexpr(gid)};"
-                for k, gid in enumerate(self.output_ids)
+            _dtype_bits = {
+                "float": 32, "uint8_t": 8, "uint16_t": 16,
+                "uint32_t": 32, "uint64_t": 64,
+            }
+            score_bits = _dtype_bits[SumReduction.infer_c_dtype(self.sum_reductions)]
+            reduction_comment = (
+                f"// {k_red} sum reduction(s) — scores_flat = {k_red} x {score_bits}-bit scores\n"
             )
+            module_port = f"    output reg  [{k_red * score_bits - 1}:0] scores_flat"
+
+            def _vsum(j, sr):
+                slot = f"scores_flat[{j}*{score_bits} +: {score_bits}]"
+                if offsets[j] == offsets[j + 1]:
+                    val = int(round(sr.beta)) if sr.tau == 1.0 else sr.beta / sr.tau
+                    return f"        s_{j} = 0;\n        {slot} = {val};"
+                return (
+                    f"        s_{j} = 0;\n"
+                    f"        for (i = {offsets[j]}; i < {offsets[j+1]}; i = i + 1)"
+                    f" s_{j} = s_{j} + raw[i];\n"
+                    f"        {slot} = s_{j};"
+                )
+
             sum_vars = ", ".join(f"s_{j}" for j in range(k_red))
-            sum_body = "\n".join(
-                f"        s_{j} = 0;\n"
-                f"        for (i = {offsets[j]}; i < {offsets[j+1]}; i = i + 1)"
-                f" s_{j} = s_{j} + raw[i];\n"
-                f"        scores_flat[{j}*32 +: 32] = s_{j};"
-                for j in range(k_red)
-            )
+            sum_body = "\n".join(_vsum(j, sr) for j, sr in enumerate(self.sum_reductions))
+
+            if n_out > 0:
+                raw_assigns = "\n".join(
+                    f"    assign raw[{k}] = {vexpr(gid)};"
+                    for k, gid in enumerate(self.output_ids)
+                )
+                raw_section = f"\n    // --- raw outputs ---\n    wire [{n_out - 1}:0] raw;\n{raw_assigns}\n"
+            else:
+                raw_section = ""
+
             output_section = f"""
-
-    // --- raw outputs ---
-    wire [{n_out - 1}:0] raw;
-{raw_assigns}
-
+{raw_section}
     // --- sum reductions (behavioral — synthesizer maps to carry chain) ---
     integer {sum_vars}, i;
     always @(*) begin
