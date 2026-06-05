@@ -106,7 +106,12 @@ class AnyLogicModel(nn.Module):
         # Flatten spatial dims only
         out = out.flatten(2)                                     # (B, 1, 64)
 
-        return out.squeeze(1)                                    # (B, 64)
+        out = out.squeeze(1)                                     # (B, 64)
+
+        out1 = out[:, :16].sum(dim=1, keepdim=True)               # (B, 1)
+        out2 = out[:, 16:].sum(dim=1, keepdim=True)               # (B, 1)
+
+        return torch.cat([out1, out2], dim=1)                      # (B, 2)
 
 
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
@@ -182,15 +187,15 @@ def test_c_codegen_group_sum_scores(model_cls):
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
-    assert circuit.output_reduction is not None
+    assert circuit.sum_reductions
 
-    r = circuit.output_reduction
+    k = len(circuit.sum_reductions)
     c_code = circuit.get_c_code()
 
-    # GroupSum is now inlined: circuit outputs float scores, no separate circuit_scores.
     assert "float   out[" in c_code
-    assert f"for (int j = 0; j < {r.k}; j++)" in c_code
-    assert "circuit_scores" not in c_code
+    assert "bool raw[" in c_code
+    assert c_code.count("// --- sum reductions ---") == 1
+    assert c_code.count("int s = 0;") == k
 
     # Verify it compiles cleanly.
     with tempfile.NamedTemporaryFile(suffix=".c", mode="w", delete=False) as tf:
@@ -204,7 +209,7 @@ def test_c_codegen_group_sum_scores(model_cls):
 
     # Verify scores match Python circuit.
     preds_python = circuit(x.reshape(1, -1))  # shape (1, k)
-    assert preds_python.shape[-1] == r.k
+    assert preds_python.shape[-1] == k
 
 
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
@@ -215,7 +220,7 @@ def test_turn_group_sum_into_argmax(model_cls):
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     circuit.simplify()
-    assert circuit.output_reduction is not None
+    assert circuit.sum_reductions
 
     # Scores from the original circuit.
     scores = circuit(x)
@@ -224,7 +229,7 @@ def test_turn_group_sum_into_argmax(model_cls):
 
     circuit.turn_group_sum_into_argmax()
     circuit.simplify()
-    assert circuit.output_reduction is None
+    assert not circuit.sum_reductions
 
     # One-hot from the converted circuit.
     one_hot = circuit(x)  # (8, k) bool
