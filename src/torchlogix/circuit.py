@@ -185,6 +185,7 @@ class Gate:
 
 @dataclass
 class SumReduction:
+    node_id:   int
     input_ids: list[int]
     tau:       float = 1.0
     beta:      float = 0.0
@@ -217,9 +218,13 @@ class Circuit:
     n_inputs:    int
     input_shape: list[int]          # original shape of the input tensor
     gates:       list[Gate] = field(default_factory=list)
-    output_ids:   list[int] = field(default_factory=list)   # flat, in order
+    outputs:     list[int] = field(default_factory=list)   # ordered node IDs (gates or SumReduction)
     output_shape: list[int] = field(default_factory=list)
-    sum_reductions: list[SumReduction] = field(default_factory=list)
+    sum_nodes:   list[SumReduction] = field(default_factory=list)
+
+    @property
+    def _sum_by_id(self) -> dict[int, SumReduction]:
+        return {sr.node_id: sr for sr in self.sum_nodes}
 
     # Registry for custom op handlers registered by downstream code (e.g. torchlogix layers).
     # Each entry: op_target -> fn(node, wire_map, circuit, next_id, gm, layer_idx) -> (next_id, layer_idx)
@@ -280,9 +285,12 @@ class Circuit:
 
         # node_name -> list[int]  (flat list of gate/input IDs produced by that node)
         wire_map: dict[str, list[int]] = {}
-        # Maps node name -> list of SumReduction nodes created from that sum, so
-        # that tau/beta scalar ops following a sum update only its own reductions.
-        _reduction_chain: dict[str, list[SumReduction]] = {}
+        # Maps node name -> list of node IDs (gate IDs or SumReduction node_ids).
+        # Used to track which nodes contribute to the circuit's final outputs,
+        # including mixed boolean + reduction chains.
+        _output_chain: dict[str, list[int]] = {}
+        # Maps SumReduction node_id -> SumReduction object for tau/beta mutation.
+        _sum_by_chain_id: dict[int, SumReduction] = {}
 
         nodes = list(gm.graph.nodes)
 
@@ -337,26 +345,20 @@ class Circuit:
             # ---- output ----
             if node.op == 'output':
                 ret = node.args[0]
-                if isinstance(ret, torch.fx.Node) and ret.name in _reduction_chain:
-                    # Float output: sum reductions determine the output
-                    circuit.sum_reductions = _reduction_chain[ret.name]
-                    circuit.output_shape   = [len(circuit.sum_reductions)]
-                elif isinstance(ret, torch.fx.Node) and ret.name in wire_map:
-                    circuit.output_ids   = wire_map[ret.name]
-                    circuit.output_shape = list(wire_map.get(f'__shape_{ret.name}',
-                                                             [len(circuit.output_ids)]))
+                def _collect(n):
+                    if not isinstance(n, torch.fx.Node):
+                        return []
+                    if n.name in _output_chain:
+                        return list(_output_chain[n.name])
+                    if n.name in wire_map:
+                        return list(wire_map[n.name])
+                    return []
+                if isinstance(ret, torch.fx.Node):
+                    circuit.outputs = _collect(ret)
                 elif isinstance(ret, (tuple, list)):
-                    out_ids = []
                     for r in ret:
-                        if isinstance(r, torch.fx.Node) and r.name in wire_map:
-                            out_ids.extend(wire_map[r.name])
-                    if out_ids:
-                        circuit.output_ids = out_ids
-                        if len(ret) == 1 and isinstance(ret[0], torch.fx.Node):
-                            shape = wire_map.get(f'__shape_{ret[0].name}', [len(out_ids)])
-                            circuit.output_shape = list(shape)
-                        else:
-                            circuit.output_shape = [len(out_ids)]
+                        circuit.outputs.extend(_collect(r))
+                circuit.output_shape = [len(circuit.outputs)]
                 i += 1
                 continue
 
@@ -511,8 +513,6 @@ class Circuit:
                 new_shape = node.args[1]
                 wire_map[node.name] = src_ids
                 wire_map[f'__shape_{node.name}'] = list(new_shape)
-                circuit.output_ids   = src_ids
-                circuit.output_shape = list(new_shape)
                 i += 1
                 continue
 
@@ -547,8 +547,6 @@ class Circuit:
                 flattened = id_tensor.flatten(start_dim, end_dim)
                 wire_map[node.name] = [int(x) for x in flattened.flatten().tolist()]
                 wire_map[f'__shape_{node.name}'] = list(flattened.shape)
-                circuit.output_ids   = wire_map[node.name]
-                circuit.output_shape = list(flattened.shape)
                 i += 1
                 continue
 
@@ -633,19 +631,34 @@ class Circuit:
                 continue
 
             # ----------------------------------------------------------------
-            # aten.cat  ->  concatenate ID tensors along a dimension
-            # Float variant: if all inputs are sum-reduction outputs, merge chains.
-            # Boolean variant: concatenate gate ID tensors as usual.
+            # aten.cat  ->  concatenate ID tensors along a dimension.
+            # Both wire_map (gate IDs) and _output_chain (any node IDs) are
+            # dict[str, list[int]], so mixing is handled uniformly: collect IDs
+            # from whichever dict knows each input, in order.
             # ----------------------------------------------------------------
             if tgt == torch.ops.aten.cat.default:
                 cat_nodes = node.args[0]
                 dim = node.args[1] if len(node.args) > 1 else 0
-                if all(isinstance(n2, torch.fx.Node) and n2.name in _reduction_chain
-                       for n2 in cat_nodes):
-                    combined: list[SumReduction] = []
+                # Check whether any input is in _output_chain (has sum nodes)
+                has_output_chain = any(
+                    isinstance(n2, torch.fx.Node) and n2.name in _output_chain
+                    for n2 in cat_nodes
+                )
+                if has_output_chain:
+                    # Unified path: mix gate IDs and sum-node IDs freely
+                    combined: list[int] = []
+                    ok = True
                     for n2 in cat_nodes:
-                        combined.extend(_reduction_chain[n2.name])
-                    _reduction_chain[node.name] = combined
+                        if not isinstance(n2, torch.fx.Node):
+                            ok = False; break
+                        if n2.name in _output_chain:
+                            combined.extend(_output_chain[n2.name])
+                        elif n2.name in wire_map:
+                            combined.extend(wire_map[n2.name])
+                        else:
+                            ok = False; break
+                    if ok:
+                        _output_chain[node.name] = combined
                 else:
                     id_tensors = []
                     ok = True
@@ -854,17 +867,17 @@ class Circuit:
                         x_ids = resolve(x_node)
                         id_tensor = torch.tensor(x_ids, dtype=torch.long).reshape(x_shape)
                         flat_outer = id_tensor.reshape(-1, x_shape[-1])
-                        new_reductions = [
-                            SumReduction(input_ids=[int(v) for v in row])
-                            for row in flat_outer
-                        ]
-                        circuit.sum_reductions.extend(new_reductions)
-                        # Track gate IDs for dead-gate elimination; don't add to
-                        # wire_map since this node's output is float, not boolean.
-                        for gid in x_ids:
-                            if gid not in circuit.output_ids:
-                                circuit.output_ids.append(gid)
-                        _reduction_chain[node.name] = new_reductions
+                        new_sr_ids = []
+                        for row in flat_outer:
+                            sr = SumReduction(
+                                node_id=next_id,
+                                input_ids=[int(v) for v in row],
+                            )
+                            circuit.sum_nodes.append(sr)
+                            _sum_by_chain_id[next_id] = sr
+                            new_sr_ids.append(next_id)
+                            next_id += 1
+                        _output_chain[node.name] = new_sr_ids
                 i += 1
                 continue
 
@@ -875,10 +888,10 @@ class Circuit:
                     shape = wire_map.get(f'__shape_{src.name}')
                     if shape is not None:
                         wire_map[f'__shape_{node.name}'] = list(shape)
-                    if src.name in _reduction_chain:
-                        _reduction_chain[node.name] = _reduction_chain[src.name]
-                elif isinstance(src, torch.fx.Node) and src.name in _reduction_chain:
-                    _reduction_chain[node.name] = _reduction_chain[src.name]
+                    if src.name in _output_chain:
+                        _output_chain[node.name] = _output_chain[src.name]
+                elif isinstance(src, torch.fx.Node) and src.name in _output_chain:
+                    _output_chain[node.name] = _output_chain[src.name]
                 i += 1
                 continue
 
@@ -891,18 +904,21 @@ class Circuit:
             )
             if tgt in _SCALAR_OPS:
                 x_node = node.args[0]
-                if (isinstance(x_node, torch.fx.Node) and x_node.name in _reduction_chain):
-                    chain_reductions = _reduction_chain[x_node.name]
+                if (isinstance(x_node, torch.fx.Node) and x_node.name in _output_chain):
+                    chain_ids = _output_chain[x_node.name]
                     scalar = node.args[1]
                     if isinstance(scalar, (int, float)):
-                        for sr in chain_reductions:
+                        for sr_id in chain_ids:
+                            sr = _sum_by_chain_id.get(sr_id)
+                            if sr is None:
+                                continue
                             if tgt in (torch.ops.aten.add.Tensor, torch.ops.aten.add.Scalar):
                                 sr.beta += float(scalar)
                             elif tgt in (torch.ops.aten.div.Tensor, torch.ops.aten.div.Scalar):
                                 sr.tau *= float(scalar)
                             elif tgt in (torch.ops.aten.mul.Tensor, torch.ops.aten.mul.Scalar):
                                 sr.tau /= float(scalar)
-                    _reduction_chain[node.name] = chain_reductions
+                    _output_chain[node.name] = chain_ids
                     i += 1
                     continue
 
@@ -920,37 +936,13 @@ class Circuit:
             # ---- skip everything else (sym_size, asserts, etc.) ----
             i += 1
 
-        # Fallback: resolve output_ids from the output node if not already set.
-        if not circuit.output_ids:
-            for node in nodes:
-                if node.op == 'output':
-                    ret = node.args[0]
-                    if isinstance(ret, torch.fx.Node) and ret.name in wire_map:
-                        circuit.output_ids   = wire_map[ret.name]
-                        circuit.output_shape = list(wire_map.get(f'__shape_{ret.name}',
-                                                                 [len(circuit.output_ids)]))
-                    elif isinstance(ret, (tuple, list)):
-                        out_ids = []
-                        for r in ret:
-                            if isinstance(r, torch.fx.Node) and r.name in wire_map:
-                                out_ids.extend(wire_map[r.name])
-                        if out_ids:
-                            circuit.output_ids = out_ids
-                            if len(ret) == 1 and isinstance(ret[0], torch.fx.Node):
-                                shape = wire_map.get(f'__shape_{ret[0].name}',
-                                                    [len(out_ids)])
-                                circuit.output_shape = list(shape)
-                            else:
-                                circuit.output_shape = [len(out_ids)]
-                    break
-
         return circuit
     
 
     def simplify(self, n_max=1000) -> None:
         for _ in range(n_max):
             before_gates = len(self.gates)
-            before_sr    = sum(len(sr.input_ids) for sr in self.sum_reductions)
+            before_sr    = sum(len(sr.input_ids) for sr in self.sum_nodes)
             self.constant_fold_gates()
             self.constant_fold_sum_reductions()
             self.bypass_wires()
@@ -958,7 +950,7 @@ class Circuit:
             self.dedup()
             self.eliminate_dead_gates()
             after_gates = len(self.gates)
-            after_sr    = sum(len(sr.input_ids) for sr in self.sum_reductions)
+            after_sr    = sum(len(sr.input_ids) for sr in self.sum_nodes)
             if after_gates == before_gates and after_sr == before_sr:
                 break
 
@@ -981,9 +973,14 @@ class Circuit:
         gate_by_id = {g.gate_id: g for g in self.gates}
 
         # Count uses of each gate so we only absorb single-use NOTs.
+        sum_by_id = self._sum_by_id
         use_count: dict[int, int] = {}
-        for gid in self.output_ids:
-            use_count[gid] = use_count.get(gid, 0) + 1
+        for out_id in self.outputs:
+            if out_id not in sum_by_id:
+                use_count[out_id] = use_count.get(out_id, 0) + 1
+        for sr in self.sum_nodes:
+            for gid in sr.input_ids:
+                use_count[gid] = use_count.get(gid, 0) + 1
         for g in self.gates:
             for inp in (g.in0, g.in1):
                 if inp >= 0:
@@ -1025,11 +1022,15 @@ class Circuit:
         """
         gate_by_id = {g.gate_id: g for g in self.gates}
 
-        # Backward BFS from outputs (boolean) and all sum reduction inputs
+        # Backward BFS: seed from boolean outputs and all sum-node input_ids
+        sum_by_id = self._sum_by_id
         visited: set[int] = set()
-        queue = list(self.output_ids)
-        for sr in self.sum_reductions:
-            queue.extend(sr.input_ids)
+        queue: list[int] = []
+        for out_id in self.outputs:
+            if out_id in sum_by_id:
+                queue.extend(sum_by_id[out_id].input_ids)
+            else:
+                queue.append(out_id)
         while queue:
             gid = queue.pop()
             if gid in visited or gid < self.n_inputs:
@@ -1056,10 +1057,10 @@ class Circuit:
         output_ids is rebuilt from the remaining live inputs so that
         eliminate_dead_gates can remove the constant gates that were folded away.
         """
-        if not self.sum_reductions:
+        if not self.sum_nodes:
             return
         gate_by_id = {g.gate_id: g for g in self.gates}
-        for sr in self.sum_reductions:
+        for sr in self.sum_nodes:
             live = []
             for gid in sr.input_ids:
                 g = gate_by_id.get(gid)
@@ -1070,14 +1071,7 @@ class Circuit:
                 else:
                     live.append(gid)
             sr.input_ids = live
-        # Rebuild output_ids so dead-gate elimination sees the updated live set.
-        seen: set[int] = set()
-        self.output_ids = []
-        for sr in self.sum_reductions:
-            for gid in sr.input_ids:
-                if gid not in seen:
-                    seen.add(gid)
-                    self.output_ids.append(gid)
+        # No output_ids to rebuild: eliminate_dead_gates reads from self.outputs directly.
 
     def constant_fold_gates(self) -> None:
         """
@@ -1174,10 +1168,11 @@ class Circuit:
                 g.in1 = resolve(g.in1)
 
         # ------------------------------------------------------------------
-        # Rewrite outputs and sum reduction inputs
+        # Rewrite outputs and sum-node input_ids.
+        # resolve() only aliases gate IDs; sum-node IDs pass through unchanged.
         # ------------------------------------------------------------------
-        self.output_ids = [resolve(gid) for gid in self.output_ids]
-        for sr in self.sum_reductions:
+        self.outputs = [resolve(oid) for oid in self.outputs]
+        for sr in self.sum_nodes:
             sr.input_ids = [resolve(gid) for gid in sr.input_ids]
 
         # ------------------------------------------------------------------
@@ -1266,10 +1261,11 @@ class Circuit:
                 g.in0, g.in1 = g.in1, g.in0
 
         # ------------------------------------------------------------------
-        # Rewrite outputs and sum reduction inputs
+        # Rewrite outputs and sum-node input_ids.
+        # resolve() only aliases gate IDs; sum-node IDs pass through unchanged.
         # ------------------------------------------------------------------
-        self.output_ids = [resolve(gid) for gid in self.output_ids]
-        for sr in self.sum_reductions:
+        self.outputs = [resolve(oid) for oid in self.outputs]
+        for sr in self.sum_nodes:
             sr.input_ids = [resolve(gid) for gid in sr.input_ids]
 
         # ------------------------------------------------------------------
@@ -1316,7 +1312,8 @@ class Circuit:
             "uint64_t": ctypes.c_uint64,
         }
         in_ctype  = _ctype_map[pack_bits]
-        out_ctype = _reduction_ctype_map[SumReduction.infer_c_dtype(self.sum_reductions)] if self.sum_reductions else in_ctype
+        red_outs  = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
+        out_ctype = _reduction_ctype_map[SumReduction.infer_c_dtype(red_outs)] if red_outs else in_ctype
         lib = ctypes.CDLL(so_path)
         lib.circuit.argtypes = [
             ctypes.POINTER(in_ctype),
@@ -1340,9 +1337,9 @@ class Circuit:
         Uses the compiled C library when available (after compile()), otherwise
         evaluates the gate list in Python.
 
-        When sum_reductions is non-empty the circuit returns a float tensor of
-        shape (batch, len(sum_reductions)); otherwise returns a bool tensor of
-        shape (batch, len(output_ids)).
+        Returns a tensor of shape (batch, len(outputs)). The dtype is determined
+        by SumReduction.infer_c_dtype over the output sum nodes: uint{N}_t when
+        all tau=1, float when tau≠1, bool when there are no sum nodes in outputs.
 
         Attention: For a fair performance comparison, the compiled code does not
         do type conversions or looping over batches. Instead, it expects numpy
@@ -1351,6 +1348,9 @@ class Circuit:
         import ctypes
 
         batch_size = input.shape[0]
+        sum_by_id  = self._sum_by_id
+        red_outs   = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
+        has_reductions = bool(red_outs)
 
         if use_compiled:
 
@@ -1363,13 +1363,12 @@ class Circuit:
                 "uint32_t": (np.uint32,   ctypes.c_uint32),
                 "uint64_t": (np.uint64,   ctypes.c_uint64),
             }
-            if not self.sum_reductions:
-                n_out = len(self.output_ids)
+            n_out = len(self.outputs)
+            if not has_reductions:
                 np_dtype_out = np.bool_
                 c_dtype_out = ctypes.c_bool
             else:
-                n_out = len(self.sum_reductions)
-                np_dtype_out, c_dtype_out = _reduction_dtype_map[SumReduction.infer_c_dtype(self.sum_reductions)]
+                np_dtype_out, c_dtype_out = _reduction_dtype_map[SumReduction.infer_c_dtype(red_outs)]
 
             if not hasattr(self, '_lib'):
                 raise RuntimeError("Circuit not compiled yet. Call compile() first.")
@@ -1408,7 +1407,7 @@ class Circuit:
                                  .sum(axis=1, dtype=np.uint64).astype(_np_dtype)  # (n_iter, n_in)
                 in_arr = packed_in.ctypes.data_as(ctypes.POINTER(_CType))
 
-                if self.sum_reductions:
+                if has_reductions:
                     out_np = np.zeros(n_iter * n_out * pack, dtype=np_dtype_out)
                     out_arr = out_np.ctypes.data_as(ctypes.POINTER(c_dtype_out))
                     self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
@@ -1436,7 +1435,7 @@ class Circuit:
                     gate_vals[g.gate_id] = _eval_gate_op(g.op, a, b)
                 return gate_vals
 
-            if self.sum_reductions:
+            if has_reductions:
                 _torch_dtype_map = {
                     "float":    torch.float32,
                     "uint8_t":  torch.uint8,
@@ -1444,21 +1443,25 @@ class Circuit:
                     "uint32_t": torch.int32,
                     "uint64_t": torch.int64,
                 }
-                out_dtype = _torch_dtype_map[SumReduction.infer_c_dtype(self.sum_reductions)]
-                results = torch.zeros(batch_size, len(self.sum_reductions), dtype=out_dtype)
+                out_dtype = _torch_dtype_map[SumReduction.infer_c_dtype(red_outs)]
                 is_int = out_dtype != torch.float32
+                results = torch.zeros(batch_size, len(self.outputs), dtype=out_dtype)
                 for i in range(batch_size):
                     gate_vals = _eval_gates(input[i])
-                    for j, sr in enumerate(self.sum_reductions):
-                        s = sum(int(gate_vals.get(gid, False)) for gid in sr.input_ids)
-                        results[i, j] = s + int(round(sr.beta)) if is_int else (s + sr.beta) / sr.tau
+                    for j, out_id in enumerate(self.outputs):
+                        sr = sum_by_id.get(out_id)
+                        if sr is not None:
+                            s = sum(int(gate_vals.get(gid, False)) for gid in sr.input_ids)
+                            results[i, j] = s + int(round(sr.beta)) if is_int else (s + sr.beta) / sr.tau
+                        else:
+                            results[i, j] = int(gate_vals.get(out_id, False))
                 return results
 
-            raw = torch.zeros(batch_size, len(self.output_ids), dtype=torch.bool)
+            raw = torch.zeros(batch_size, len(self.outputs), dtype=torch.bool)
             for i in range(batch_size):
                 gate_vals = _eval_gates(input[i])
-                for k, gid in enumerate(self.output_ids):
-                    raw[i, k] = gate_vals[gid]
+                for k, out_id in enumerate(self.outputs):
+                    raw[i, k] = gate_vals.get(out_id, False)
             return raw
 
 
@@ -1486,7 +1489,32 @@ class Circuit:
 
         n_in  = self.n_inputs
         n_g   = len(self.gates)
-        n_out = len(self.output_ids)
+        # Derived output quantities
+        sum_by_id  = self._sum_by_id
+        n_total    = len(self.outputs)   # total output slots
+
+        # Build raw[] layout: sum-reduction input gate IDs in outputs order
+        raw_ids: list[int] = []
+        sum_raw_offset: dict[int, tuple[int, int]] = {}  # node_id -> (start, end) in raw[]
+        for out_id in self.outputs:
+            sr = sum_by_id.get(out_id)
+            if sr is not None and out_id not in sum_raw_offset:
+                start = len(raw_ids)
+                raw_ids.extend(sr.input_ids)
+                sum_raw_offset[out_id] = (start, len(raw_ids))
+        n_raw = len(raw_ids)
+
+        red_outs      = [sum_by_id[oid] for oid in self.outputs if oid in sum_by_id]
+        has_reductions = bool(red_outs)
+        red_dtype      = SumReduction.infer_c_dtype(red_outs) if has_reductions else "bool"
+        out_ctype      = red_dtype if has_reductions else ctype
+        is_int_red     = has_reductions and red_dtype != "float"
+        # Packed boolean-only circuits use bit-packed output (one word per output slot).
+        # Circuits with reductions use per-sample layout (pack_bits values per slot).
+        if has_reductions and pack_bits is not None:
+            out_n = n_total * pack_bits
+        else:
+            out_n = n_total
 
         gate_by_id = {g.gate_id: g for g in self.gates}
 
@@ -1500,9 +1528,14 @@ class Circuit:
                 for dep in (g.in0, g.in1):
                     if dep >= n_in:
                         use_count[dep] = use_count.get(dep, 0) + 1
-            for oid in self.output_ids:
-                if oid >= n_in:
-                    use_count[oid] = use_count.get(oid, 0) + 1
+            for out_id in self.outputs:
+                sr = sum_by_id.get(out_id)
+                if sr is not None:
+                    for gid in sr.input_ids:
+                        if gid >= n_in:
+                            use_count[gid] = use_count.get(gid, 0) + 1
+                elif out_id >= n_in:
+                    use_count[out_id] = use_count.get(out_id, 0) + 1
 
         def should_inline(gid: int) -> bool:
             return inline_single_use and use_count.get(gid, 0) <= 1
@@ -1530,21 +1563,6 @@ class Circuit:
             return result
 
         pack_str = f"  pack_bits={pack_bits}" if pack_bits else ""
-        has_reductions = bool(self.sum_reductions)
-        red_dtype  = SumReduction.infer_c_dtype(self.sum_reductions) if has_reductions else "float"
-        out_ctype  = red_dtype if has_reductions else ctype
-        is_int_red = has_reductions and red_dtype != "float"
-        k_red = len(self.sum_reductions)
-        if has_reductions:
-            out_n = k_red * pack_bits if pack_bits is not None else k_red
-        else:
-            out_n = n_out
-
-        # Cumulative offsets of each SumReduction's slice in the raw[] array.
-        # raw[] is laid out as: [sr0_bits..., sr1_bits..., ...]
-        offsets: list[int] = [0]
-        for sr in self.sum_reductions:
-            offsets.append(offsets[-1] + len(sr.input_ids))
 
         gate_lines = []
         current_layer = -1
@@ -1568,77 +1586,99 @@ class Circuit:
                 s += '.0'
             return s + 'f'
 
-        if has_reductions:
-            def _assign(dest: str, sr: SumReduction, s_expr: str) -> str:
-                if is_int_red:
-                    b = int(round(sr.beta))
-                    return f"{dest} = {s_expr}{f' + {b}' if b else ''};"
-                return f"{dest} = ((float){s_expr} + {_c_float(sr.beta)}) / {_c_float(sr.tau)};"
+        def _sr_assign(dest: str, sr: SumReduction, s_expr: str) -> str:
+            if is_int_red:
+                b = int(round(sr.beta))
+                return f"{dest} = {s_expr}{f' + {b}' if b else ''};"
+            return f"{dest} = ((float){s_expr} + {_c_float(sr.beta)}) / {_c_float(sr.tau)};"
 
-            if pack_bits is None:
-                def _loop(j, sr):
-                    if offsets[j] == offsets[j + 1]:
+        if pack_bits is None:
+            # Non-packed: one output value per output node
+            out_lines = []
+            for j, out_id in enumerate(self.outputs):
+                sr = sum_by_id.get(out_id)
+                if sr is not None:
+                    start, end = sum_raw_offset[out_id]
+                    if start == end:
                         val = int(round(sr.beta)) if is_int_red else _c_float(sr.beta / sr.tau)
-                        return f"    out[{j}] = {val};"
-                    return (
-                        f"    {{\n"
-                        f"        int s = 0;\n"
-                        f"        for (int i = {offsets[j]}; i < {offsets[j+1]}; i++) s += (int)raw[i];\n"
-                        f"        {_assign(f'out[{j}]', sr, 's')}\n"
-                        f"    }}"
-                    )
-                reduction_loops = "\n".join(_loop(j, sr) for j, sr in enumerate(self.sum_reductions))
-                if n_out > 0:
-                    raw_assigns = "\n".join(
-                        f"    raw[{k}] = {expr_of(gid)};"
-                        for k, gid in enumerate(self.output_ids)
-                    )
-                    raw_section = f"\n    // --- raw outputs ---\n    bool raw[{n_out}];\n{raw_assigns}\n"
+                        out_lines.append(f"    out[{j}] = {val};")
+                    else:
+                        assign = _sr_assign(f"out[{j}]", sr, "s")
+                        out_lines.append(
+                            f"    {{\n"
+                            f"        int s = 0;\n"
+                            f"        for (int i = {start}; i < {end}; i++) s += (int)raw[i];\n"
+                            f"        {assign}\n"
+                            f"    }}"
+                        )
                 else:
-                    raw_section = ""
-                output_section = f"""
-{raw_section}
-    // --- sum reductions ---
-{reduction_loops}"""
-            else:
-                def _loop_packed(j, sr):
-                    if offsets[j] == offsets[j + 1]:
-                        val = int(round(sr.beta)) if is_int_red else sr.beta / sr.tau
-                        return f"        out[p * {k_red} + {j}] = {val if is_int_red else _c_float(val)};"
-                    return (
-                        f"        {{\n"
-                        f"            int s = 0;\n"
-                        f"            for (int i = {offsets[j]}; i < {offsets[j+1]}; i++)"
-                        f" s += (int)((raw[i] >> p) & 1);\n"
-                        f"            {_assign(f'out[p * {k_red} + {j}]', sr, 's')}\n"
-                        f"        }}"
-                    )
-                reduction_loops = "\n".join(
-                    _loop_packed(j, sr) for j, sr in enumerate(self.sum_reductions)
+                    cast = f"({out_ctype})" if has_reductions else ""
+                    out_lines.append(f"    out[{j}] = {cast}{expr_of(out_id)};")
+            out_section = "\n".join(out_lines)
+
+            if n_raw > 0:
+                raw_assigns = "\n".join(
+                    f"    raw[{k}] = {expr_of(gid)};"
+                    for k, gid in enumerate(raw_ids)
                 )
-                if n_out > 0:
-                    raw_assigns = "\n".join(
-                        f"    raw[{k}] = {expr_of(gid)};"
-                        for k, gid in enumerate(self.output_ids)
-                    )
-                    raw_section = f"\n    // --- raw packed outputs ---\n    {ctype} raw[{n_out}];\n{raw_assigns}\n"
-                else:
-                    raw_section = ""
-                output_section = f"""
+                raw_section = f"\n    // --- raw inputs to sum reductions ---\n    bool raw[{n_raw}];\n{raw_assigns}\n"
+            else:
+                raw_section = ""
+            output_section = f"""
 {raw_section}
-    // --- unpack + sum reductions per sample in pack ---
-    for (int p = 0; p < {pack_bits}; p++) {{
-{reduction_loops}
-    }}"""
-        else:
+    // --- outputs ---
+{out_section}"""
+        elif not has_reductions:
+            # Packed boolean-only: each out[j] is a bit-packed word (N samples in N bits).
+            # This is the classical SIMD circuit evaluation format.
             out_assigns = "\n".join(
-                f"    out[{k}] = {expr_of(gid)};"
-                for k, gid in enumerate(self.output_ids)
+                f"    out[{j}] = {expr_of(out_id)};"
+                for j, out_id in enumerate(self.outputs)
             )
             output_section = f"""
 
-    // --- outputs ---
+    // --- packed outputs ---
 {out_assigns}"""
+        else:
+            # Packed with reductions (or mixed): per-sample layout out[p * n_total + j].
+            pack_lines = []
+            for j, out_id in enumerate(self.outputs):
+                sr = sum_by_id.get(out_id)
+                if sr is not None:
+                    start, end = sum_raw_offset[out_id]
+                    if start == end:
+                        val = int(round(sr.beta)) if is_int_red else sr.beta / sr.tau
+                        pack_lines.append(f"        out[p * {n_total} + {j}] = {val if is_int_red else _c_float(val)};")
+                    else:
+                        assign = _sr_assign(f"out[p * {n_total} + {j}]", sr, "s")
+                        pack_lines.append(
+                            f"        {{\n"
+                            f"            int s = 0;\n"
+                            f"            for (int i = {start}; i < {end}; i++)"
+                            f" s += (int)((raw[i] >> p) & 1);\n"
+                            f"            {assign}\n"
+                            f"        }}"
+                        )
+                else:
+                    pack_lines.append(
+                        f"        out[p * {n_total} + {j}] = ({out_ctype})(({expr_of(out_id)} >> p) & 1);"
+                    )
+            pack_section = "\n".join(pack_lines)
+
+            if n_raw > 0:
+                raw_assigns = "\n".join(
+                    f"    raw[{k}] = {expr_of(gid)};"
+                    for k, gid in enumerate(raw_ids)
+                )
+                raw_section = f"\n    // --- raw packed inputs to sum reductions ---\n    {ctype} raw[{n_raw}];\n{raw_assigns}\n"
+            else:
+                raw_section = ""
+            output_section = f"""
+{raw_section}
+    // --- outputs: sample p at out[p * {n_total} + j] ---
+    for (int p = 0; p < {pack_bits}; p++) {{
+{pack_section}
+    }}"""
 
         return f"""\
 // Auto-generated circuit — do not edit
@@ -1649,7 +1689,7 @@ class Circuit:
 
 // Input shape:  {self.input_shape}
 // Output shape: {self.output_shape}
-// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_out}{pack_str}
+// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_total}{pack_str}
 
 void circuit(
     const {ctype} in[{n_in}],
@@ -1675,10 +1715,11 @@ void circuit_bench(
         lowest-index class. After this call output_reduction is None and the
         circuit has k boolean outputs (one-hot: winning class bit is 1).
         """
-        if not self.sum_reductions:
-            raise ValueError("Circuit has no sum_reductions to convert")
+        red_outs = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
+        if not red_outs:
+            raise ValueError("Circuit has no sum-reduction outputs to convert")
 
-        k = len(self.sum_reductions)
+        k = len(red_outs)
         argmax_layer = max((g.layer for g in self.gates), default=-1) + 1
         next_id = max((g.gate_id for g in self.gates), default=self.n_inputs - 1) + 1
 
@@ -1791,7 +1832,7 @@ void circuit_bench(
             bits.extend([ct] * int(round(sr.beta)))
             return bits
 
-        counts = [popcount(_bits_with_const(sr)) for sr in self.sum_reductions]
+        counts = [popcount(_bits_with_const(sr)) for sr in red_outs]
 
         # 2. Pairwise comparisons: gt[(a, b)] = gate for "a strictly beats b", a > b.
         gt: dict[tuple[int, int], int] = {}
@@ -1816,9 +1857,11 @@ void circuit_bench(
                     result = emit(GateOp.AND, result, c)
                 out_ids.append(result)
 
-        self.output_ids       = out_ids
-        self.output_shape     = [k]
-        self.sum_reductions   = []
+        # Replace reduction output IDs in self.outputs with argmax gate IDs
+        red_id_to_argmax = {sr.node_id: out_ids[j] for j, sr in enumerate(red_outs)}
+        self.outputs = [red_id_to_argmax.get(oid, oid) for oid in self.outputs]
+        self.output_shape = [k]
+        self.sum_nodes = []
 
 
 
@@ -1829,7 +1872,7 @@ void circuit_bench(
         d = {
             'n_inputs': self.n_inputs,
             'input_shape': self.input_shape,
-            'output_ids': self.output_ids,
+            'outputs': self.outputs,
             'output_shape': self.output_shape,
             'gates': [
                 {
@@ -1843,20 +1886,21 @@ void circuit_bench(
                 for g in self.gates
             ],
         }
-        if self.sum_reductions:
-            d['sum_reductions'] = [
-                {'input_ids': sr.input_ids, 'tau': sr.tau, 'beta': sr.beta}
-                for sr in self.sum_reductions
+        if self.sum_nodes:
+            d['sum_nodes'] = [
+                {'node_id': sr.node_id, 'input_ids': sr.input_ids,
+                 'tau': sr.tau, 'beta': sr.beta}
+                for sr in self.sum_nodes
             ]
         return d
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> Circuit:
         """
         Create a Circuit instance from a (JSON-deserialized) dictionary.
         """
         circuit = cls(n_inputs=data['n_inputs'], input_shape=data['input_shape'])
-        circuit.output_ids = data.get('output_ids', [])
+        circuit.outputs = data.get('outputs', [])
         circuit.output_shape = data.get('output_shape', [])
         for g_data in data.get('gates', []):
             g = Gate(
@@ -1868,14 +1912,15 @@ void circuit_bench(
                 node_idx=g_data.get('node_idx', -1),
             )
             circuit.gates.append(g)
-        if 'sum_reductions' in data:
-            circuit.sum_reductions = [
+        if 'sum_nodes' in data:
+            circuit.sum_nodes = [
                 SumReduction(
+                    node_id=sr['node_id'],
                     input_ids=sr['input_ids'],
                     tau=sr.get('tau', 1.0),
                     beta=sr.get('beta', 0.0),
                 )
-                for sr in data['sum_reductions']
+                for sr in data['sum_nodes']
             ]
         return circuit
     
@@ -1901,9 +1946,24 @@ void circuit_bench(
         inline_single_use=True: single-use gates are folded into their parent
         expression rather than named wires (same semantics as in emit_c).
         """
-        n_in  = self.n_inputs
-        n_out = len(self.output_ids)
+        n_in      = self.n_inputs
+        n_total   = len(self.outputs)
+        sum_by_id = self._sum_by_id
         gate_by_id = {g.gate_id: g for g in self.gates}
+
+        # Build raw[] layout for sum reductions (same as get_c_code)
+        raw_ids: list[int] = []
+        sum_raw_offset_v: dict[int, tuple[int, int]] = {}
+        for out_id in self.outputs:
+            sr = sum_by_id.get(out_id)
+            if sr is not None and out_id not in sum_raw_offset_v:
+                start = len(raw_ids)
+                raw_ids.extend(sr.input_ids)
+                sum_raw_offset_v[out_id] = (start, len(raw_ids))
+        n_raw = len(raw_ids)
+
+        red_outs  = [sum_by_id[oid] for oid in self.outputs if oid in sum_by_id]
+        has_red   = bool(red_outs)
 
         # ---- use-count for optional inlining --------------------------------
         use_count: dict[int, int] = {}
@@ -1913,9 +1973,14 @@ void circuit_bench(
                 for dep in (g.in0, g.in1):
                     if dep >= n_in:
                         use_count[dep] = use_count.get(dep, 0) + 1
-            for oid in self.output_ids:
-                if oid >= n_in:
-                    use_count[oid] = use_count.get(oid, 0) + 1
+            for out_id in self.outputs:
+                sr = sum_by_id.get(out_id)
+                if sr is not None:
+                    for gid in sr.input_ids:
+                        if gid >= n_in:
+                            use_count[gid] = use_count.get(gid, 0) + 1
+                elif out_id >= n_in:
+                    use_count[out_id] = use_count.get(out_id, 0) + 1
 
         def should_inline(gid: int) -> bool:
             return inline_single_use and use_count.get(gid, 0) <= 1
@@ -1956,59 +2021,64 @@ void circuit_bench(
             gate_lines.append(f"    wire g{gate.gate_id} = {expr};")
         gates_str = "\n".join(gate_lines)
 
-        if self.sum_reductions:
-            k_red = len(self.sum_reductions)
-            offsets: list[int] = [0]
-            for sr in self.sum_reductions:
-                offsets.append(offsets[-1] + len(sr.input_ids))
-
+        if has_red:
             _dtype_bits = {
                 "float": 32, "uint8_t": 8, "uint16_t": 16,
                 "uint32_t": 32, "uint64_t": 64,
             }
-            score_bits = _dtype_bits[SumReduction.infer_c_dtype(self.sum_reductions)]
+            score_bits = _dtype_bits[SumReduction.infer_c_dtype(red_outs)]
             reduction_comment = (
-                f"// {k_red} sum reduction(s) — scores_flat = {k_red} x {score_bits}-bit scores\n"
+                f"// {n_total} output(s) — scores_flat = {n_total} x {score_bits}-bit values\n"
             )
-            module_port = f"    output reg  [{k_red * score_bits - 1}:0] scores_flat"
+            module_port = f"    output reg  [{n_total * score_bits - 1}:0] scores_flat"
 
-            def _vsum(j, sr):
+            # Build always block body: one entry per output in order
+            sv_lines = []
+            sv_vars = set()
+            for j, out_id in enumerate(self.outputs):
+                sr = sum_by_id.get(out_id)
                 slot = f"scores_flat[{j}*{score_bits} +: {score_bits}]"
-                if offsets[j] == offsets[j + 1]:
-                    val = int(round(sr.beta)) if sr.tau == 1.0 else sr.beta / sr.tau
-                    return f"        s_{j} = 0;\n        {slot} = {val};"
-                return (
-                    f"        s_{j} = 0;\n"
-                    f"        for (i = {offsets[j]}; i < {offsets[j+1]}; i = i + 1)"
-                    f" s_{j} = s_{j} + raw[i];\n"
-                    f"        {slot} = s_{j};"
-                )
+                if sr is not None:
+                    sv_vars.add(f"s_{j}")
+                    start, end = sum_raw_offset_v[out_id]
+                    if start == end:
+                        val = int(round(sr.beta)) if sr.tau == 1.0 else sr.beta / sr.tau
+                        sv_lines.append(f"        s_{j} = 0;\n        {slot} = {val};")
+                    else:
+                        sv_lines.append(
+                            f"        s_{j} = 0;\n"
+                            f"        for (i = {start}; i < {end}; i = i + 1)"
+                            f" s_{j} = s_{j} + raw[i];\n"
+                            f"        {slot} = s_{j};"
+                        )
+                else:
+                    sv_lines.append(f"        {slot} = {vexpr(out_id)};")
 
-            sum_vars = ", ".join(f"s_{j}" for j in range(k_red))
-            sum_body = "\n".join(_vsum(j, sr) for j, sr in enumerate(self.sum_reductions))
+            sum_vars_decl = ", ".join(sorted(sv_vars)) + ", i" if sv_vars else "i"
+            sum_body = "\n".join(sv_lines)
 
-            if n_out > 0:
+            if n_raw > 0:
                 raw_assigns = "\n".join(
                     f"    assign raw[{k}] = {vexpr(gid)};"
-                    for k, gid in enumerate(self.output_ids)
+                    for k, gid in enumerate(raw_ids)
                 )
-                raw_section = f"\n    // --- raw outputs ---\n    wire [{n_out - 1}:0] raw;\n{raw_assigns}\n"
+                raw_section = f"\n    // --- raw inputs to sum reductions ---\n    wire [{n_raw - 1}:0] raw;\n{raw_assigns}\n"
             else:
                 raw_section = ""
 
             output_section = f"""
 {raw_section}
-    // --- sum reductions (behavioral — synthesizer maps to carry chain) ---
-    integer {sum_vars}, i;
+    // --- outputs (behavioral — synthesizer maps to carry chain) ---
+    integer {sum_vars_decl};
     always @(*) begin
 {sum_body}
     end"""
         else:
             reduction_comment = ""
-            module_port = f"    output wire [{n_out - 1}:0] out"
+            module_port = f"    output wire [{n_total - 1}:0] out"
             out_assigns = "\n".join(
-                f"    assign out[{k}] = {vexpr(gid)};"
-                for k, gid in enumerate(self.output_ids)
+                f"    assign out[{k}] = {vexpr(out_id)};"
+                for k, out_id in enumerate(self.outputs)
             )
             output_section = f"""
 
@@ -2019,7 +2089,7 @@ void circuit_bench(
 // Auto-generated by circuit_ir — do not edit
 // Input shape:  {self.input_shape}
 // Output shape: {self.output_shape}
-// n_inputs={n_in}  n_gates={len(self.gates)}  n_outputs={n_out}
+// n_inputs={n_in}  n_gates={len(self.gates)}  n_outputs={n_total}
 
 {reduction_comment}module circuit (
     input  wire [{n_in - 1}:0] inp,

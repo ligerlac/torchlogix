@@ -12,23 +12,26 @@ from torchlogix.layers import (
     LogicDense,
     OrPooling2d,
     OrPooling3d,
+    LearnableBinarization
 )
 
 
 class DenseModel(nn.Sequential):
     def __init__(self):
         super().__init__(
+            LearnableBinarization(thresholds=[0.33, 0.66]),
             LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
             LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
         )
-        self.input_shape = (1000,)
+        self.input_shape = (500,)
 
 
 # inherit from sequential
 class ConvModel(nn.Sequential):
     def __init__(self):
         super().__init__(
-            LogicConv2d(in_dim=32, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2, parametrization_kwargs={"weight_init": "random"}),
+            LearnableBinarization(thresholds=[0.33, 0.66], one_per="channel", feature_dim=1),
+            LogicConv2d(in_dim=32, channels=6, num_kernels=8, receptive_field_size=3, tree_depth=2, parametrization_kwargs={"weight_init": "random"}),
             OrPooling2d(kernel_size=2, stride=2),
             nn.Flatten(),  # 8 × 15 x 15 = 1800
             LogicDense(1800, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
@@ -61,6 +64,46 @@ class BranchModel(nn.Module):
         x = self.group_sum(x)
         return x
     
+
+@pytest.mark.parametrize("model_class", [DenseModel, ConvModel, BranchModel])
+def test_eval_mode_equivalence(model_class):
+    x = torch.randn(1, *model_class().input_shape)
+
+    model = model_class()
+
+    # set params to extreme values such that relaxed and discrete version should be the same
+    for module in model.modules():
+        if isinstance(module, LearnableBinarization):
+            # low temperatures for binarization
+            module.temperature_sampling=1e-9
+            module.temperature_softplus=1e-9
+
+        if isinstance(module, LogicDense):
+            # pick random indeces to set to high values (give priority to certain gates, picked at random)
+            n_gates = module.weight.shape[0]
+            indices = torch.randint(0, 16, (n_gates,), device=module.weight.device)
+            rows = torch.arange(n_gates, device=module.weight.device)
+
+            with torch.no_grad():
+                module.weight[rows, indices] = 100
+
+        if isinstance(module, LogicConv2d):
+            for layer_weights in module.tree_weights:
+                n_kernels, n_inputs = layer_weights.data.shape[:2]
+                indices = torch.randint(
+                    0, 16,
+                    (n_kernels, n_inputs, 1),
+                    device=layer_weights.device
+                )
+                with torch.no_grad():
+                    layer_weights.scatter_(2, indices, 100)
+
+    out_train = model(x)
+
+    model.eval()
+    out_eval = model(x)
+    assert torch.allclose(out_eval, out_train, atol=1e-5), "Eval mode outputs do not match"
+
 
 @pytest.mark.parametrize("model_class", [DenseModel, ConvModel, BranchModel])
 def test_round_trip(model_class):

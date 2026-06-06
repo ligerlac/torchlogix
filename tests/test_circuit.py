@@ -108,10 +108,11 @@ class AnyLogicModel(nn.Module):
 
         out = out.squeeze(1)                                     # (B, 64)
 
-        out1 = out[:, :16].sum(dim=1, keepdim=True)               # (B, 1)
-        out2 = out[:, 16:].sum(dim=1, keepdim=True)               # (B, 1)
+        out1 = out[:, :8].sum(dim=1, keepdim=True)               # (B, 1)
+        out2 = out[:, 8:16].sum(dim=1, keepdim=True)             # (B, 1)
+        out3 = out[:, 16:]                                       # (B, 16)
 
-        return torch.cat([out1, out2], dim=1)                      # (B, 2)
+        return torch.cat([out1, out2, out3], dim=1)                      # (B, 18)
 
 
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
@@ -192,16 +193,18 @@ def test_c_codegen_group_sum_scores(model_cls):
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
-    assert circuit.sum_reductions
+    assert circuit.sum_nodes
 
     from torchlogix.circuit import SumReduction
-    k = len(circuit.sum_reductions)
-    out_dtype = SumReduction.infer_c_dtype(circuit.sum_reductions)
+    sum_by_id = circuit._sum_by_id
+    red_outs = [sum_by_id[oid] for oid in circuit.outputs if oid in sum_by_id]
+    k = len(red_outs)
+    out_dtype = SumReduction.infer_c_dtype(red_outs)
     c_code = circuit.get_c_code()
 
     assert f"{out_dtype}   out[" in c_code
     assert "bool raw[" in c_code
-    assert c_code.count("// --- sum reductions ---") == 1
+    assert c_code.count("// --- outputs ---") == 1
     assert c_code.count("int s = 0;") == k
 
     # Verify it compiles cleanly.
@@ -227,7 +230,7 @@ def test_turn_group_sum_into_argmax(model_cls):
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     circuit.simplify()
-    assert circuit.sum_reductions
+    assert circuit.sum_nodes
 
     # Scores from the original circuit.
     scores = circuit(x)
@@ -236,7 +239,7 @@ def test_turn_group_sum_into_argmax(model_cls):
 
     circuit.turn_group_sum_into_argmax()
     circuit.simplify()
-    assert not circuit.sum_reductions
+    assert not circuit.sum_nodes
 
     # One-hot from the converted circuit.
     one_hot = circuit(x)  # (8, k) bool
