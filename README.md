@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
   </a>
   <a href="https://doi.org/10.5281/zenodo.18800427">
-    <img src="https://zenodo.org/badge/1059516279.svg" alt="DOI">
+    <img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.18800427-blue" alt="DOI">
   </a>
   <a href="https://nsf.gov/awardsearch/showAward?AWD_ID=2323298">
     <img src="https://img.shields.io/badge/NSF-2323298-blue.svg" alt="DOI">
