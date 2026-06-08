@@ -120,18 +120,15 @@ def apply_luts_export_mode(
     b: torch.BoolTensor,
     lut_ids: torch.IntTensor
 ) -> torch.BoolTensor:
-    """Tracer-friendly LUT application for TorchScript export.
+    """Tracer-friendly LUT application for circuit export.
 
-    Args:
-        a: First input (batch, neurons) or (batch, spatial, kernels, features)
-        b: Second input (same shape as a)
-        lut_ids: LUT operation IDs (neurons,) or (kernels, features)
-
-    Note: This function is optimized for export/tracing, not runtime performance.
-          For training/eval without export, use the regular forward pass.
+    Iterates only over the LUT IDs that are actually present in `lut_ids`.
+    When traced with make_fx, `lut_ids` is a concrete tensor, so
+    `lut_ids.unique().tolist()` evaluates at trace time to a Python list of
+    active IDs — unused LUT types are never traced and produce no dead gates.
     """
     result = torch.empty_like(a, dtype=torch.bool)
-    for lut_id in range(16):
+    for lut_id in lut_ids.unique().tolist():
         mask = (lut_ids == lut_id)
         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
     return result

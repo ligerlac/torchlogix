@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import ClassVar
+from datetime import datetime
 import operator
 import json
 import numpy as np
@@ -319,6 +320,19 @@ class Circuit:
             if node.op == 'get_attr':
                 val = _get_attr_val(gm, node)
                 if isinstance(val, torch.Tensor) and val.dtype == torch.bool:
+                    # Skip boolean tensors used exclusively as index masks —
+                    # they are routing metadata, not circuit data. The index.Tensor
+                    # and index_put_ handlers retrieve them via _get_attr_val directly.
+                    _index_targets = {
+                        torch.ops.aten.index.Tensor,
+                        torch.ops.aten.index_put_.default,
+                    }
+                    if node.users and all(
+                        u.op == 'call_function' and u.target in _index_targets
+                        for u in node.users
+                    ):
+                        i += 1
+                        continue
                     flat = val.flatten().tolist()
                     gate_ids = []
                     for b in flat:
@@ -1326,6 +1340,15 @@ class Circuit:
             ctypes.c_int,
         ]
         lib.circuit_bench.restype = None
+        if pack_bits is not None:
+            # Bool-input wrapper: packing/unpacking happens inside C, no Python loop needed.
+            bool_out_ctype = out_ctype if red_outs else ctypes.c_bool
+            lib.circuit_bench_bool.argtypes = [
+                ctypes.POINTER(ctypes.c_bool),
+                ctypes.POINTER(bool_out_ctype),
+                ctypes.c_int,
+            ]
+            lib.circuit_bench_bool.restype = None
         self._lib = lib
         self._pack_bits = pack_bits
 
@@ -1393,35 +1416,18 @@ class Circuit:
                 return out_np.reshape(batch_size, n_out)
 
             else:
-                n_iter = batch_size // pack
-                _np_dtype = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}[pack]
-                _CType    = {8: ctypes.c_uint8, 16: ctypes.c_uint16,
-                             32: ctypes.c_uint32, 64: ctypes.c_uint64}[pack]
-
-                flat = input.reshape(batch_size, -1)          # (batch_size, n_in)
-                flat3d = flat.reshape(n_iter, pack, -1)        # (n_iter, pack, n_in)
-
-                # Pack n_iter chunks: packed_in[chunk, k] = OR_j(flat3d[chunk, j, k] << j)
-                shifts_pow = (np.uint64(1) << np.arange(pack, dtype=np.uint64))
-                packed_in = (flat3d.astype(np.uint64) * shifts_pow[np.newaxis, :, np.newaxis]) \
-                                 .sum(axis=1, dtype=np.uint64).astype(_np_dtype)  # (n_iter, n_in)
-                in_arr = packed_in.ctypes.data_as(ctypes.POINTER(_CType))
-
+                # circuit_bench_bool handles packing, circuit evaluation, and unpacking
+                # entirely in C — no Python loops or intermediate arrays needed.
+                flat = input.reshape(batch_size, -1)
+                in_arr = flat.ctypes.data_as(ctypes.POINTER(ctypes.c_bool))
                 if has_reductions:
-                    out_np = np.zeros(n_iter * n_out * pack, dtype=np_dtype_out)
+                    out_np = np.zeros(batch_size * n_out, dtype=np_dtype_out)
                     out_arr = out_np.ctypes.data_as(ctypes.POINTER(c_dtype_out))
-                    self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
-                    return out_np.reshape(batch_size, n_out)
-
-                out_packed = np.zeros((n_iter, n_out), dtype=_np_dtype)
-                out_arr = out_packed.ctypes.data_as(ctypes.POINTER(_CType))
-                self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
-
-                # Unpack: raw[chunk, j, k] = (out_packed[chunk, k] >> j) & 1
-                shifts = np.arange(pack, dtype=np.uint64)
-                return ((out_packed[:, np.newaxis, :].astype(np.uint64)
-                         >> shifts[np.newaxis, :, np.newaxis]) & 1).astype(bool) \
-                         .reshape(batch_size, n_out)
+                else:
+                    out_np = np.zeros(batch_size * n_out, dtype=np.bool_)
+                    out_arr = out_np.ctypes.data_as(ctypes.POINTER(ctypes.c_bool))
+                self._lib.circuit_bench_bool(in_arr, out_arr, ctypes.c_int(batch_size))
+                return out_np.reshape(batch_size, n_out)
 
         else:
             def _eval_gates(inp_row):
@@ -1705,7 +1711,38 @@ void circuit_bench(
 {{
     for (int i = 0; i < n_iter; i++)
         circuit(in + i * {n_in}, out + i * {out_n});
-}}"""
+}}
+
+{"" if pack_bits is None else f"""
+// Packs raw bool input, runs packed circuit, unpacks output — no Python packing needed.
+void circuit_bench_bool(
+    const bool   *in_bool,  // (batch_size, {n_in}) bool, row-major
+    {'bool' if not has_reductions else out_ctype}  *out,  // (batch_size, {n_total}) {'bool' if not has_reductions else out_ctype}, row-major
+    int           batch_size)
+{{
+    int n_iter = batch_size / {pack_bits};
+    {ctype} packed_in[{n_in}];
+    {out_ctype} packed_out[{out_n}];
+
+    for (int iter = 0; iter < n_iter; iter++) {{
+
+        // Pack {pack_bits} bool samples per input wire into one {ctype} word
+        for (int k = 0; k < {n_in}; k++) {{
+            {ctype} w = ({ctype})0;
+            for (int b = 0; b < {pack_bits}; b++)
+                w |= ({ctype})in_bool[(iter * {pack_bits} + b) * {n_in} + k] << b;
+            packed_in[k] = w;
+        }}
+
+        circuit(packed_in, packed_out);
+
+        // {'Unpack packed-word outputs to individual bools' if not has_reductions else 'Copy per-sample outputs (already unpacked by circuit)'}
+        for (int b = 0; b < {pack_bits}; b++)
+            for (int j = 0; j < {n_total}; j++)
+                out[(iter * {pack_bits} + b) * {n_total} + j] =
+                    {f'(packed_out[j] >> b) & 1' if not has_reductions else f'packed_out[b * {n_total} + j]'};
+    }}
+}}"""}"""
 
 
     def turn_group_sum_into_argmax(self) -> None:
