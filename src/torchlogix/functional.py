@@ -8,10 +8,6 @@ gate networks.
 import math
 import random
 import torch
-import numpy as np
-
-
-BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
 
 # The 16 possible binary logic operations on two inputs A and B

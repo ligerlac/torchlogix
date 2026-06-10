@@ -16,9 +16,6 @@ class OrPooling2d(torch.nn.Module):
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self.kernel_size_tuple = _to_tuple(kernel_size, 2)
-        self.stride_tuple = _to_tuple(stride, 2)
-        self.padding_tuple = _to_tuple(padding, 2)
         self.export_mode = export_mode
 
     def forward(self, x):
@@ -42,9 +39,9 @@ class OrPooling2d(torch.nn.Module):
 
 
     def _torch_or_bool(self, x):
-        kh, kw = self.kernel_size_tuple
-        sh, sw = self.stride_tuple
-        ph, pw = self.padding_tuple
+        kh, kw = _to_tuple(self.kernel_size, 2)
+        sh, sw = _to_tuple(self.stride, 2)
+        ph, pw = _to_tuple(self.padding, 2)
 
         x = F.pad(x, (pw, pw, ph, ph), value=False)
         x = x.unfold(2, kh, sh).unfold(3, kw, sw).flatten(-2)  # (n, c, out_h, out_w, kh*kw)
@@ -69,9 +66,6 @@ class OrPooling3d(torch.nn.Module):
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self.kernel_size_tuple = _to_tuple(kernel_size, 3)
-        self.stride_tuple = _to_tuple(stride, 3)
-        self.padding_tuple = _to_tuple(padding, 3)
         self.export_mode = export_mode
 
     def forward(self, x):
@@ -96,9 +90,9 @@ class OrPooling3d(torch.nn.Module):
 
 
     def _torch_or_pool(self, x):
-        kd, kh, kw = self.kernel_size_tuple
-        sd, sh, sw = self.stride_tuple
-        pd, ph, pw = self.padding_tuple
+        kd, kh, kw = _to_tuple(self.kernel_size, 3)
+        sd, sh, sw = _to_tuple(self.stride, 3)
+        pd, ph, pw = _to_tuple(self.padding, 3)
 
         x = F.pad(x, (pw, pw, ph, ph, pd, pd), value=False)
         x = x.unfold(2, kd, sd).unfold(3, kh, sh).unfold(4, kw, sw).flatten(-3)  # (n, c, out_d, out_h, out_w, kd*kh*kw)
