@@ -7,7 +7,14 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, OrPooling2d, GroupSum, FixedBinarization, LearnableBinarization
+from torchlogix.layers import (
+    LogicConv2d, 
+    LogicConvTranspose2d, 
+    OrPooling2d, 
+    GroupSum, 
+    FixedBinarization, 
+    LearnableBinarization
+)
 from torchlogix import CompiledLogicNet
 
 
@@ -940,3 +947,116 @@ def test_compiled_model_with_thresholding_float():
     # Verify outputs match
     assert np.allclose(preds.numpy(), preds_compiled, atol=1e-5), \
         "Compiled model with thresholding predictions do not match original model"
+
+@pytest.mark.parametrize("stride,output_padding", [(1, 0), (2, 0), (2, 1), (3, 0), (3, 2)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose2d_output_shape(stride, output_padding, padding):
+    """LogicConvTranspose2d must produce the correct spatial output shape."""
+    in_h, in_w = 6, 6
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if output_padding >= stride:
+        pytest.skip("output_padding must be < stride")
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    layer = LogicConvTranspose2d(
+        in_dim=(in_h, in_w),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_h, in_w)
+    out = layer(x)
+
+    expected_h = (in_h - 1) * stride - 2 * padding + kH + output_padding
+    expected_w = (in_w - 1) * stride - 2 * padding + kH + output_padding
+    assert out.shape == (batch, num_kernels, expected_h, expected_w), (
+        f"Expected shape {(batch, num_kernels, expected_h, expected_w)}, got {tuple(out.shape)}"
+    )
+
+def test_conv_transpose2d_gradients():
+    """Gradients must flow through LogicConvTranspose2d to all tree-weight parameters."""
+    layer = LogicConvTranspose2d(
+        in_dim=(4, 4),
+        channels=2,
+        num_kernels=4,
+        tree_depth=2,
+        receptive_field_size=3,
+        stride=2,
+        padding=0,
+        output_padding=0,
+        parametrization="warp",
+        device="cpu",
+    )
+    layer.train()
+
+    x = torch.rand(2, 2, 4, 4)
+    out = layer(x)
+    out.sum().backward()
+
+    for i, w in enumerate(layer.tree_weights):
+        assert w.grad is not None, f"tree_weights[{i}] has no gradient"
+        assert w.grad.abs().sum() > 0, f"tree_weights[{i}] gradient is all zero"
+
+@pytest.mark.parametrize("stride,in_h", [(1, 8), (2, 6), (3, 5)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose2d_shape_inverse_of_conv2d(stride, in_h, padding):
+    """LogicConvTranspose2d must invert the spatial dimensions of LogicConv2d.
+
+    Given a conv that maps (B, C, H, W) → (B, K, H', W'), a transpose conv
+    with the same stride/padding/receptive_field_size and output_padding=0
+    should map (B, K, H', W') → (B, C', H, W).
+    """
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    conv = LogicConv2d(
+        in_dim=(in_h, in_h),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        device="cpu",
+    )
+
+    # Compute what spatial size the conv produces
+    x = torch.rand(batch, channels, in_h, in_h)
+    conv_out = conv(x)
+    out_h = conv_out.shape[2]
+
+    output_padding = (in_h + 2 * padding - kH) % stride
+
+    # Transpose conv with the same parameters should map back to (in_h, in_h)
+    transpose_conv = LogicConvTranspose2d(
+        in_dim=(out_h, out_h),
+        channels=num_kernels,
+        num_kernels=channels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    reconstructed = transpose_conv(conv_out)
+    assert reconstructed.shape == (batch, channels, in_h, in_h), (
+        f"Expected shape {(batch, channels, in_h, in_h)}, got {tuple(reconstructed.shape)}"
+    )

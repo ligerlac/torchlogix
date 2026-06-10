@@ -41,6 +41,15 @@ def setup_connections(
             )
         else:
             raise ValueError(f"Unknown connections method: {connections}")
+    elif structure == "conv_transpose":
+        if connections == "fixed":
+            return FixedConvTransposeConnections(
+                lut_rank=lut_rank,
+                device=device,
+                **connections_kwargs
+            )
+        else:
+            raise ValueError(f"Unknown connections method: {connections}")
     else:
         raise ValueError(f"Unknown structure method: {structure}")
     
@@ -679,3 +688,120 @@ class FixedConvConnections(Connections):
               *self.indices[0][..., :-1].moveaxis(-1, 0))]
         else:
             return x[..., self.indices[tree_level]]
+
+class FixedConvTransposeConnections(FixedConvConnections):
+    """Fixed connections for transposed convolutional logic layers.
+
+    Implements the transpose (fractionally-strided) analogue of
+    ``FixedConvConnections``.  The transposed convolution is realized by:
+
+    1. Inserting ``stride - 1`` zeros between every pair of adjacent input
+       elements (input dilation).
+    2. Appending ``output_padding`` zeros to one side of the dilated tensor.
+    3. Padding the result symmetrically by ``receptive_field_size - 1 - padding``
+       on every side.
+    4. Applying a stride-1 convolution over this effective input — handled
+       identically to ``FixedConvConnections``.
+
+    Index tensors are pre-computed for the effective (dilated + padded) input
+    dimensions.  ``forward`` constructs that tensor at tree level 0 before
+    delegating to the parent's index-gathering logic.
+
+    Args:
+        output_padding: Additional size added to one end of each spatial
+            dimension.  Must satisfy ``0 <= output_padding < stride``.
+        (all other args): Same as ``FixedConvConnections``.
+    """
+
+    def __init__(
+        self,
+        in_dim: Union[_size_2_t, _size_3_t, int],
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: Union[_size_2_t, _size_3_t, int] = 2,
+        stride: int = 1,
+        padding: int = 0,
+        output_padding: Union[_size_2_t, _size_3_t, int] = 0,
+        conv_dimension: int = 2,
+        lut_rank: int = 2,
+        device=None,
+        init_method: str = "random",
+        channel_group_size: int = None,
+        **kwargs
+    ):
+
+        if conv_dimension == 2:
+            in_dim_t = _pair(in_dim)
+            rfs_t = _pair(receptive_field_size)
+            op_t = _pair(output_padding)
+        else:
+            in_dim_t = _triple(in_dim)
+            rfs_t = _triple(receptive_field_size)
+            op_t = _triple(output_padding)
+
+        # padding applied to the dilated input
+        eff_padding = rfs_t[0] - 1 - padding
+        assert eff_padding >= 0, (
+            f"padding ({padding}) must be <= receptive_field_size - 1 "
+            f"({rfs_t[0] - 1}) for transposed convolution"
+        )
+
+        # effective in_dim seen by the underlying stride-1 conv
+        eff_in_dim = tuple(
+            (d - 1) * stride + 1 + op
+            for d, op in zip(in_dim_t, op_t)
+        )
+
+        self.orig_in_dim = in_dim_t
+        self.orig_stride = stride
+        self.output_padding_t = op_t
+
+        super().__init__(
+            in_dim=eff_in_dim,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=rfs_t,
+            stride=1,
+            padding=eff_padding,
+            conv_dimension=conv_dimension,
+            lut_rank=lut_rank,
+            device=device,
+            init_method=init_method,
+            channel_group_size=channel_group_size,
+            **kwargs
+        )
+
+    def _make_dilated_input(self, x):
+        """Insert (orig_stride - 1) zeros between input elements and append output_padding zeros."""
+        if self.orig_stride == 1 and all(op == 0 for op in self.output_padding_t):
+            return x
+
+        B, C = x.shape[0], x.shape[1]
+        spatial = x.shape[2:]
+        dilated_size = tuple(
+            (s - 1) * self.orig_stride + 1 + op
+            for s, op in zip(spatial, self.output_padding_t)
+        )
+
+        out = torch.zeros(B, C, *dilated_size, device=x.device, dtype=x.dtype)
+
+        # Place input values at stride-spaced positions; output_padding tail stays zero.
+        src_slices = (slice(None), slice(None)) + tuple(
+            slice(None, (s - 1) * self.orig_stride + 1, self.orig_stride)
+            for s in spatial
+        )
+
+        out[src_slices] = x
+        return out
+
+    def forward(self, x, tree_level):
+        if tree_level == 0:
+            x = self._make_dilated_input(x)
+            if self.padding > 0:
+                # FixedConvConnections indices are computed for the padded input;
+                # padding must be applied here since there is no external padding step
+                pad = (self.padding,) * (2 * self.conv_dimension)
+                x = torch.nn.functional.pad(x, pad, mode="constant", value=0)
+        return super().forward(x, tree_level)
