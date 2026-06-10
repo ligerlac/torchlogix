@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch.nn.modules.utils import _triple
 
-from torchlogix.layers import LogicConv3d, OrPooling3d, GroupSum
+from torchlogix.layers import LogicConv3d, LogicConvTranspose3d, OrPooling3d, GroupSum
 from torchlogix import CompiledLogicNet
 
 
@@ -622,3 +622,112 @@ def test_compiled_pooling_model():
     preds_compiled = compiled_model(X.bool().numpy())
 
     assert np.allclose(preds, preds_compiled)
+
+@pytest.mark.parametrize("stride,output_padding,padding", [
+    (1, 0, 0), (2, 0, 0), (2, 1, 0), (3, 0, 0), (3, 2, 0),
+    (1, 0, 1), (2, 0, 1), (2, 1, 1), (3, 0, 1), (3, 2, 1),
+])
+def test_conv_transpose3d_output_shape(stride, output_padding, padding):
+    """LogicConvTranspose3d must produce the correct spatial output shape."""
+    in_d, in_h, in_w = 4, 4, 4
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    layer = LogicConvTranspose3d(
+        in_dim=(in_d, in_h, in_w),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_d, in_h, in_w)
+    out = layer(x)
+
+    expected = (in_d - 1) * stride - 2 * padding + kH + output_padding
+    assert out.shape == (batch, num_kernels, expected, expected, expected), (
+        f"Expected shape {(batch, num_kernels, expected, expected, expected)}, "
+        f"got {tuple(out.shape)}"
+    )
+
+
+def test_conv_transpose3d_gradients():
+    """Gradients must flow through LogicConvTranspose3d to all tree-weight parameters."""
+    layer = LogicConvTranspose3d(
+        in_dim=(4, 4, 4),
+        channels=2,
+        num_kernels=4,
+        tree_depth=2,
+        receptive_field_size=3,
+        stride=2,
+        padding=0,
+        output_padding=0,
+        parametrization="warp",
+        device="cpu",
+    )
+    layer.train()
+
+    x = torch.rand(2, 2, 4, 4, 4)
+    out = layer(x)
+    out.sum().backward()
+
+    for i, w in enumerate(layer.tree_weights):
+        assert w.grad is not None, f"tree_weights[{i}] has no gradient"
+        assert w.grad.abs().sum() > 0, f"tree_weights[{i}] gradient is all zero"
+
+
+@pytest.mark.parametrize("stride,in_d", [(1, 6), (2, 5), (3, 4)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose3d_shape_inverse_of_conv3d(stride, in_d, padding):
+    """LogicConvTranspose3d must invert the spatial dimensions of LogicConv3d."""
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    conv = LogicConv3d(
+        in_dim=(in_d, in_d, in_d),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_d, in_d, in_d)
+    conv_out = conv(x)
+    out_d = conv_out.shape[2]
+
+    output_padding = (in_d + 2 * padding - kH) % stride
+
+    transpose_conv = LogicConvTranspose3d(
+        in_dim=(out_d, out_d, out_d),
+        channels=num_kernels,
+        num_kernels=channels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    reconstructed = transpose_conv(conv_out)
+    assert reconstructed.shape == (batch, channels, in_d, in_d, in_d), (
+        f"Expected shape {(batch, channels, in_d, in_d, in_d)}, "
+        f"got {tuple(reconstructed.shape)}"
+    )
