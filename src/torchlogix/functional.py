@@ -128,7 +128,7 @@ def apply_luts_export_mode(
     active IDs — unused LUT types are never traced and produce no dead gates.
     """
     result = torch.empty_like(a, dtype=torch.bool)
-    for lut_id in lut_ids.unique().tolist():
+    for lut_id in range(16):
         mask = (lut_ids == lut_id)
         result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
     return result

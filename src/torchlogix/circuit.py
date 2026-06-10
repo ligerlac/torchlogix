@@ -226,6 +226,18 @@ class Circuit:
     @property
     def _sum_by_id(self) -> dict[int, SumReduction]:
         return {sr.node_id: sr for sr in self.sum_nodes}
+    
+    def __repr__(self) -> str:
+        return (
+            f"Circuit(\n"
+            f"  n_inputs={self.n_inputs},\n"
+            f"  input_shape={self.input_shape},\n"
+            f"  logic_nodes={len(self.gates)},\n"
+            f"  sum_nodes={len(self.sum_nodes)},\n"
+            f"  outputs={self.outputs},\n"
+            f"  output_shape={self.output_shape}\n"
+            f")"
+        )
 
     # Registry for custom op handlers registered by downstream code (e.g. torchlogix layers).
     # Each entry: op_target -> fn(node, wire_map, circuit, next_id, gm, layer_idx) -> (next_id, layer_idx)

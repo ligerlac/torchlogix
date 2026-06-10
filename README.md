@@ -57,14 +57,20 @@ model = torch.nn.Sequential(
     GroupSum(k=10, tau=8)
 )
 ```
-Like ordinary PyTorch neural networks, this model may be trained, e.g., with `torch.nn.CrossEntropyLoss`. The Adam optimizer with a learning rate of `0.01` works well. Every layer and hence the entire model can be switched between the relaxed trainable and discrete, fully boolean version with the standard `model.train()` / `model.eval()` commands. Furthermore, the discrete model can be expressed in pure `C` and compiled like so
-
+Like ordinary PyTorch neural networks, this model may be trained, e.g., with `torch.nn.CrossEntropyLoss`. The Adam optimizer with a learning rate of `0.01` works well. Every layer and hence the entire model can be switched between the relaxed trainable and discrete, fully boolean version with the standard `model.train()` / `model.eval()` commands. Furthermore, there is a dedicated `model.set_export_mode()`, which expresses the forward path as pure boolean and indexing operations. This can be represented as a fully unrolled combinational `Circuit`, which can be compiled for fast inference:
 ```python
-compiled_model = CompiledLogicNet(model, input_shape=(1, 28, 28))
-compiled_model.compile()
-
-all_preds = model(all_X)  #  ~15 ms for all 10000 test examples on my laptop
+from torchlogix import Circuit
+circuit = Circuit.from_model(model, input_shape=(1, 28, 28))
+circuit.compile()
+preds = model(X_np)  # ~6 ms for 100k images on my laptop
 ```
+The graph-based intermediate representation (IR) of a `Circuit` can be simplified and emit `C` and `Verilog` code directly:
+```python
+circuit.simplify()  # removes dead code, folds constants, does dedup...
+circuit.get_c_code()
+circuit.get_verilog_code()
+```
+
 The full training- and evaluation of the model above is demonstrated in the example notebook [experiments/mnist_example.ipynb](experiments/mnist_example.ipynb).
 
 
