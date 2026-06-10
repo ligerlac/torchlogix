@@ -27,16 +27,12 @@ class OrPooling2d(torch.nn.Module):
         assert isinstance(x, torch.Tensor), "Input must be a PyTorch tensor in non-export mode."
         assert x.dim() == 4, "Input tensor must be 4d"
 
-        orig_dtype = x.dtype
-        x = F.max_pool2d(
+        return F.max_pool2d(
             x.float(),
             kernel_size=self.kernel_size,
             stride=self.stride,
             padding=self.padding,
         )
-
-        return (x > 0) if orig_dtype == torch.bool else x.to(orig_dtype)
-
 
     def _torch_or_bool(self, x):
         kh, kw = _to_tuple(self.kernel_size, 2)
@@ -77,17 +73,12 @@ class OrPooling3d(torch.nn.Module):
         assert isinstance(x, torch.Tensor), "Expected torch tensor"
         assert x.dim() == 5, "Input tensor must be 5d"
 
-        orig_dtype = x.dtype
-
-        x = F.max_pool3d(
+        return F.max_pool3d(
             x.float(),
             kernel_size=self.kernel_size,
             stride=self.stride,
             padding=self.padding,
         )
-
-        return (x > 0) if orig_dtype == torch.bool else x.to(orig_dtype)
-
 
     def _torch_or_pool(self, x):
         kd, kh, kw = _to_tuple(self.kernel_size, 3)
