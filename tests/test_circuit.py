@@ -14,16 +14,19 @@ from torchlogix.layers import (
     LogicDense,
     OrPooling2d,
     OrPooling3d,
+    FixedBinarization
 )
 
 
 class DenseModel(nn.Sequential):
     def __init__(self):
         super().__init__(
+            FixedBinarization(thresholds=[0.33, 0.66]),
             LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
             LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
         )
-        self.input_shape = (1000,)
+        self.input_shape = (500,)
+        self.input_type = torch.float32
 
 
 # inherit from sequential
@@ -38,6 +41,7 @@ class ConvModel(nn.Sequential):
             GroupSum(10)# , tau=2.0),
         )
         self.input_shape = (3, 32, 32)
+        self.input_type = torch.bool
 
 
 # w/ custom forward pass
@@ -51,6 +55,7 @@ class BranchModel(nn.Module):
         self.dense = LogicDense(1801, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"})
         self.group_sum = GroupSum(10)
         self.input_shape = (32*32*3 + 1,)
+        self.input_type = torch.bool
 
     def forward(self, x):
         assert x.shape[1:] == (32*32*3 + 1,)
@@ -72,6 +77,7 @@ class AnyLogicModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.input_shape = (4, 8, 8)
+        self.input_type = torch.bool
 
 
     def forward(self, x):
@@ -118,7 +124,7 @@ class AnyLogicModel(nn.Module):
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
 def test_functional_equivalence(model_cls):
     model = model_cls()
-    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
+    x = torch.randint(0, 2, (1, *model.input_shape), dtype=model.input_type)
 
     set_export_mode(model)
     preds_model = model(x)
@@ -251,3 +257,56 @@ def test_turn_group_sum_into_argmax(model_cls):
     one_hot_compiled = circuit(x.numpy(), use_compiled=True)
 
     assert torch.equal(torch.from_numpy(one_hot_compiled), expected_one_hot), "Compiled circuit one-hot output differs from expected one-hot"
+
+
+def test_binarization_node_functional():
+    """Binarization fan-out nodes: GroupSum → FixedBinarization → LogicDense pipeline."""
+    import numpy as np
+    from torchlogix.circuit import Binarization
+
+    # Build a simple 2-layer model: logic → 4-class groupsum → 4-bit binarization → logic → 2-class groupsum
+    n_bits = 4
+    thresholds = torch.tensor([1.0, 2.0, 3.0, 4.0])
+
+    class BinarizedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.dense1 = LogicDense(100, 100, parametrization="raw",
+                                     parametrization_kwargs={"weight_init": "random"})
+            self.group_sum = GroupSum(4)
+            self.binarize = FixedBinarization(thresholds=thresholds)
+            self.dense2 = LogicDense(16, 100, parametrization="raw",
+                                     parametrization_kwargs={"weight_init": "random"})
+            self.group_sum2 = GroupSum(2)
+            self.input_shape = (100,)
+
+        def forward(self, x):
+            x = self.dense1(x)
+            x = self.group_sum(x)
+            x = self.binarize(x).bool()  # binarize returns float; cast back to bool for logic layer
+            x = self.dense2(x)
+            return self.group_sum2(x)
+
+    model = BinarizedModel()
+    x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
+
+    set_export_mode(model)
+    preds_model = model(x)
+
+    circuit = Circuit.from_model(model, input_shape=model.input_shape)
+
+    # 4 SumReduction nodes (from GroupSum(4)) and 4 Binarization nodes (one per class)
+    assert len(circuit.sum_nodes) >= 4, "Expected at least 4 SumReduction nodes"
+    assert len(circuit.binarization_nodes) == 4, (
+        f"Expected 4 Binarization nodes (one per class, {n_bits} bits each), "
+        f"got {len(circuit.binarization_nodes)}"
+    )
+    for b in circuit.binarization_nodes:
+        assert isinstance(b, Binarization)
+        assert len(b.output_ids) == n_bits, f"Expected {n_bits} outputs per Binarization"
+        assert len(b.thresholds) == n_bits
+
+    # Functional equivalence
+    preds_circuit = circuit(x)
+    assert torch.equal(preds_model, preds_circuit.to(preds_model.dtype)), \
+        "Circuit with Binarization differs from model predictions"

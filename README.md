@@ -64,11 +64,13 @@ circuit = Circuit.from_model(model, input_shape=(1, 28, 28))
 circuit.compile()
 preds = model(X_np)  # ~6 ms for 100k images on my laptop
 ```
-The graph-based intermediate representation (IR) of a `Circuit` can be simplified and emit `C` and `Verilog` code directly:
+The graph-based intermediate representation (IR) of a `Circuit` can be simplified, (de-)serialized as json, and emit `C` and `Verilog` code directly:
 ```python
 circuit.simplify()  # removes dead code, folds constants, does dedup...
 circuit.get_c_code()
 circuit.get_verilog_code()
+cicuit.write_json("circuit.json")
+
 ```
 
 The full training- and evaluation of the model above is demonstrated in the example notebook [experiments/mnist_example.ipynb](experiments/mnist_example.ipynb).

@@ -30,6 +30,7 @@ class Binarization(torch.nn.Module, ABC):
             self,
             thresholds: Tensor | List,
             feature_dim=-2,
+            export_mode=False,
             **kwargs
         ):
         super().__init__()
@@ -37,6 +38,7 @@ class Binarization(torch.nn.Module, ABC):
             thresholds = torch.tensor(thresholds, dtype=torch.float32)
         self.register_buffer('thresholds', thresholds)
         self.feature_dim = feature_dim
+        self.export_mode = export_mode
 
     def get_thresholds(self):
         """Return thresholds. Subclasses can override for learnable thresholds."""
@@ -46,10 +48,15 @@ class Binarization(torch.nn.Module, ABC):
     def forward(self, x: Tensor) -> Tensor:
         """Subclasses must implement forward."""
         pass
-    
+
+    def set_export_mode(self, export_mode: bool = True):
+        """Set export mode. In export mode, outputs are bool tensors. Otherwise, float."""
+        if export_mode:
+            self.eval()
+        self.export_mode = export_mode
+
     @staticmethod
     def get_uniform_thresholds(data_set: Tensor, num_bits: int, one_per: str) -> Tensor:
-        print(f"Data set shape for uniform threshold calculation (per={one_per}): {data_set.shape}")
         if one_per == "feature":
             min_value = data_set.min(dim=0)[0]
             max_value = data_set.max(dim=0)[0]
@@ -68,8 +75,6 @@ class Binarization(torch.nn.Module, ABC):
             raise ValueError(f"one_per must be 'feature', 'channel', or 'global'. Got {one_per}.")
         threshs = min_value.unsqueeze(-1) + torch.arange(1, num_bits+1).unsqueeze(0) * (
             (max_value - min_value) / (num_bits + 1)).unsqueeze(-1)
-        print(f"Uniform thresholds shape: {threshs.shape}")
-        print(f"threshs =\n{threshs}")
         return threshs
         
     @staticmethod
@@ -159,11 +164,15 @@ class FixedBinarization(Binarization):
             # x: (batch, channels, h, w, 1)
             # Reshape to (1, num_channels, 1, 1, num_bits)
             thresholds = self.thresholds.view(1, -1, 1, 1, self.thresholds.shape[1])
-            x = (x > thresholds).float()
+            x = (x > thresholds)
         else:
-            x = (x > self.thresholds).float()
-        return merge_dim_with_last(x, self.feature_dim)
-        
+            x = (x > self.thresholds)
+        x = merge_dim_with_last(x, self.feature_dim)
+        if self.export_mode:
+            return x
+        else:
+            return x.float()
+
 
 class DummyBinarization(Binarization):
     """ Dummy binarization module that does nothing."""

@@ -14,6 +14,7 @@ from torchlogix.layers import (
     LogicDense,
     OrPooling2d,
     OrPooling3d,
+    FixedBinarization,
 )
 
 
@@ -24,6 +25,7 @@ from torchlogix.layers import (
 @pytest.fixture
 def logic_dense_model():
     model = nn.Sequential(
+        FixedBinarization(thresholds=[0.5]),
         LogicDense(16, 32, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
         LogicDense(32, 16, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
     )
@@ -98,7 +100,8 @@ def single_3d_conv_model():
 @pytest.fixture
 def sample_input_1d():
     torch.manual_seed(0)
-    return torch.randint(0, 2, (8, 16)).bool()
+    # return torch.randint(0, 2, (8, 16)).bool()
+    return torch.rand(8, 16).float()
 
 
 @pytest.fixture
@@ -189,6 +192,7 @@ ALLOWED_FX_TARGETS = {
     torch.ops.aten.transpose.int,
     torch.ops.aten.pad.default,
     torch.ops.aten.unfold.default,
+    torch.ops.aten.unsqueeze.default,
 
     # Advanced view variants
     torch.ops.aten.view.default,
@@ -222,11 +226,15 @@ ALLOWED_FX_TARGETS_GROUP_SUM = {
     torch.ops.aten._assert_tensor_metadata.default,
 }
 
+ALLOWED_FX_TARGETS_BINARIZATION = {
+    # Native decomposition of binarization: comparators
+    torch.ops.aten.gt.Tensor
+}
 
 class TestFXGraphPurity:
 
     @pytest.mark.parametrize("model_fixture, input_fixture, allowed_targets", [
-        ("logic_dense_model", "sample_input_1d", ALLOWED_FX_TARGETS),
+        ("logic_dense_model", "sample_input_1d", ALLOWED_FX_TARGETS | ALLOWED_FX_TARGETS_BINARIZATION),
         ("conv2d_model_wo_group_sum", "sample_input_2d", ALLOWED_FX_TARGETS),
         ("conv3d_model_wo_group_sum", "sample_input_3d", ALLOWED_FX_TARGETS),
         ("conv2d_model", "sample_input_2d", ALLOWED_FX_TARGETS | ALLOWED_FX_TARGETS_GROUP_SUM),

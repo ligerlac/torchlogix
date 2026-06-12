@@ -174,33 +174,44 @@ def _eval_gate_op(op: GateOp, a: bool, b: bool) -> bool:
 
 
 @dataclass
-class Gate:
-    gate_id: int
-    op:      GateOp
-    in0:     int = -1   # -1 = unused
-    in1:     int = -1
-    # metadata
-    layer:   int = -1
-    node_idx: int = -1  # index within the layer's flat node list
+class CircuitNode:
+    """Base class for all circuit IR nodes.
+
+    Every node has a unique ID, a list of input node IDs, and a list of output
+    node IDs it produces.  All IDs live in the same shared counter space so the
+    graph can be traversed uniformly without type-specific dispatch.
+    """
+    node_id:    int
+    input_ids:  list[int] = field(default_factory=list)
+    output_ids: list[int] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not self.output_ids:
+            self.output_ids = [self.node_id]
 
 
-@dataclass
-class SumReduction:
-    node_id:   int
-    input_ids: list[int]
-    tau:       float = 1.0
-    beta:      float = 0.0
+@dataclass(kw_only=True)
+class Gate(CircuitNode):
+    """Boolean logic gate.  input_ids has 0–2 elements (no -1 sentinels).
+    output_ids is always [node_id].
+    """
+    op:       GateOp
+    layer:    int = -1
+    node_idx: int = -1
+
+
+@dataclass(kw_only=True)
+class SumReduction(CircuitNode):
+    """Reduces N boolean inputs to one integer/float scalar.
+    input_ids = boolean gate IDs being summed.
+    output_ids = [node_id] (one scalar output).
+    """
+    tau:  float = 1.0
+    beta: float = 0.0
 
     @classmethod
     def infer_c_dtype(cls, reductions: list['SumReduction']) -> str:
-        """
-        Infer the narrowest C output type for a collection of SumReduction nodes.
-
-        Returns 'float' when any reduction uses a non-unity tau or fractional beta.
-        Otherwise returns the smallest unsigned integer type that cannot overflow
-        given the statically-known maximum sum per reduction:
-            max_val = len(input_ids) + int(beta)
-        """
+        """Narrowest C output type that cannot overflow for this set of reductions."""
         for sr in reductions:
             if sr.tau != 1.0 or sr.beta != round(sr.beta):
                 return "float"
@@ -214,18 +225,42 @@ class SumReduction:
         return "uint64_t"
 
 
+@dataclass(kw_only=True)
+class Binarization(CircuitNode):
+    """Fans one scalar input out to n_bits boolean gate IDs via threshold comparisons.
+    input_ids  = [scalar_node_id]         (exactly one scalar input)
+    output_ids = n_bits boolean gate IDs  (fan-out; referenceable by downstream gates)
+    thresholds = one per output bit; output_ids[k] = 1 iff input > thresholds[k]
+    """
+    thresholds: list[float] = field(default_factory=list)
+
+
 @dataclass
 class Circuit:
-    n_inputs:    int
-    input_shape: list[int]          # original shape of the input tensor
-    gates:       list[Gate] = field(default_factory=list)
-    outputs:     list[int] = field(default_factory=list)   # ordered node IDs (gates or SumReduction)
-    output_shape: list[int] = field(default_factory=list)
-    sum_nodes:   list[SumReduction] = field(default_factory=list)
+    n_inputs:           int
+    input_shape:        list[int]
+    gates:              list[Gate]         = field(default_factory=list)
+    outputs:            list[int]          = field(default_factory=list)
+    output_shape:       list[int]          = field(default_factory=list)
+    sum_nodes:          list[SumReduction] = field(default_factory=list)
+    binarization_nodes: list[Binarization] = field(default_factory=list)
 
     @property
     def _sum_by_id(self) -> dict[int, SumReduction]:
         return {sr.node_id: sr for sr in self.sum_nodes}
+
+    @property
+    def _node_by_output_id(self) -> dict[int, CircuitNode]:
+        """Maps every output gate ID to its owning CircuitNode."""
+        result: dict[int, CircuitNode] = {}
+        for g in self.gates:
+            result[g.node_id] = g
+        for sr in self.sum_nodes:
+            result[sr.node_id] = sr
+        for b in self.binarization_nodes:
+            for oid in b.output_ids:
+                result[oid] = b
+        return result
     
     def __repr__(self) -> str:
         return (
@@ -349,7 +384,7 @@ class Circuit:
                     gate_ids = []
                     for b in flat:
                         op = GateOp.CONST_TRUE if b else GateOp.CONST_FALSE
-                        g = Gate(gate_id=next_id, op=op, layer=layer_idx)
+                        g = Gate(node_id=next_id, input_ids=[], op=op, layer=layer_idx)
                         circuit.gates.append(g)
                         gate_ids.append(next_id)
                         next_id += 1
@@ -494,6 +529,11 @@ class Circuit:
                     new_shape.insert(dim, 1)
                     wire_map[node.name] = src_ids
                     wire_map[f'__shape_{node.name}'] = new_shape
+                    if src_node.name in _output_chain:
+                        _output_chain[node.name] = _output_chain[src_node.name]
+                elif isinstance(src_node, torch.fx.Node) and src_node.name in _output_chain:
+                    # Float-domain unsqueeze (e.g. before FixedBinarization comparison)
+                    _output_chain[node.name] = _output_chain[src_node.name]
                 i += 1
                 continue
 
@@ -620,7 +660,7 @@ class Circuit:
                     result_ids = []
                     for v in padded.flatten().tolist():
                         if v < 0:
-                            g = Gate(gate_id=next_id, op=const_op, layer=layer_idx)
+                            g = Gate(node_id=next_id, input_ids=[], op=const_op, layer=layer_idx)
                             circuit.gates.append(g)
                             result_ids.append(next_id)
                             next_id += 1
@@ -759,7 +799,7 @@ class Circuit:
                     else:
                         gate_ids = []
                         for _ in x_ids:
-                            g = Gate(gate_id=next_id, op=const_op, layer=layer_idx)
+                            g = Gate(node_id=next_id, input_ids=[], op=const_op, layer=layer_idx)
                             circuit.gates.append(g)
                             gate_ids.append(next_id)
                             next_id += 1
@@ -832,8 +872,7 @@ class Circuit:
                     shape   = wire_map.get(f'__shape_{a_node_arg.name}', [len(a_ids)])
                     gate_ids = []
                     for a_id, b_id in zip(a_ids, b_ids):
-                        g = Gate(gate_id=next_id, op=gate_op, in0=a_id, in1=b_id,
-                                layer=layer_idx)
+                        g = Gate(node_id=next_id, input_ids=[a_id, b_id], op=gate_op, layer=layer_idx)
                         circuit.gates.append(g)
                         gate_ids.append(next_id)
                         next_id += 1
@@ -849,7 +888,7 @@ class Circuit:
                     shape = wire_map.get(f'__shape_{a_node_arg.name}', [len(a_ids)])
                     gate_ids = []
                     for a_id in a_ids:
-                        g = Gate(gate_id=next_id, op=GateOp.NOT, in0=a_id, layer=layer_idx)
+                        g = Gate(node_id=next_id, input_ids=[a_id], op=GateOp.NOT, layer=layer_idx)
                         circuit.gates.append(g)
                         gate_ids.append(next_id)
                         next_id += 1
@@ -868,7 +907,7 @@ class Circuit:
                     else GateOp.CONST_TRUE
                 gate_ids = []
                 for _ in ref_ids:
-                    g = Gate(gate_id=next_id, op=op, layer=layer_idx)
+                    g = Gate(node_id=next_id, input_ids=[], op=op, layer=layer_idx)
                     circuit.gates.append(g)
                     gate_ids.append(next_id)
                     next_id += 1
@@ -907,7 +946,7 @@ class Circuit:
                 i += 1
                 continue
 
-            if tgt == torch.ops.aten.to.dtype:
+            if tgt in (torch.ops.aten.to.dtype, torch.ops.aten._to_copy.default):
                 src = node.args[0]
                 if isinstance(src, torch.fx.Node) and src.name in wire_map:
                     wire_map[node.name] = wire_map[src.name]
@@ -920,6 +959,103 @@ class Circuit:
                     _output_chain[node.name] = _output_chain[src.name]
                 i += 1
                 continue
+
+            # ----------------------------------------------------------------
+            # aten.gt.Tensor / aten.gt.Scalar → Binarization fan-out nodes.
+            # Each SumReduction node_id in _output_chain fans out to n_bits
+            # boolean gate IDs, one per threshold.
+            # ----------------------------------------------------------------
+            _GT_OPS = (torch.ops.aten.gt.Tensor, torch.ops.aten.gt.Scalar)
+            if tgt in _GT_OPS:
+                x_node = node.args[0]
+                if isinstance(x_node, torch.fx.Node) and x_node.name in _output_chain:
+                    sr_ids = _output_chain[x_node.name]
+                    # Retrieve thresholds
+                    thr_arg = node.args[1]
+                    if tgt == torch.ops.aten.gt.Scalar:
+                        # Single scalar threshold → one output per SumReduction
+                        global_thresholds = [float(thr_arg)]
+                        per_feature = False
+                    else:
+                        # Tensor threshold (global shape (n_bits,) or per-feature (n_features, n_bits))
+                        if isinstance(thr_arg, torch.fx.Node) and thr_arg.op == 'get_attr':
+                            thr_tensor = _get_attr_val(gm, thr_arg)
+                        elif isinstance(thr_arg, torch.fx.Node) and thr_arg.name in wire_map:
+                            # Already evaluated tensor — skip for now
+                            i += 1
+                            continue
+                        else:
+                            i += 1
+                            continue
+                        thr_tensor = thr_tensor.float()
+                        per_feature = thr_tensor.dim() == 2  # (n_features, n_bits)
+                        if not per_feature:
+                            global_thresholds = thr_tensor.flatten().tolist()
+
+                    n_features = len(sr_ids)
+                    n_bits = len(global_thresholds) if not per_feature else thr_tensor.shape[-1]
+                    all_out_ids: list[int] = []
+                    for f, sr_id in enumerate(sr_ids):
+                        thresholds_f = (thr_tensor[f].tolist() if per_feature
+                                        else global_thresholds)
+                        out_ids = list(range(next_id, next_id + n_bits))
+                        next_id += n_bits
+                        b_node = Binarization(
+                            node_id=next_id,
+                            input_ids=[sr_id],
+                            output_ids=out_ids,
+                            thresholds=thresholds_f,
+                        )
+                        next_id += 1
+                        circuit.binarization_nodes.append(b_node)
+                        all_out_ids.extend(out_ids)
+
+                    # Output is boolean → goes into wire_map
+                    wire_map[node.name] = all_out_ids
+                    wire_map[f'__shape_{node.name}'] = [1, n_features, n_bits]
+                    i += 1
+                    continue
+
+            # ----------------------------------------------------------------
+            # aten.gt applied to a wire_map input (e.g. FixedBinarization as
+            # the first layer comparing raw float inputs to thresholds).
+            # Creates one Binarization node per input position; the node's
+            # input_id points to the gate/wire ID for that position.
+            # ----------------------------------------------------------------
+            if tgt in _GT_OPS:
+                x_node = node.args[0]
+                if isinstance(x_node, torch.fx.Node) and x_node.name in wire_map:
+                    x_ids   = wire_map[x_node.name]
+                    x_shape = wire_map.get(f'__shape_{x_node.name}', [len(x_ids)])
+                    thr_arg = node.args[1]
+                    if tgt == torch.ops.aten.gt.Scalar:
+                        thresholds_val = [float(thr_arg)]
+                    elif isinstance(thr_arg, torch.fx.Node) and thr_arg.op == 'get_attr':
+                        thresholds_val = _get_attr_val(gm, thr_arg).float().flatten().tolist()
+                    else:
+                        i += 1; continue
+
+                    n_bits = len(thresholds_val)
+                    all_out_ids: list[int] = []
+                    for gate_id in x_ids:
+                        out_ids = list(range(next_id, next_id + n_bits))
+                        next_id += n_bits
+                        b_node = Binarization(
+                            node_id=next_id,
+                            input_ids=[gate_id],
+                            output_ids=out_ids,
+                            thresholds=thresholds_val,
+                        )
+                        next_id += 1
+                        circuit.binarization_nodes.append(b_node)
+                        all_out_ids.extend(out_ids)
+
+                    # Replace the last dimension with n_bits (broadcasting semantics)
+                    out_shape = list(x_shape[:-1]) + [n_bits]
+                    wire_map[node.name] = all_out_ids
+                    wire_map[f'__shape_{node.name}'] = out_shape
+                    i += 1
+                    continue
 
             # Scalar add/div/mul following a sum node (tau/beta adjustment).
             # Only the SumReduction nodes from that specific sum are updated.
@@ -996,7 +1132,7 @@ class Circuit:
         After fusion the absorbed NOT gates become dead and are removed by the
         next eliminate_dead_gates() call (which simplify() already calls).
         """
-        gate_by_id = {g.gate_id: g for g in self.gates}
+        gate_by_id = {g.node_id: g for g in self.gates}
 
         # Count uses of each gate so we only absorb single-use NOTs.
         sum_by_id = self._sum_by_id
@@ -1008,36 +1144,35 @@ class Circuit:
             for gid in sr.input_ids:
                 use_count[gid] = use_count.get(gid, 0) + 1
         for g in self.gates:
-            for inp in (g.in0, g.in1):
-                if inp >= 0:
-                    use_count[inp] = use_count.get(inp, 0) + 1
+            for inp in g.input_ids:
+                use_count[inp] = use_count.get(inp, 0) + 1
 
         for g in self.gates:
             # --- AND / OR: absorb a NOT on one input ---
             if g.op in (GateOp.AND, GateOp.OR):
-                in0_g = gate_by_id.get(g.in0)
-                in1_g = gate_by_id.get(g.in1)
-                if in1_g is not None and in1_g.op == GateOp.NOT and use_count.get(g.in1, 0) == 1:
-                    g.op  = GateOp.AND_NOT_B if g.op == GateOp.AND else GateOp.OR_NOT_B
-                    g.in1 = in1_g.in0
-                    in1_g.op = GateOp.WIRE   # will be dead after eliminate_dead_gates
-                elif in0_g is not None and in0_g.op == GateOp.NOT and use_count.get(g.in0, 0) == 1:
-                    g.op  = GateOp.AND_NOT_A if g.op == GateOp.AND else GateOp.OR_NOT_A
-                    g.in0 = in0_g.in0
+                in0_g = gate_by_id.get(g.input_ids[0]) if g.input_ids else None
+                in1_g = gate_by_id.get(g.input_ids[1]) if len(g.input_ids) > 1 else None
+                if in1_g is not None and in1_g.op == GateOp.NOT and use_count.get(g.input_ids[1], 0) == 1:
+                    g.op = GateOp.AND_NOT_B if g.op == GateOp.AND else GateOp.OR_NOT_B
+                    g.input_ids[1] = in1_g.input_ids[0]
+                    in1_g.op = GateOp.WIRE
+                elif in0_g is not None and in0_g.op == GateOp.NOT and use_count.get(g.input_ids[0], 0) == 1:
+                    g.op = GateOp.AND_NOT_A if g.op == GateOp.AND else GateOp.OR_NOT_A
+                    g.input_ids[0] = in0_g.input_ids[0]
                     in0_g.op = GateOp.WIRE
 
             # --- NOT(binary): fold into NAND / NOR / XNOR ---
-            elif g.op == GateOp.NOT and g.in0 >= 0 and use_count.get(g.gate_id, 0) >= 1:
-                src = gate_by_id.get(g.in0)
-                if src is not None and use_count.get(g.in0, 0) == 1:
+            elif g.op == GateOp.NOT and g.input_ids and use_count.get(g.node_id, 0) >= 1:
+                src = gate_by_id.get(g.input_ids[0])
+                if src is not None and use_count.get(g.input_ids[0], 0) == 1:
                     if src.op == GateOp.AND:
-                        g.op, g.in0, g.in1 = GateOp.NAND, src.in0, src.in1
+                        g.op = GateOp.NAND; g.input_ids = list(src.input_ids)
                         src.op = GateOp.WIRE
                     elif src.op == GateOp.OR:
-                        g.op, g.in0, g.in1 = GateOp.NOR, src.in0, src.in1
+                        g.op = GateOp.NOR; g.input_ids = list(src.input_ids)
                         src.op = GateOp.WIRE
                     elif src.op == GateOp.XOR:
-                        g.op, g.in0, g.in1 = GateOp.XNOR, src.in0, src.in1
+                        g.op = GateOp.XNOR; g.input_ids = list(src.input_ids)
                         src.op = GateOp.WIRE
 
 
@@ -1046,31 +1181,21 @@ class Circuit:
         Remove gates that do not contribute to the output (i.e. not on a path
         from any output ID back to an input ID).
         """
-        gate_by_id = {g.gate_id: g for g in self.gates}
-
-        # Backward BFS: seed from boolean outputs and all sum-node input_ids
-        sum_by_id = self._sum_by_id
+        # Backward BFS using the unified node map — all node types handled uniformly.
+        node_map = self._node_by_output_id
         visited: set[int] = set()
-        queue: list[int] = []
-        for out_id in self.outputs:
-            if out_id in sum_by_id:
-                queue.extend(sum_by_id[out_id].input_ids)
-            else:
-                queue.append(out_id)
+        queue: list[int] = list(self.outputs)
         while queue:
-            gid = queue.pop()
-            if gid in visited or gid < self.n_inputs:
+            oid = queue.pop()
+            if oid in visited or oid < self.n_inputs:
                 continue
-            visited.add(gid)
-            g = gate_by_id.get(gid)
-            if g is None:
+            visited.add(oid)
+            node = node_map.get(oid)
+            if node is None:
                 continue
-            if g.in0 >= 0:
-                queue.append(g.in0)
-            if g.in1 >= 0:
-                queue.append(g.in1)
+            queue.extend(node.input_ids)
 
-        self.gates = [g for g in self.gates if g.gate_id in visited]
+        self.gates = [g for g in self.gates if g.node_id in visited]
 
 
     def constant_fold_sum_reductions(self) -> None:
@@ -1085,7 +1210,7 @@ class Circuit:
         """
         if not self.sum_nodes:
             return
-        gate_by_id = {g.gate_id: g for g in self.gates}
+        gate_by_id = {g.node_id: g for g in self.gates}
         for sr in self.sum_nodes:
             live = []
             for gid in sr.input_ids:
@@ -1108,15 +1233,15 @@ class Circuit:
         const_val: dict[int, bool] = {}
         new_gates = []
         for g in self.gates:
-            a_c = const_val.get(g.in0) if g.in0 >= 0 else None
-            b_c = const_val.get(g.in1) if g.in1 >= 0 else None
-            new_op, new_in0, new_in1, known = _simplify_gate(
-                g.op, g.in0, g.in1, a_c, b_c)
+            in0 = g.input_ids[0] if g.input_ids else -1
+            in1 = g.input_ids[1] if len(g.input_ids) > 1 else -1
+            a_c = const_val.get(in0) if in0 >= 0 else None
+            b_c = const_val.get(in1) if in1 >= 0 else None
+            new_op, new_in0, new_in1, known = _simplify_gate(g.op, in0, in1, a_c, b_c)
             if known is not None:
-                const_val[g.gate_id] = known
-            new_gates.append(Gate(gate_id=g.gate_id, op=new_op,
-                                in0=new_in0, in1=new_in1,
-                                layer=g.layer, node_idx=g.node_idx))
+                const_val[g.node_id] = known
+            new_inputs = [x for x in [new_in0, new_in1] if x >= 0]
+            new_gates.append(Gate(node_id=g.node_id, input_ids=new_inputs, op=new_op, layer=g.layer, node_idx=g.node_idx))
         self.gates = new_gates
 
 
@@ -1131,7 +1256,7 @@ class Circuit:
         This pass is intentionally conservative and cheap.
         """
 
-        gate_by_id = {g.gate_id: g for g in self.gates}
+        gate_by_id = {g.node_id: g for g in self.gates}
 
         # ------------------------------------------------------------------
         # Build alias map
@@ -1149,24 +1274,21 @@ class Circuit:
                 # ----------------------------------------------------------
                 # WIRE(x) -> x
                 # ----------------------------------------------------------
-                if g.op == GateOp.WIRE and g.in0 >= 0:
-                    target = alias.get(g.in0, g.in0)
-
-                    if alias.get(g.gate_id) != target:
-                        alias[g.gate_id] = target
+                if g.op == GateOp.WIRE and g.input_ids:
+                    target = alias.get(g.input_ids[0], g.input_ids[0])
+                    if alias.get(g.node_id) != target:
+                        alias[g.node_id] = target
                         changed = True
 
                 # ----------------------------------------------------------
                 # NOT(NOT(x)) -> x
                 # ----------------------------------------------------------
-                elif g.op == GateOp.NOT and g.in0 >= 0:
-                    src = gate_by_id.get(g.in0)
-
-                    if src is not None and src.op == GateOp.NOT:
-                        target = alias.get(src.in0, src.in0)
-
-                        if alias.get(g.gate_id) != target:
-                            alias[g.gate_id] = target
+                elif g.op == GateOp.NOT and g.input_ids:
+                    src = gate_by_id.get(g.input_ids[0])
+                    if src is not None and src.op == GateOp.NOT and src.input_ids:
+                        target = alias.get(src.input_ids[0], src.input_ids[0])
+                        if alias.get(g.node_id) != target:
+                            alias[g.node_id] = target
                             changed = True
 
         # ------------------------------------------------------------------
@@ -1184,27 +1306,21 @@ class Circuit:
             return gid
 
         # ------------------------------------------------------------------
-        # Rewrite all fanins
+        # Rewrite all fanins, outputs, and sum-node input_ids.
+        # resolve() only aliases gate IDs; SumReduction/Binarization IDs pass through.
         # ------------------------------------------------------------------
         for g in self.gates:
-            if g.in0 >= 0:
-                g.in0 = resolve(g.in0)
+            g.input_ids = [resolve(x) for x in g.input_ids]
 
-            if g.in1 >= 0:
-                g.in1 = resolve(g.in1)
-
-        # ------------------------------------------------------------------
-        # Rewrite outputs and sum-node input_ids.
-        # resolve() only aliases gate IDs; sum-node IDs pass through unchanged.
-        # ------------------------------------------------------------------
         self.outputs = [resolve(oid) for oid in self.outputs]
         for sr in self.sum_nodes:
             sr.input_ids = [resolve(gid) for gid in sr.input_ids]
+        # Binarization input_ids reference SumReduction node_ids → not in alias map → unchanged.
 
         # ------------------------------------------------------------------
         # Remove aliased gates themselves
         # ------------------------------------------------------------------
-        self.gates = [g for g in self.gates if g.gate_id not in alias]
+        self.gates = [g for g in self.gates if g.node_id not in alias]
 
 
     def dedup(self) -> None:
@@ -1242,20 +1358,17 @@ class Circuit:
         # Build replacement map
         # ------------------------------------------------------------------
         for g in self.gates:
-
-            in0 = g.in0
-            in1 = g.in1
-
+            inputs = list(g.input_ids)
             # Normalize commutative ops
-            if g.op in COMMUTATIVE and in0 > in1:
-                in0, in1 = in1, in0
+            if g.op in COMMUTATIVE and len(inputs) == 2 and inputs[0] > inputs[1]:
+                inputs[0], inputs[1] = inputs[1], inputs[0]
 
-            key = (g.op, in0, in1)
+            key = tuple([g.op] + inputs)
 
             if key in canonical:
-                replace[g.gate_id] = canonical[key]
+                replace[g.node_id] = canonical[key]
             else:
-                canonical[key] = g.gate_id
+                canonical[key] = g.node_id
 
         # ------------------------------------------------------------------
         # Resolve transitively
@@ -1272,24 +1385,14 @@ class Circuit:
             return gid
 
         # ------------------------------------------------------------------
-        # Rewrite fanins
+        # Rewrite fanins, outputs, and sum-node input_ids.
         # ------------------------------------------------------------------
         for g in self.gates:
-
-            if g.in0 >= 0:
-                g.in0 = resolve(g.in0)
-
-            if g.in1 >= 0:
-                g.in1 = resolve(g.in1)
-
+            g.input_ids = [resolve(x) for x in g.input_ids]
             # Keep commutative gates normalized afterward
-            if g.op in COMMUTATIVE and g.in0 > g.in1:
-                g.in0, g.in1 = g.in1, g.in0
+            if g.op in COMMUTATIVE and len(g.input_ids) == 2 and g.input_ids[0] > g.input_ids[1]:
+                g.input_ids[0], g.input_ids[1] = g.input_ids[1], g.input_ids[0]
 
-        # ------------------------------------------------------------------
-        # Rewrite outputs and sum-node input_ids.
-        # resolve() only aliases gate IDs; sum-node IDs pass through unchanged.
-        # ------------------------------------------------------------------
         self.outputs = [resolve(oid) for oid in self.outputs]
         for sr in self.sum_nodes:
             sr.input_ids = [resolve(gid) for gid in sr.input_ids]
@@ -1297,7 +1400,7 @@ class Circuit:
         # ------------------------------------------------------------------
         # Remove duplicate gates
         # ------------------------------------------------------------------
-        self.gates = [g for g in self.gates if g.gate_id not in replace]
+        self.gates = [g for g in self.gates if g.node_id not in replace]
         
 
     def compile(self, opt_level: int = 1, pack_bits: int = None) -> None:
@@ -1308,6 +1411,14 @@ class Circuit:
         import ctypes
         import subprocess
         import tempfile
+
+        # Packed mode requires boolean inputs; circuits with input-binarization
+        # take float inputs, so packing is not supported for them.
+        if pack_bits is not None and any(
+            b.input_ids and b.input_ids[0] < self.n_inputs
+            for b in self.binarization_nodes
+        ):
+            pack_bits = None
 
         c_code = self.get_c_code(pack_bits=pack_bits)
         tmp_c = tempfile.NamedTemporaryFile(suffix='.c', delete=False, mode='w')
@@ -1337,9 +1448,14 @@ class Circuit:
             "uint32_t": ctypes.c_uint32,
             "uint64_t": ctypes.c_uint64,
         }
-        in_ctype  = _ctype_map[pack_bits]
         red_outs  = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
-        out_ctype = _reduction_ctype_map[SumReduction.infer_c_dtype(red_outs)] if red_outs else in_ctype
+        # Use float input type when Binarization nodes take raw input wires.
+        has_input_binarization = (pack_bits is None and
+            any(b.input_ids and b.input_ids[0] < self.n_inputs for b in self.binarization_nodes))
+        in_ctype  = ctypes.c_float if has_input_binarization else _ctype_map[pack_bits]
+        # Output type depends on reductions, not on input type.
+        packed_ctype = _ctype_map[pack_bits]  # packed output type (bool for None → c_bool)
+        out_ctype = _reduction_ctype_map[SumReduction.infer_c_dtype(red_outs)] if red_outs else packed_ctype
         lib = ctypes.CDLL(so_path)
         lib.circuit.argtypes = [
             ctypes.POINTER(in_ctype),
@@ -1386,6 +1502,10 @@ class Circuit:
         sum_by_id  = self._sum_by_id
         red_outs   = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
         has_reductions = bool(red_outs)
+        has_input_binarization = any(
+            b.input_ids and b.input_ids[0] < self.n_inputs
+            for b in self.binarization_nodes
+        )
 
         if use_compiled:
 
@@ -1408,11 +1528,12 @@ class Circuit:
             if not hasattr(self, '_lib'):
                 raise RuntimeError("Circuit not compiled yet. Call compile() first.")
 
-            # check input is boolean numpy array (not torch)
-            assert isinstance(input, np.ndarray) and input.dtype == np.bool_, (
-                "Compiled circuit expects boolean numpy array input, "
-                "got {t} with dtype {dt}".format(t=type(input), dt=input.dtype)
-            )
+            # Input must be a numpy array; dtype is bool unless input-binarization nodes
+            # are present, in which case float32 is expected.
+            assert isinstance(input, np.ndarray), (
+                "Compiled circuit expects a numpy array input, got {t}".format(t=type(input)))
+            _in_np_dtype = np.float32 if has_input_binarization else np.bool_
+            _in_c_type   = ctypes.c_float if has_input_binarization else ctypes.c_bool
 
             assert batch_size % pack == 0 if pack is not None else True, (
                 f"batch_size={batch_size} must be a multiple of pack_bits={pack}"
@@ -1420,8 +1541,8 @@ class Circuit:
 
             if pack is None:
                 n_iter = batch_size
-                flat = input.reshape(batch_size, -1)  # (batch_size, n_in), C-contiguous
-                in_arr = flat.ctypes.data_as(ctypes.POINTER(ctypes.c_bool))
+                flat = input.reshape(batch_size, -1).astype(_in_np_dtype)
+                in_arr = flat.ctypes.data_as(ctypes.POINTER(_in_c_type))
                 out_np = np.zeros(batch_size * n_out, dtype=np_dtype_out)
                 out_arr = out_np.ctypes.data_as(ctypes.POINTER(c_dtype_out))
                 self._lib.circuit_bench(in_arr, out_arr, ctypes.c_int(n_iter))
@@ -1442,15 +1563,72 @@ class Circuit:
                 return out_np.reshape(batch_size, n_out)
 
         else:
+            if self.binarization_nodes:
+                # General topological evaluation — covers all three node types.
+                # Node IDs are assigned from a shared counter in topological order,
+                # so sorting by ID gives a correct evaluation sequence.
+                node_map    = self._node_by_output_id
+                gate_by_id  = {g.node_id: g for g in self.gates}
+                bin_out_map = {oid: b
+                               for b in self.binarization_nodes
+                               for oid in b.output_ids}
+                all_ids = sorted(node_map.keys())
+
+                _torch_dtype_map = {
+                    "float":    torch.float32,
+                    "uint8_t":  torch.uint8,
+                    "uint16_t": torch.int32,
+                    "uint32_t": torch.int32,
+                    "uint64_t": torch.int64,
+                }
+                out_dtype = _torch_dtype_map.get(
+                    SumReduction.infer_c_dtype(red_outs) if red_outs else "bool",
+                    torch.float32,
+                ) if has_reductions else torch.bool
+
+                results = torch.zeros(batch_size, len(self.outputs), dtype=out_dtype)
+                for i in range(batch_size):
+                    gate_vals: dict[int, bool] = {
+                        gid: bool(input[i].flatten()[gid].item())
+                        for gid in range(self.n_inputs)
+                    }
+                    scalar_vals: dict[int, float] = {}
+                    for oid in all_ids:
+                        node = node_map[oid]
+                        if isinstance(node, Gate):
+                            a = gate_vals.get(node.input_ids[0], False) if node.input_ids else False
+                            b = gate_vals.get(node.input_ids[1], False) if len(node.input_ids) > 1 else False
+                            gate_vals[oid] = _eval_gate_op(node.op, a, b)
+                        elif isinstance(node, SumReduction) and oid == node.node_id:
+                            s = sum(int(gate_vals.get(gid, False)) for gid in node.input_ids)
+                            scalar_vals[oid] = (s + node.beta) / node.tau
+                        elif isinstance(node, Binarization) and oid in bin_out_map:
+                            b_node = bin_out_map[oid]
+                            bit_idx = b_node.output_ids.index(oid)
+                            inp = b_node.input_ids[0]
+                            if inp < self.n_inputs:
+                                # Raw input wire — read the actual (float) value
+                                sv = float(input[i].flatten()[inp].item())
+                            else:
+                                sv = scalar_vals.get(inp, 0.0)
+                            gate_vals[oid] = bool(sv > b_node.thresholds[bit_idx])
+                    for j, out_id in enumerate(self.outputs):
+                        sr = sum_by_id.get(out_id)
+                        if sr is not None:
+                            results[i, j] = scalar_vals.get(out_id, 0.0)
+                        else:
+                            results[i, j] = int(gate_vals.get(out_id, False))
+                return results
+
             def _eval_gates(inp_row):
                 gate_vals: dict[int, bool] = {
                     gid: bool(inp_row.flatten()[gid].item())
                     for gid in range(self.n_inputs)
                 }
                 for g in self.gates:
-                    a = gate_vals.get(g.in0, False) if g.in0 >= 0 else False
-                    b = gate_vals.get(g.in1, False) if g.in1 >= 0 else False
-                    gate_vals[g.gate_id] = _eval_gate_op(g.op, a, b)
+                    a = gate_vals.get(g.input_ids[0], False) if g.input_ids else False
+                    b = gate_vals.get(g.input_ids[1], False) if len(g.input_ids) > 1 else False
+                    gate_vals[g.node_id] = _eval_gate_op(g.op, a, b)
                 return gate_vals
 
             if has_reductions:
@@ -1534,7 +1712,7 @@ class Circuit:
         else:
             out_n = n_total
 
-        gate_by_id = {g.gate_id: g for g in self.gates}
+        gate_by_id = {g.node_id: g for g in self.gates}
 
         # ------------------------------------------------------------------ #
         # Count how many times each gate's output is consumed                 #
@@ -1542,8 +1720,8 @@ class Circuit:
         use_count: dict[int, int] = {}
         if inline_single_use:
             for g in self.gates:
-                use_count.setdefault(g.gate_id, 0)
-                for dep in (g.in0, g.in1):
+                use_count.setdefault(g.node_id, 0)
+                for dep in g.input_ids:
                     if dep >= n_in:
                         use_count[dep] = use_count.get(dep, 0) + 1
             for out_id in self.outputs:
@@ -1574,35 +1752,69 @@ class Circuit:
             g = gate_by_id.get(gid)
             if g is None:
                 return f"g{gid}"
-            a = expr_of(g.in0)
-            b = expr_of(g.in1)
+            a = expr_of((g.input_ids[0] if g.input_ids else -1))
+            b = expr_of((g.input_ids[1] if len(g.input_ids) > 1 else -1))
             result = gate_ops[g.op].format(a=a, b=b)
             _expr_cache[gid] = result
             return result
 
         pack_str = f"  pack_bits={pack_bits}" if pack_bits else ""
 
-        gate_lines = []
-        current_layer = -1
-        for gate in self.gates:
-            if should_inline(gate.gate_id):
-                continue
-            if gate.layer != current_layer:
-                if current_layer >= 0:
-                    gate_lines.append("")
-                current_layer = gate.layer
-                gate_lines.append(f"    // --- layer {current_layer} ---")
-            a = expr_of(gate.in0)
-            b = expr_of(gate.in1)
-            expr = gate_ops[gate.op].format(a=a, b=b)
-            gate_lines.append(f"    {ctype} g{gate.gate_id} = {expr};")
-        gates_str = "\n".join(gate_lines)
-
         def _c_float(v: float) -> str:
             s = f"{v:.9g}"
             if '.' not in s and 'e' not in s and 'E' not in s:
                 s += '.0'
             return s + 'f'
+
+        # Determine if any Binarization takes a raw input wire (input_id < n_in).
+        # Those comparisons need the input as float rather than bool.
+        input_binarizations = [b for b in self.binarization_nodes if b.input_ids and b.input_ids[0] < n_in]
+        in_ctype = "float" if (pack_bits is None and input_binarizations) else ctype
+
+        # Build a map from Binarization output_id → (Binarization, bit_index)
+        bin_out_map = {oid: (b, k)
+                       for b in self.binarization_nodes
+                       for k, oid in enumerate(b.output_ids)}
+
+        # Emit gates and Binarization outputs interleaved in topological (node_id) order.
+        # Gates that have inline_single_use are skipped; Binarization outputs are always explicit.
+        gate_lines = []
+        current_layer = -1
+
+        # Build a unified sorted emit list
+        emit_list: list[tuple[int, object]] = []
+        for gate in self.gates:
+            emit_list.append((gate.node_id, gate))
+        for b in self.binarization_nodes:
+            for k, oid in enumerate(b.output_ids):
+                emit_list.append((oid, (b, k)))
+        emit_list.sort(key=lambda x: x[0])
+
+        for node_id, obj in emit_list:
+            if isinstance(obj, Gate):
+                gate = obj
+                if should_inline(gate.node_id):
+                    continue
+                if gate.layer != current_layer:
+                    if current_layer >= 0:
+                        gate_lines.append("")
+                    current_layer = gate.layer
+                    gate_lines.append(f"    // --- layer {current_layer} ---")
+                a = expr_of((gate.input_ids[0] if gate.input_ids else -1))
+                b_val = expr_of((gate.input_ids[1] if len(gate.input_ids) > 1 else -1))
+                expr = gate_ops[gate.op].format(a=a, b=b_val)
+                gate_lines.append(f"    {ctype} g{gate.node_id} = {expr};")
+            else:
+                b_node, bit_idx = obj
+                inp_id = b_node.input_ids[0]
+                threshold = b_node.thresholds[bit_idx]
+                if inp_id < n_in:
+                    inp_expr = f"in[{inp_id}]"
+                else:
+                    inp_expr = f"sum_{inp_id}"
+                gate_lines.append(f"    bool g{node_id} = {inp_expr} > {_c_float(threshold)};")
+
+        gates_str = "\n".join(gate_lines)
 
         def _sr_assign(dest: str, sr: SumReduction, s_expr: str) -> str:
             if is_int_red:
@@ -1710,14 +1922,14 @@ class Circuit:
 // n_inputs={n_in}  n_gates={n_g}  n_outputs={n_total}{pack_str}
 
 void circuit(
-    const {ctype} in[{n_in}],
+    const {in_ctype} in[{n_in}],
     {out_ctype}   out[{out_n}])
 {{
 {gates_str}{output_section}
 }}
 
 void circuit_bench(
-    const {ctype} in[{n_in}],
+    const {in_ctype} in[{n_in}],
     {out_ctype}   out[{out_n}],
     int           n_iter)
 {{
@@ -1770,7 +1982,7 @@ void circuit_bench_bool(
 
         k = len(red_outs)
         argmax_layer = max((g.layer for g in self.gates), default=-1) + 1
-        next_id = max((g.gate_id for g in self.gates), default=self.n_inputs - 1) + 1
+        next_id = max((g.node_id for g in self.gates), default=self.n_inputs - 1) + 1
 
         # A lazily-created CONST_TRUE gate (needed only if NOT(always-false) appears).
         _const_true_id: list[int] = []
@@ -1779,7 +1991,7 @@ void circuit_bench_bool(
             nonlocal next_id
             if not _const_true_id:
                 gid = next_id
-                self.gates.append(Gate(gate_id=gid, op=GateOp.CONST_TRUE, layer=argmax_layer))
+                self.gates.append(Gate(node_id=gid, input_ids=[], op=GateOp.CONST_TRUE, layer=argmax_layer))
                 next_id += 1
                 _const_true_id.append(gid)
             return _const_true_id[0]
@@ -1810,7 +2022,7 @@ void circuit_bench_bool(
                 if a == -1:            return emit(GateOp.NOT, b)
                 if b == -1:            return emit(GateOp.NOT, a)
             gid = next_id
-            self.gates.append(Gate(gate_id=gid, op=op, in0=a, in1=b, layer=argmax_layer))
+            self.gates.append(Gate(node_id=gid, input_ids=[a, b], op=op, layer=argmax_layer))
             next_id += 1
             return gid
 
@@ -1925,10 +2137,9 @@ void circuit_bench_bool(
             'output_shape': self.output_shape,
             'gates': [
                 {
-                    'gate_id': g.gate_id,
+                    'node_id': g.node_id,
                     'op': g.op.name,
-                    'in0': g.in0,
-                    'in1': g.in1,
+                    'input_ids': g.input_ids,
                     'layer': g.layer,
                     'node_idx': g.node_idx,
                 }
@@ -1941,6 +2152,12 @@ void circuit_bench_bool(
                  'tau': sr.tau, 'beta': sr.beta}
                 for sr in self.sum_nodes
             ]
+        if self.binarization_nodes:
+            d['binarization_nodes'] = [
+                {'node_id': b.node_id, 'input_ids': b.input_ids,
+                 'output_ids': b.output_ids, 'thresholds': b.thresholds}
+                for b in self.binarization_nodes
+            ]
         return d
 
     @classmethod
@@ -1952,11 +2169,15 @@ void circuit_bench_bool(
         circuit.outputs = data.get('outputs', [])
         circuit.output_shape = data.get('output_shape', [])
         for g_data in data.get('gates', []):
+            # Support both new format (input_ids) and old format (in0/in1)
+            if 'input_ids' in g_data:
+                inputs = g_data['input_ids']
+            else:
+                inputs = [x for x in [g_data.get('in0', -1), g_data.get('in1', -1)] if x >= 0]
             g = Gate(
-                gate_id=g_data['gate_id'],
+                node_id=g_data.get('gate_id', g_data.get('node_id')),
+                input_ids=inputs,
                 op=GateOp[g_data['op']],
-                in0=g_data['in0'],
-                in1=g_data['in1'],
                 layer=g_data.get('layer', -1),
                 node_idx=g_data.get('node_idx', -1),
             )
@@ -1970,6 +2191,16 @@ void circuit_bench_bool(
                     beta=sr.get('beta', 0.0),
                 )
                 for sr in data['sum_nodes']
+            ]
+        if 'binarization_nodes' in data:
+            circuit.binarization_nodes = [
+                Binarization(
+                    node_id=b['node_id'],
+                    input_ids=b['input_ids'],
+                    output_ids=b['output_ids'],
+                    thresholds=b['thresholds'],
+                )
+                for b in data['binarization_nodes']
             ]
         return circuit
     
@@ -1998,7 +2229,7 @@ void circuit_bench_bool(
         n_in      = self.n_inputs
         n_total   = len(self.outputs)
         sum_by_id = self._sum_by_id
-        gate_by_id = {g.gate_id: g for g in self.gates}
+        gate_by_id = {g.node_id: g for g in self.gates}
 
         # Build raw[] layout for sum reductions (same as get_c_code)
         raw_ids: list[int] = []
@@ -2018,8 +2249,8 @@ void circuit_bench_bool(
         use_count: dict[int, int] = {}
         if inline_single_use:
             for g in self.gates:
-                use_count.setdefault(g.gate_id, 0)
-                for dep in (g.in0, g.in1):
+                use_count.setdefault(g.node_id, 0)
+                for dep in g.input_ids:
                     if dep >= n_in:
                         use_count[dep] = use_count.get(dep, 0) + 1
             for out_id in self.outputs:
@@ -2049,8 +2280,8 @@ void circuit_bench_bool(
             g = gate_by_id.get(gid)
             if g is None:
                 return f"g{gid}"
-            a = vexpr(g.in0)
-            b = vexpr(g.in1)
+            a = vexpr((g.input_ids[0] if g.input_ids else -1))
+            b = vexpr((g.input_ids[1] if len(g.input_ids) > 1 else -1))
             result = GATE_OP_VERILOG[g.op].format(a=a, b=b)
             _expr_cache[gid] = result
             return result
@@ -2058,16 +2289,16 @@ void circuit_bench_bool(
         gate_lines = []
         current_layer = -1
         for gate in self.gates:
-            if should_inline(gate.gate_id):
+            if should_inline(gate.node_id):
                 continue
             if gate.layer != current_layer:
                 gate_lines.append("")
                 current_layer = gate.layer
                 gate_lines.append(f"    // --- layer {current_layer} ---")
-            a = vexpr(gate.in0)
-            b = vexpr(gate.in1)
+            a = vexpr((gate.input_ids[0] if gate.input_ids else -1))
+            b = vexpr((gate.input_ids[1] if len(gate.input_ids) > 1 else -1))
             expr = GATE_OP_VERILOG[gate.op].format(a=a, b=b)
-            gate_lines.append(f"    wire g{gate.gate_id} = {expr};")
+            gate_lines.append(f"    wire g{gate.node_id} = {expr};")
         gates_str = "\n".join(gate_lines)
 
         if has_red:
