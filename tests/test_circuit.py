@@ -195,11 +195,11 @@ def test_c_codegen_group_sum_scores(model_cls):
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     assert circuit.sum_nodes
 
-    from torchlogix.circuit import SumReduction
+    from torchlogix.circuit import _c_output_dtype
     sum_by_id = circuit._sum_by_id
     red_outs = [sum_by_id[oid] for oid in circuit.outputs if oid in sum_by_id]
     k = len(red_outs)
-    out_dtype = SumReduction.infer_c_dtype(red_outs)
+    out_dtype = _c_output_dtype(red_outs)
     c_code = circuit.get_c_code()
 
     assert f"{out_dtype}   out[" in c_code
@@ -222,32 +222,3 @@ def test_c_codegen_group_sum_scores(model_cls):
     assert preds_python.shape[-1] == k
 
 
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
-def test_turn_group_sum_into_argmax(model_cls):
-    """turn_group_sum_into_argmax produces one-hot outputs that match Python argmax."""
-    model = model_cls()
-    x = torch.randint(0, 2, (8, *model.input_shape), dtype=torch.bool)
-
-    circuit = Circuit.from_model(model, input_shape=model.input_shape)
-    circuit.simplify()
-    assert circuit.sum_nodes
-
-    # Scores from the original circuit.
-    scores = circuit(x)
-    expected_argmax = scores.argmax(dim=-1)
-    expected_one_hot = torch.nn.functional.one_hot(expected_argmax, num_classes=scores.shape[-1]).bool()
-
-    circuit.turn_group_sum_into_argmax()
-    circuit.simplify()
-    assert not circuit.sum_nodes
-
-    # One-hot from the converted circuit.
-    one_hot = circuit(x)  # (8, k) bool
-
-    # one_hot should equal expected_one_hot
-    assert torch.equal(one_hot, expected_one_hot), "Circuit one-hot output differs from expected one-hot"
-
-    circuit.compile()
-    one_hot_compiled = circuit(x.numpy(), use_compiled=True)
-
-    assert torch.equal(torch.from_numpy(one_hot_compiled), expected_one_hot), "Compiled circuit one-hot output differs from expected one-hot"

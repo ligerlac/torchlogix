@@ -20,7 +20,6 @@ Each gate:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import ClassVar
 from datetime import datetime
 import operator
 import json
@@ -70,25 +69,6 @@ LUT_ID_TO_GATE = {
     13: (GateOp.OR_NOT_A,    True,  True),
     14: (GateOp.NAND,        True,  True),
     15: (GateOp.CONST_TRUE,  False, False),
-}
-
-GATE_OP_LISP = {
-    GateOp.CONST_FALSE: "(const false)",
-    GateOp.CONST_TRUE:  "(const true)",
-    GateOp.WIRE:        "(wire {a})",
-    GateOp.NOT:         "(not {a})",
-    GateOp.AND:         "(and {a} {b})",
-    GateOp.OR:          "(or {a} {b})",
-    GateOp.XOR:         "(xor {a} {b})",
-    GateOp.NAND:        "(nand {a} {b})",
-    GateOp.NOR:         "(nor {a} {b})",
-    GateOp.XNOR:        "(xnor {a} {b})",
-    GateOp.AND_NOT_B:   "(and {a} (not {b}))",
-    GateOp.AND_NOT_A:   "(and (not {a}) {b})",
-    GateOp.OR_NOT_B:    "(or {a} (not {b}))",
-    GateOp.OR_NOT_A:    "(or (not {a}) {b})",
-    GateOp.NOT_A:       "(not {a})",
-    GateOp.NOT_B:       "(not {b})",
 }
 
 # Verilog expression templates; a/b are Verilog signal name strings
@@ -179,9 +159,7 @@ class Gate:
     op:      GateOp
     in0:     int = -1   # -1 = unused
     in1:     int = -1
-    # metadata
-    layer:   int = -1
-    node_idx: int = -1  # index within the layer's flat node list
+    node_idx: int = -1
 
 
 @dataclass
@@ -191,27 +169,23 @@ class SumReduction:
     tau:       float = 1.0
     beta:      float = 0.0
 
-    @classmethod
-    def infer_c_dtype(cls, reductions: list['SumReduction']) -> str:
-        """
-        Infer the narrowest C output type for a collection of SumReduction nodes.
+    def get_max_value(self) -> int | None:
+        """Return the max possible integer output, or None if the output is float (tau≠1 or fractional beta)."""
+        if self.tau != 1.0 or self.beta != round(self.beta):
+            return None
+        return len(self.input_ids) + int(round(self.beta))
 
-        Returns 'float' when any reduction uses a non-unity tau or fractional beta.
-        Otherwise returns the smallest unsigned integer type that cannot overflow
-        given the statically-known maximum sum per reduction:
-            max_val = len(input_ids) + int(beta)
-        """
-        for sr in reductions:
-            if sr.tau != 1.0 or sr.beta != round(sr.beta):
-                return "float"
-        max_val = max(
-            (len(sr.input_ids) + int(round(sr.beta)) for sr in reductions),
-            default=0,
-        )
-        if max_val <= 0xFF:       return "uint8_t"
-        if max_val <= 0xFFFF:     return "uint16_t"
-        if max_val <= 0xFFFFFFFF: return "uint32_t"
-        return "uint64_t"
+
+def _c_output_dtype(reductions: list[SumReduction]) -> str:
+    """Return the narrowest C type for a set of SumReduction outputs."""
+    max_vals = [sr.get_max_value() for sr in reductions]
+    if any(v is None for v in max_vals):
+        return "float"
+    m = max(max_vals, default=0)
+    if m <= 0xFF:        return "uint8_t"
+    if m <= 0xFFFF:      return "uint16_t"
+    if m <= 0xFFFFFFFF:  return "uint32_t"
+    return "uint64_t"
 
 
 @dataclass
@@ -234,24 +208,9 @@ class Circuit:
             f"  input_shape={self.input_shape},\n"
             f"  logic_nodes={len(self.gates)},\n"
             f"  sum_nodes={len(self.sum_nodes)},\n"
-            f"  outputs={self.outputs},\n"
             f"  output_shape={self.output_shape}\n"
             f")"
         )
-
-    # Registry for custom op handlers registered by downstream code (e.g. torchlogix layers).
-    # Each entry: op_target -> fn(node, wire_map, circuit, next_id, gm, layer_idx) -> (next_id, layer_idx)
-    _op_handlers: ClassVar[dict] = {}
-
-    @classmethod
-    def register_op_handler(cls, op_target, fn) -> None:
-        """Register a handler for a custom FX op so from_fx_graph can process it.
-
-        fn signature: (node, wire_map, circuit, next_id, gm, layer_idx) -> (next_id, layer_idx)
-        The handler should update wire_map and circuit.gates in-place and return
-        the new (next_id, layer_idx) pair.  Return None to leave them unchanged.
-        """
-        cls._op_handlers[op_target] = fn
 
     @classmethod
     def from_model(cls, model: torch.nn.Module, input_shape: list[int]) -> Circuit:
@@ -322,8 +281,6 @@ class Circuit:
         # ------------------------------------------------------------------
         # Pass 2: walk nodes in order
         # ------------------------------------------------------------------
-        layer_idx = 0
-
         i = 0
         while i < len(nodes):
             node = nodes[i]
@@ -349,7 +306,7 @@ class Circuit:
                     gate_ids = []
                     for b in flat:
                         op = GateOp.CONST_TRUE if b else GateOp.CONST_FALSE
-                        g = Gate(gate_id=next_id, op=op, layer=layer_idx)
+                        g = Gate(gate_id=next_id, op=op)
                         circuit.gates.append(g)
                         gate_ids.append(next_id)
                         next_id += 1
@@ -620,7 +577,7 @@ class Circuit:
                     result_ids = []
                     for v in padded.flatten().tolist():
                         if v < 0:
-                            g = Gate(gate_id=next_id, op=const_op, layer=layer_idx)
+                            g = Gate(gate_id=next_id, op=const_op)
                             circuit.gates.append(g)
                             result_ids.append(next_id)
                             next_id += 1
@@ -759,7 +716,7 @@ class Circuit:
                     else:
                         gate_ids = []
                         for _ in x_ids:
-                            g = Gate(gate_id=next_id, op=const_op, layer=layer_idx)
+                            g = Gate(gate_id=next_id, op=const_op)
                             circuit.gates.append(g)
                             gate_ids.append(next_id)
                             next_id += 1
@@ -832,8 +789,7 @@ class Circuit:
                     shape   = wire_map.get(f'__shape_{a_node_arg.name}', [len(a_ids)])
                     gate_ids = []
                     for a_id, b_id in zip(a_ids, b_ids):
-                        g = Gate(gate_id=next_id, op=gate_op, in0=a_id, in1=b_id,
-                                layer=layer_idx)
+                        g = Gate(gate_id=next_id, op=gate_op, in0=a_id, in1=b_id)
                         circuit.gates.append(g)
                         gate_ids.append(next_id)
                         next_id += 1
@@ -849,7 +805,7 @@ class Circuit:
                     shape = wire_map.get(f'__shape_{a_node_arg.name}', [len(a_ids)])
                     gate_ids = []
                     for a_id in a_ids:
-                        g = Gate(gate_id=next_id, op=GateOp.NOT, in0=a_id, layer=layer_idx)
+                        g = Gate(gate_id=next_id, op=GateOp.NOT, in0=a_id)
                         circuit.gates.append(g)
                         gate_ids.append(next_id)
                         next_id += 1
@@ -868,7 +824,7 @@ class Circuit:
                     else GateOp.CONST_TRUE
                 gate_ids = []
                 for _ in ref_ids:
-                    g = Gate(gate_id=next_id, op=op, layer=layer_idx)
+                    g = Gate(gate_id=next_id, op=op)
                     circuit.gates.append(g)
                     gate_ids.append(next_id)
                     next_id += 1
@@ -947,17 +903,6 @@ class Circuit:
                     _output_chain[node.name] = chain_ids
                     i += 1
                     continue
-
-            # ---------------------------------------------------------------------
-            # Registered custom op handlers (e.g. torchlogix lut_layer / group_sum)
-            # ---------------------------------------------------------------------
-            if tgt in Circuit._op_handlers:
-                result = Circuit._op_handlers[tgt](
-                    node, wire_map, circuit, next_id, gm, layer_idx)
-                if result is not None:
-                    next_id, layer_idx = result
-                i += 1
-                continue
 
             # ---- skip everything else (sym_size, asserts, etc.) ----
             i += 1
@@ -1116,7 +1061,7 @@ class Circuit:
                 const_val[g.gate_id] = known
             new_gates.append(Gate(gate_id=g.gate_id, op=new_op,
                                 in0=new_in0, in1=new_in1,
-                                layer=g.layer, node_idx=g.node_idx))
+                                node_idx=g.node_idx))
         self.gates = new_gates
 
 
@@ -1339,7 +1284,7 @@ class Circuit:
         }
         in_ctype  = _ctype_map[pack_bits]
         red_outs  = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
-        out_ctype = _reduction_ctype_map[SumReduction.infer_c_dtype(red_outs)] if red_outs else in_ctype
+        out_ctype = _reduction_ctype_map[_c_output_dtype(red_outs)] if red_outs else in_ctype
         lib = ctypes.CDLL(so_path)
         lib.circuit.argtypes = [
             ctypes.POINTER(in_ctype),
@@ -1373,7 +1318,7 @@ class Circuit:
         evaluates the gate list in Python.
 
         Returns a tensor of shape (batch, len(outputs)). The dtype is determined
-        by SumReduction.infer_c_dtype over the output sum nodes: uint{N}_t when
+        by _c_output_dtype over the output sum nodes: uint{N}_t when
         all tau=1, float when tau≠1, bool when there are no sum nodes in outputs.
 
         Attention: For a fair performance comparison, the compiled code does not
@@ -1403,7 +1348,7 @@ class Circuit:
                 np_dtype_out = np.bool_
                 c_dtype_out = ctypes.c_bool
             else:
-                np_dtype_out, c_dtype_out = _reduction_dtype_map[SumReduction.infer_c_dtype(red_outs)]
+                np_dtype_out, c_dtype_out = _reduction_dtype_map[_c_output_dtype(red_outs)]
 
             if not hasattr(self, '_lib'):
                 raise RuntimeError("Circuit not compiled yet. Call compile() first.")
@@ -1461,7 +1406,7 @@ class Circuit:
                     "uint32_t": torch.int32,
                     "uint64_t": torch.int64,
                 }
-                out_dtype = _torch_dtype_map[SumReduction.infer_c_dtype(red_outs)]
+                out_dtype = _torch_dtype_map[_c_output_dtype(red_outs)]
                 is_int = out_dtype != torch.float32
                 results = torch.zeros(batch_size, len(self.outputs), dtype=out_dtype)
                 for i in range(batch_size):
@@ -1524,7 +1469,7 @@ class Circuit:
 
         red_outs      = [sum_by_id[oid] for oid in self.outputs if oid in sum_by_id]
         has_reductions = bool(red_outs)
-        red_dtype      = SumReduction.infer_c_dtype(red_outs) if has_reductions else "bool"
+        red_dtype      = _c_output_dtype(red_outs) if has_reductions else "bool"
         out_ctype      = red_dtype if has_reductions else ctype
         is_int_red     = has_reductions and red_dtype != "float"
         # Packed boolean-only circuits use bit-packed output (one word per output slot).
@@ -1583,15 +1528,9 @@ class Circuit:
         pack_str = f"  pack_bits={pack_bits}" if pack_bits else ""
 
         gate_lines = []
-        current_layer = -1
         for gate in self.gates:
             if should_inline(gate.gate_id):
                 continue
-            if gate.layer != current_layer:
-                if current_layer >= 0:
-                    gate_lines.append("")
-                current_layer = gate.layer
-                gate_lines.append(f"    // --- layer {current_layer} ---")
             a = expr_of(gate.in0)
             b = expr_of(gate.in1)
             expr = gate_ops[gate.op].format(a=a, b=b)
@@ -1757,163 +1696,6 @@ void circuit_bench_bool(
 }}"""}"""
 
 
-    def turn_group_sum_into_argmax(self) -> None:
-        """
-        Replace the GroupSum output reduction with pure gate logic that computes
-        the argmax of the k group sums. Ties are broken in favour of the
-        lowest-index class. After this call output_reduction is None and the
-        circuit has k boolean outputs (one-hot: winning class bit is 1).
-        """
-        red_outs = [sr for sr in self.sum_nodes if sr.node_id in set(self.outputs)]
-        if not red_outs:
-            raise ValueError("Circuit has no sum-reduction outputs to convert")
-
-        k = len(red_outs)
-        argmax_layer = max((g.layer for g in self.gates), default=-1) + 1
-        next_id = max((g.gate_id for g in self.gates), default=self.n_inputs - 1) + 1
-
-        # A lazily-created CONST_TRUE gate (needed only if NOT(always-false) appears).
-        _const_true_id: list[int] = []
-
-        def get_const_true() -> int:
-            nonlocal next_id
-            if not _const_true_id:
-                gid = next_id
-                self.gates.append(Gate(gate_id=gid, op=GateOp.CONST_TRUE, layer=argmax_layer))
-                next_id += 1
-                _const_true_id.append(gid)
-            return _const_true_id[0]
-
-        def emit(op: GateOp, a: int = -1, b: int = -1) -> int:
-            """Emit a gate with constant folding for -1 (constant false) inputs."""
-            nonlocal next_id
-            if op == GateOp.WIRE:      return a
-            if op == GateOp.NOT:
-                if a == -1:            return get_const_true()
-            if op == GateOp.AND:
-                if a == -1 or b == -1: return -1
-            if op == GateOp.OR:
-                if a == -1 and b == -1: return -1
-                if a == -1:            return b
-                if b == -1:            return a
-            if op == GateOp.XOR:
-                if a == -1:            return b
-                if b == -1:            return a
-            if op == GateOp.AND_NOT_B:   # a AND NOT b
-                if a == -1:            return -1
-                if b == -1:            return a   # a AND true = a
-            if op == GateOp.AND_NOT_A:   # NOT a AND b
-                if b == -1:            return -1
-                if a == -1:            return b   # true AND b = b
-            if op == GateOp.XNOR:
-                if a == -1 and b == -1: return get_const_true()
-                if a == -1:            return emit(GateOp.NOT, b)
-                if b == -1:            return emit(GateOp.NOT, a)
-            gid = next_id
-            self.gates.append(Gate(gate_id=gid, op=op, in0=a, in1=b, layer=argmax_layer))
-            next_id += 1
-            return gid
-
-        def add_bits(a_bits: list[int], b_bits: list[int]) -> list[int]:
-            """Add two unsigned binary numbers (LSB first). Returns sum bits."""
-            n = max(len(a_bits), len(b_bits))
-            a = a_bits + [-1] * (n - len(a_bits))
-            b = b_bits + [-1] * (n - len(b_bits))
-            result = []
-            carry = -1
-            for ai, bi in zip(a, b):
-                xab   = emit(GateOp.XOR, ai, bi)
-                s     = emit(GateOp.XOR, xab, carry)
-                c_ab  = emit(GateOp.AND, ai, bi)
-                c_xc  = emit(GateOp.AND, xab, carry)
-                carry = emit(GateOp.OR, c_ab, c_xc)
-                result.append(s)
-            result.append(carry)
-            return result
-
-        def popcount(bit_ids: list[int]) -> list[int]:
-            """Binary-tree popcount. Returns count as binary number (LSB first)."""
-            if not bit_ids:
-                return [-1]
-            numbers = [[b] for b in bit_ids]
-            while len(numbers) > 1:
-                new_numbers = []
-                for i in range(0, len(numbers) - 1, 2):
-                    new_numbers.append(add_bits(numbers[i], numbers[i + 1]))
-                if len(numbers) % 2 == 1:
-                    new_numbers.append(numbers[-1])
-                numbers = new_numbers
-            return numbers[0]
-
-        def compare_gt(a_bits: list[int], b_bits: list[int]) -> int:
-            """Return gate ID for (unsigned(a) > unsigned(b)).
-
-            Standard ripple comparator: scan MSB→LSB tracking 'greater so far'
-            and 'equal so far'. Equal is true until any bit differs.
-              greater_new = greater OR (equal AND a_wins)
-              equal_new   = equal AND (a[i] XNOR b[i])
-            """
-            n = max(len(a_bits), len(b_bits))
-            a = a_bits + [-1] * (n - len(a_bits))
-            b = b_bits + [-1] * (n - len(b_bits))
-            greater = -1   # false: a not greater so far
-            equal   = None  # None = implicitly true (before first bit)
-            for i in range(n - 1, -1, -1):
-                ai, bi = a[i], b[i]
-                a_wins = emit(GateOp.AND_NOT_B, ai, bi)
-                a_eq   = emit(GateOp.XNOR, ai, bi)
-                if equal is None:
-                    # First bit: equal is implicitly true, so AND(true, a_wins) = a_wins
-                    greater = emit(GateOp.OR, greater, a_wins)
-                    equal   = a_eq
-                else:
-                    greater = emit(GateOp.OR, greater, emit(GateOp.AND, equal, a_wins))
-                    equal   = emit(GateOp.AND, equal, a_eq)
-            return greater
-
-        # 1. Popcount for each SumReduction's input bits, including any constant
-        # contribution that was folded into beta by constant_fold_sum_reductions.
-        # We add int(beta) CONST_TRUE wires so the comparators see the full sum;
-        # the subsequent simplify() will fold those constants back out of the adder.
-        def _bits_with_const(sr: SumReduction) -> list[int]:
-            bits = list(sr.input_ids)
-            ct = get_const_true()
-            bits.extend([ct] * int(round(sr.beta)))
-            return bits
-
-        counts = [popcount(_bits_with_const(sr)) for sr in red_outs]
-
-        # 2. Pairwise comparisons: gt[(a, b)] = gate for "a strictly beats b", a > b.
-        gt: dict[tuple[int, int], int] = {}
-        for a in range(k):
-            for b in range(a):
-                gt[(a, b)] = compare_gt(counts[a], counts[b])
-
-        # 3. One-hot output.
-        # out[j] = AND(j > m for all m < j) AND AND(NOT (m > j) for all m > j)
-        out_ids = []
-        for j in range(k):
-            conditions = []
-            for m in range(j):
-                conditions.append(gt[(j, m)])
-            for m in range(j + 1, k):
-                conditions.append(emit(GateOp.NOT, gt[(m, j)]))
-            if not conditions:
-                out_ids.append(get_const_true())
-            else:
-                result = conditions[0]
-                for c in conditions[1:]:
-                    result = emit(GateOp.AND, result, c)
-                out_ids.append(result)
-
-        # Replace reduction output IDs in self.outputs with argmax gate IDs
-        red_id_to_argmax = {sr.node_id: out_ids[j] for j, sr in enumerate(red_outs)}
-        self.outputs = [red_id_to_argmax.get(oid, oid) for oid in self.outputs]
-        self.output_shape = [k]
-        self.sum_nodes = []
-
-
-
     def to_dict(self) -> dict:
         """
         Convert the circuit representation to a JSON-serializable format.
@@ -1929,7 +1711,6 @@ void circuit_bench_bool(
                     'op': g.op.name,
                     'in0': g.in0,
                     'in1': g.in1,
-                    'layer': g.layer,
                     'node_idx': g.node_idx,
                 }
                 for g in self.gates
@@ -1957,7 +1738,6 @@ void circuit_bench_bool(
                 op=GateOp[g_data['op']],
                 in0=g_data['in0'],
                 in1=g_data['in1'],
-                layer=g_data.get('layer', -1),
                 node_idx=g_data.get('node_idx', -1),
             )
             circuit.gates.append(g)
@@ -1983,7 +1763,7 @@ void circuit_bench_bool(
         return cls.from_dict(data)
 
 
-    def get_verilog_code(self, inline_single_use: bool) -> str:
+    def get_verilog_code(self, inline_single_use: bool = False) -> str:
         """
         Generate a Verilog module that implements the circuit.
 
@@ -2056,14 +1836,9 @@ void circuit_bench_bool(
             return result
 
         gate_lines = []
-        current_layer = -1
         for gate in self.gates:
             if should_inline(gate.gate_id):
                 continue
-            if gate.layer != current_layer:
-                gate_lines.append("")
-                current_layer = gate.layer
-                gate_lines.append(f"    // --- layer {current_layer} ---")
             a = vexpr(gate.in0)
             b = vexpr(gate.in1)
             expr = GATE_OP_VERILOG[gate.op].format(a=a, b=b)
@@ -2071,11 +1846,8 @@ void circuit_bench_bool(
         gates_str = "\n".join(gate_lines)
 
         if has_red:
-            _dtype_bits = {
-                "float": 32, "uint8_t": 8, "uint16_t": 16,
-                "uint32_t": 32, "uint64_t": 64,
-            }
-            score_bits = _dtype_bits[SumReduction.infer_c_dtype(red_outs)]
+            _dtype_bits = {"float": 32, "uint8_t": 8, "uint16_t": 16, "uint32_t": 32, "uint64_t": 64}
+            score_bits = _dtype_bits[_c_output_dtype(red_outs)]
             reduction_comment = (
                 f"// {n_total} output(s) — scores_flat = {n_total} x {score_bits}-bit values\n"
             )
