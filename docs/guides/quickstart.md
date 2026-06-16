@@ -42,6 +42,9 @@ for x, y in train_loader:
 
 ## Convert to Circuit and compile
 
+> `Circuit` requires **binary inputs** — binarize at the dataset level before
+> passing data to the model. Binarization layers are not exported.
+
 ```python
 from torchlogix import Circuit
 from torchlogix.utils import set_export_mode
