@@ -13,7 +13,7 @@ import torch
 from .layers.conv import LogicConv2d, LogicConv3d
 from .layers.pool import OrPooling2d, OrPooling3d
 from .layers.dense import LogicDense
-from .layers.groupsum import GroupSum
+from .layers.groupsum import GroupSum, LearnableGroupAffine, LearnableGroupLinear
 from .layers.binarization import Binarization
 
 
@@ -72,8 +72,13 @@ class CompiledLogicNet(torch.nn.Module):
         self.lib_fn = None
 
         # GroupSum information
+        self.group_sum_layer_type = None
         self.tau = 1
         self.beta = 0
+        self.affine_scale = None
+        self.affine_bias = None
+        self.group_linear_weight = None
+        self.group_linear_bias = None
 
         if model is not None:
             self._parse_model(verbose)
@@ -87,16 +92,29 @@ class CompiledLogicNet(torch.nn.Module):
             if self.model[0].thresholds is not None:
                 self.apply_thresholding = True
 
-        # Find GroupSum layer for num_classes
+        # Find final aggregation layer for num_classes
         for layer in self.model:
             if isinstance(layer, GroupSum):
+                self.group_sum_layer_type = "groupsum"
                 self.num_classes = layer.k
                 self.tau = layer.tau
                 self.beta = layer.beta
                 break
+            if isinstance(layer, LearnableGroupAffine):
+                self.group_sum_layer_type = "learnable_affine"
+                self.num_classes = layer.k
+                self.affine_scale = torch.exp(layer.a.detach()).cpu().tolist()
+                self.affine_bias = layer.b.detach().cpu().tolist()
+                break
+            if isinstance(layer, LearnableGroupLinear):
+                self.group_sum_layer_type = "learnable_linear"
+                self.num_classes = layer.k
+                self.group_linear_weight = layer.linear.weight.detach().cpu().tolist()
+                self.group_linear_bias = layer.linear.bias.detach().cpu().tolist()
+                break
 
         if self.num_classes is None:
-            raise ValueError("No GroupSum layer found in model")
+            raise ValueError("No GroupSum, LearnableGroupAffine, or LearnableGroupLinear layer found in model")
 
         # Parse all layers and track execution order
         for layer in self.model:
@@ -127,6 +145,12 @@ class CompiledLogicNet(torch.nn.Module):
             elif isinstance(layer, GroupSum):
                 if verbose:
                     print(f"Found GroupSum layer (tau={self.tau}, beta={self.beta}) with {layer.k} classes")
+            elif isinstance(layer, LearnableGroupAffine):
+                if verbose:
+                    print(f"Found LearnableGroupAffine layer with {layer.k} classes")
+            elif isinstance(layer, LearnableGroupLinear):
+                if verbose:
+                    print(f"Found LearnableGroupLinear layer with {layer.k} classes")
             else:
                 if verbose:
                     print(f"Warning: Unknown layer type: {type(layer)}")
@@ -264,6 +288,71 @@ class CompiledLogicNet(torch.nn.Module):
                 raise ValueError(f"Operator {operation_name} unknown.")
 
         return res
+
+    @staticmethod
+    def _c_float_literal(value: float) -> str:
+        """Format a Python float as a C float literal."""
+        literal = f"{float(value):.9g}"
+        if "." not in literal and "e" not in literal and "E" not in literal:
+            literal += ".0"
+        return f"{literal}f"
+
+    def _get_groupsum_output_expression_indexed(
+        self, sum_expr: str, class_index_expr: str, neurons_per_class: int
+    ) -> str:
+        """Generate final C expression when the class index is a C variable."""
+        if not self.apply_groupsum_scaling:
+            return sum_expr
+
+        if self.group_sum_layer_type == "learnable_affine":
+            return (
+                f"(((2.0f * ({sum_expr}) / {neurons_per_class}.0f) - 1.0f) "
+                f"* affine_scale[{class_index_expr}] + affine_bias[{class_index_expr}])"
+            )
+
+        return f"(({sum_expr} + {self._c_float_literal(self.beta)}) / {self._c_float_literal(self.tau)})"
+
+    def _get_normalized_groupsum_expression(self, sum_expr: str, neurons_per_class: int) -> str:
+        """Generate the normalized popcount expression shared by learnable aggregation layers."""
+        return f"((2.0f * ({sum_expr}) / {neurons_per_class}.0f) - 1.0f)"
+
+    def _get_learnable_linear_constants(self) -> tuple[str, str]:
+        """Generate flattened C initializers for LearnableGroupLinear parameters."""
+        weight_values = [
+            self._c_float_literal(weight)
+            for row in self.group_linear_weight
+            for weight in row
+        ]
+        bias_values = [self._c_float_literal(bias) for bias in self.group_linear_bias]
+        return ", ".join(weight_values), ", ".join(bias_values)
+
+    def _get_batch_learnable_linear_code(self) -> str:
+        """Generate C code to apply LearnableGroupLinear to bitpacked group values."""
+        return f"""
+        // Apply LearnableGroupLinear to normalized group sums
+        for(size_t b = 0; b < {self.num_bits}; ++b) {{
+            for(size_t out_c = 0; out_c < {self.num_classes}; ++out_c) {{
+                float linear_out = linear_bias[out_c];
+                for(size_t in_c = 0; in_c < {self.num_classes}; ++in_c) {{
+                    linear_out += group_values[b * {self.num_classes} + in_c] * linear_weight[out_c * {self.num_classes} + in_c];
+                }}
+                out[(i * {self.num_bits} + b) * {self.num_classes} + out_c] = linear_out;
+            }}
+        }}"""
+
+    def _get_single_learnable_linear_code(self) -> str:
+        """Generate C code to apply LearnableGroupLinear to one event's group values."""
+        return f"""
+    // Apply LearnableGroupLinear to normalized group sums
+    for(size_t out_c = 0; out_c < {self.num_classes}; ++out_c) {{
+        float linear_out = linear_bias[out_c];
+        for(size_t in_c = 0; in_c < {self.num_classes}; ++in_c) {{
+            linear_out += group_values[in_c] * linear_weight[out_c * {self.num_classes} + in_c];
+        }}
+        out[out_c] = linear_out;
+    }}
+}}
+"""
 
     def get_gate_verilog(self, var1: str, var2: str, gate_op: int) -> str:
         """Generate Verilog code for a logic gate operation.
@@ -1170,6 +1259,19 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
     bool *bool_temp = malloc({logic_net_inp_size} * {self.num_bits} * sizeof(bool));
     {thresholds_c_def}"""
 
+        if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_affine":
+            scale_str = ", ".join(self._c_float_literal(x) for x in self.affine_scale)
+            bias_str = ", ".join(self._c_float_literal(x) for x in self.affine_bias)
+            code_start += f"""
+    const float affine_scale[{self.num_classes}] = {{{scale_str}}};
+    const float affine_bias[{self.num_classes}] = {{{bias_str}}};"""
+        elif self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_linear":
+            weight_str, bias_str = self._get_learnable_linear_constants()
+            code_start += f"""
+    float group_values[{self.num_bits} * {self.num_classes}];
+    const float linear_weight[{self.num_classes} * {self.num_classes}] = {{{weight_str}}};
+    const float linear_bias[{self.num_classes}] = {{{bias_str}}};"""
+
         code_start += f"""
 
     for(size_t i = 0; i < len; ++i) {{"""
@@ -1210,6 +1312,21 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
             inp_temp[d] = res;
         }}"""
 
+        if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_linear":
+            group_output_expr = (
+                "group_values[b * "
+                f"{self.num_classes} + c] = "
+                f"{self._get_normalized_groupsum_expression('res', num_neurons_ll // self.num_classes)}"
+            )
+            learnable_linear_code = self._get_batch_learnable_linear_code()
+        else:
+            group_output_expr = (
+                "out[(i * "
+                f"{self.num_bits} + b) * {self.num_classes} + c] = "
+                f"{self._get_groupsum_output_expression_indexed('res', 'c', num_neurons_ll // self.num_classes)}"
+            )
+            learnable_linear_code = ""
+
         return [
             code_start + code_threshold + f"""
 
@@ -1242,9 +1359,10 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
                     res <<= 1;
                     res += !!(out_temp_o[d] & bit_mask);
                 }}
-                out[(i * {self.num_bits} + b) * {self.num_classes} + c] = {"(res + " + str(self.beta) + ") / " + str(self.tau) if self.apply_groupsum_scaling else "res"};
+                {group_output_expr};
             }}
         }}
+        {learnable_linear_code}
     }}
     free(inp_temp);
     free(out_temp);
@@ -1289,6 +1407,19 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
     bool out_temp[{num_neurons_ll}];"""
         ]
 
+        if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_affine":
+            scale_str = ", ".join(self._c_float_literal(x) for x in self.affine_scale)
+            bias_str = ", ".join(self._c_float_literal(x) for x in self.affine_bias)
+            code.append(f"""    const float affine_scale[{self.num_classes}] = {{{scale_str}}};
+    const float affine_bias[{self.num_classes}] = {{{bias_str}}};
+""")
+        elif self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_linear":
+            weight_str, bias_str = self._get_learnable_linear_constants()
+            code.append(f"""    float group_values[{self.num_classes}];
+    const float linear_weight[{self.num_classes} * {self.num_classes}] = {{{weight_str}}};
+    const float linear_bias[{self.num_classes}] = {{{bias_str}}};
+""")
+
         if self.apply_thresholding:
             code.append(f"""    bool inp_temp[{input_size * num_thresholds}];
     {thresholds_c_def}
@@ -1318,18 +1449,21 @@ void apply_logic_net({inp_dtype} const *inp, {out_dtype} *out, size_t len) {{
             sum += out_temp[c * {num_neurons_ll} / {self.num_classes} + a];
         }}""")
 
-        if self.apply_groupsum_scaling:
-                code.append(f"""
-        out[c] = (sum + {self.beta}) / {self.tau};
+        group_output_expr = (
+            f"group_values[c] = {self._get_normalized_groupsum_expression('sum', num_neurons_ll // self.num_classes)}"
+            if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_linear"
+            else f"out[c] = {self._get_groupsum_output_expression_indexed('sum', 'c', num_neurons_ll // self.num_classes)}"
+        )
+
+        code.append(f"""
+        {group_output_expr};
     }}
-}}
 """)
+
+        if self.apply_groupsum_scaling and self.group_sum_layer_type == "learnable_linear":
+            code.append(self._get_single_learnable_linear_code())
         else:
-                code.append(f"""
-        out[c] = sum;
-    }}
-}}
-""")
+            code.append("}\n")
 
         code.append(
             f"""

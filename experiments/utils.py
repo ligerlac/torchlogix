@@ -79,6 +79,22 @@ def load_n(loader, n):
                 break
 
 
+def cosine_loss(ground_truth, prediction):
+    cos_sim = torch.nn.CosineSimilarity(dim=1, eps=1e-8)
+    return 1 - torch.mean(cos_sim(ground_truth, prediction))
+
+
+def get_loss(loss):
+    if loss == "cross_entropy":
+        return torch.nn.CrossEntropyLoss()
+    elif loss == "mse":
+        return torch.nn.MSELoss()
+    elif loss == "cosine_similarity":
+        return cosine_loss
+    else:
+        raise ValueError(f"Unsupported loss function: {loss}")
+
+
 def get_model(thresholds, args):
     """
     Select model from the architecture.
@@ -264,7 +280,10 @@ def evaluate_model(model, loader, eval_functions, mode="eval", device="cuda"):
                 x = torchlogix.PackBitsTensor(x.reshape(x.shape[0], -1).round().bool())
 
             preds = model(x)
-
+            if preds.shape[-1] == 1:
+                y = y.to(torch.float32)
+                if len(y.shape) == 1:
+                    y = y.unsqueeze(1)
             for name, fn in eval_functions.items():
                 metrics[name].append(fn(preds, y).to(torch.float32).mean().item())
 
