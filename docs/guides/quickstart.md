@@ -2,7 +2,7 @@
 
 For a complete end-to-end walkthrough — training, evaluating, compiling, and
 exporting to C/Verilog — see the
-[MNIST example notebook](../../experiments/mnist_example.ipynb).
+[MNIST example notebook](../../examples/mnist_example.ipynb).
 
 This page shows the minimal API surface for building and exporting a model.
 

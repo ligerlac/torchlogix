@@ -33,22 +33,22 @@ python examples/synthesis/generate_test_vectors.py \
 Writes `test_vectors_input.txt` and `test_vectors_output.txt` in `$readmemb`
 format, plus a `test_vectors.npz` NumPy archive for debugging.
 
-### 3. Run functional simulation
+### 3. Functional simulation
 
-Copy `testbench_template.v` and configure `INPUT_WIDTH` / `OUTPUT_WIDTH` to
-match your circuit, then simulate with Icarus Verilog:
+For a self-contained simulation that requires no manual testbench editing, use
+`examples/verify_with_verilator.py` (requires Verilator):
 
 ```bash
-cp examples/synthesis/testbench_template.v tb_circuit.v
-# Edit tb_circuit.v: set INPUT_WIDTH and OUTPUT_WIDTH
-
-iverilog -o sim.out circuit.v tb_circuit.v
-vvp sim.out
-# Expected: RESULT: ALL TESTS PASSED
+python examples/verify_with_verilator.py
+# → PASS: all 64 tests match
 ```
 
-For a self-contained Verilator-based check (no manual testbench editing), see
-`examples/verify_with_verilator.py`.
+To run the Verilog testbench against your own test vectors with Vivado's
+simulator, copy `testbench_template.v`, set `INPUT_WIDTH` / `OUTPUT_WIDTH`, then:
+
+```bash
+xvlog circuit.v testbench_template.v && xelab tb_logic_net && xsim tb_logic_net -runall
+```
 
 ### 4. FPGA synthesis with Vivado
 
@@ -72,13 +72,6 @@ Common FPGA parts:
 | Arty A7-35T | `xc7a35tcpg236-1` |
 | Arty A7-100T | `xc7a100tcsg324-1` |
 
-### 5. Open-source synthesis with Yosys / nextpnr
-
-```bash
-yosys -p "read_verilog circuit.v; synth -top circuit; write_json circuit.json"
-nextpnr-ice40 --hx8k --json circuit.json --asc circuit.asc
-```
-
 ---
 
 ## Files
@@ -87,7 +80,7 @@ nextpnr-ice40 --hx8k --json circuit.json --asc circuit.asc
 |------|-------------|
 | `synthesize.tcl` | Automated Vivado synthesis script |
 | `testbench_template.v` | Verilog testbench template (edit widths before use) |
-| `generate_test_vectors.py` | Generate $readmemb-format test vectors from a Circuit |
+| `generate_test_vectors.py` | Generate `$readmemb`-format test vectors from a Circuit |
 
 ---
 
