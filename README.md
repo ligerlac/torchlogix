@@ -71,7 +71,7 @@ circuit.get_c_code()
 circuit.get_verilog_code()
 ```
 
-The full training- and evaluation of the model above is demonstrated in the example notebook [experiments/mnist_example.ipynb](experiments/mnist_example.ipynb).
+The full training- and evaluation of the model above is demonstrated in the example notebook [examples/mnist_example.ipynb](examples/mnist_example.ipynb).
 
 
 ## Documentation
