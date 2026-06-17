@@ -1,5 +1,3 @@
-
-
 from abc import ABC, abstractmethod
 import torch
 
@@ -19,16 +17,18 @@ class LogicBase(torch.nn.Module, ABC):
         parametrization_kwargs (dict): Additional keyword arguments for parametrization.
         connections (str): Type of connections to use ('fixed', 'learnable', etc.).
         connections_kwargs (dict): Additional keyword arguments for connections.
+        export_mode (bool): Whether to enable export mode for traceable, fully boolean expression
     """
     def __init__(
-        self, 
+        self,
         device: str = "cpu",
         grad_factor: float = 1.0,
         lut_rank: int = 2,
         parametrization: str = "raw",
         parametrization_kwargs: dict = None,
         connections: str = "fixed",
-        connections_kwargs: dict = None,    
+        connections_kwargs: dict = None,
+        export_mode: bool = False
     ):
         super().__init__()
         # Create parametrization component (sampler merged into parametrization)
@@ -42,6 +42,7 @@ class LogicBase(torch.nn.Module, ABC):
         self.lut_rank = lut_rank
         self.connections = connections
         self.connections_kwargs = connections_kwargs or {}
+        self.export_mode = export_mode
 
     @abstractmethod
     def _init_weights(self, **kwargs):
@@ -101,3 +102,13 @@ class LogicBase(torch.nn.Module, ABC):
             method (str): Rescaling method. Options are 'clip', 'abs_sum', 'L2'.
         """
         pass
+
+    def set_export_mode(self, enabled: bool = True):
+        """Enable or disable export mode for circuit/ONNX tracing.
+
+        When enabled, pre-computes and caches LUT IDs as a buffer to avoid
+        recomputing argmax in the exported model. All shapes must be static;
+        circuit tracing always operates on a single sample (no batch dim).
+        """
+        self.eval()
+        self.export_mode = enabled

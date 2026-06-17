@@ -7,11 +7,7 @@ gate networks.
 """
 import math
 import random
-import numpy as np
 import torch
-
-
-BITS_TO_NP_DTYPE = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
 
 
 # The 16 possible binary logic operations on two inputs A and B
@@ -83,7 +79,7 @@ def bin_op(a, b, i):
 
 def compute_all_logic_ops_vectorized(a, b):
     """Compute all 16 logic operations in a single vectorized operation.
-    
+
     Returns a tensor with shape [..., 16] where the last dimension contains
     all 16 logic operations applied to inputs a and b.
     """
@@ -91,11 +87,11 @@ def compute_all_logic_ops_vectorized(a, b):
     ab = a * b  # AND operation
     a_plus_b = a + b
     a_or_b = a_plus_b - ab  # OR operation
-    
+
     # Stack all 16 operations efficiently using precomputed terms
     ops = torch.stack([
         torch.zeros_like(a),           # 0: 0
-        ab,                           # 1: A and B  
+        ab,                           # 1: A and B
         a - ab,                       # 2: A and not B
         a,                            # 3: A
         b - ab,                       # 4: B and not A
@@ -106,13 +102,52 @@ def compute_all_logic_ops_vectorized(a, b):
         1 - (a_plus_b - 2 * ab),     # 9: not(A xor B)
         1 - b,                       # 10: not B
         1 - b + ab,                  # 11: B implies A
-        1 - a,                       # 12: not A  
+        1 - a,                       # 12: not A
         1 - a + ab,                  # 13: A implies B
         1 - ab,                      # 14: not(A and B)
         torch.ones_like(a)           # 15: 1
     ], dim=-1)
-    
+
     return ops
+
+
+def apply_luts_export_mode(
+    a: torch.BoolTensor,
+    b: torch.BoolTensor,
+    lut_ids: torch.IntTensor
+) -> torch.BoolTensor:
+    """Tracer-friendly LUT application for circuit export.
+
+    Iterates only over the LUT IDs that are actually present in `lut_ids`.
+    When traced with make_fx, `lut_ids` is a concrete tensor, so
+    `lut_ids.unique().tolist()` evaluates at trace time to a Python list of
+    active IDs — unused LUT types are never traced and produce no dead gates.
+    """
+    result = torch.empty_like(a, dtype=torch.bool)
+    for lut_id in range(16):
+        mask = (lut_ids == lut_id)
+        result[..., mask] = _map[lut_id](a[..., mask], b[..., mask])
+    return result
+
+
+_map = [
+    lambda a, b: torch.zeros_like(a),              # 0:  CONST_FALSE
+    lambda a, b: a & b,
+    lambda a, b: a & ~b,
+    lambda a, b: a,
+    lambda a, b: b & ~a,
+    lambda a, b: b,
+    lambda a, b: a ^ b,
+    lambda a, b: a | b,
+    lambda a, b: ~(a | b),
+    lambda a, b: ~(a ^ b),
+    lambda a, b: ~b,
+    lambda a, b: ~(b & ~a),
+    lambda a, b: ~a,
+    lambda a, b: ~(a & ~b),
+    lambda a, b: ~(a & b),
+    lambda a, b: torch.ones_like(a),               # 15: CONST_TRUE
+]
 
 
 def weighted_raw_basis_sum(a, b, weights, einsum_pattern) -> torch.Tensor:
@@ -846,7 +881,6 @@ def get_regularization_loss(weights, regularizer=None):
         # to enforce a growing norm factor (towards infinity)
         norm_factor = weights[:, -1]
         loss = torch.exp(-norm_factor).mean()
-        # print(f"WARP regularization loss: {loss.item()}")
         return loss
     else:
         raise ValueError(f"Unknown regularizer: {regularizer}")

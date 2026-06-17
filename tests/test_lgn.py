@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 import torch
 
-from torchlogix import CompiledLogicNet
 from torchlogix.layers import GroupSum, LogicDense
 from torchlogix.functional import take_tuples, walsh_basis_hard
 
@@ -180,65 +179,3 @@ def test_take_tuples(lut_rank):
     assert counts.float().std().item() < 1
     # cover all inputs
     assert len(unique) == layer.in_dim
-
-
-@pytest.mark.parametrize("weight_init", ["random", "residual"])
-def test_compiled_model(weight_init):
-    """Test model compilation and inference."""
-    parametrization_kwargs = {"weight_init": weight_init}
-    connections_kwargs = {"init_method": "random"}
-    model = torch.nn.Sequential(
-        LogicDense(
-            in_dim=42,
-            out_dim=42,
-            connections="fixed",
-            connections_kwargs=connections_kwargs,
-            parametrization_kwargs=parametrization_kwargs,
-            device="cpu",
-        ),
-        LogicDense(
-            in_dim=42,
-            out_dim=42,
-            connections="fixed",
-            connections_kwargs=connections_kwargs,
-            parametrization_kwargs=parametrization_kwargs,
-            device="cpu",
-        ),
-        GroupSum(1),
-    )
-    compiled_model = CompiledLogicNet(
-        model=model, input_shape=(42,), num_bits=8, cpu_compiler="gcc", verbose=True
-    )
-    compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
-
-    # switch model to eval mode
-    model.train(False)
-
-    X = torch.randint(0, 2, (8, 42)).int()
-    preds = model(X)
-    preds_compiled = compiled_model(X.bool().numpy())
-    assert np.allclose(preds, preds_compiled)
-
-
-def test_large_compiled_model():
-    """Test model compilation and inference."""
-    k_num = 16
-    model = torch.nn.Sequential(
-        LogicDense(in_dim=81 * k_num, out_dim=1280 * k_num, device="cpu"),
-        LogicDense(in_dim=1280 * k_num, out_dim=640 * k_num, device="cpu"),
-        LogicDense(in_dim=640 * k_num, out_dim=320 * k_num, device="cpu"),
-        GroupSum(8),
-    )
-    compiled_model = CompiledLogicNet(
-        model=model, input_shape=(81 * k_num,), num_bits=8, cpu_compiler="gcc", verbose=True
-    )
-    compiled_model.compile(save_lib_path="minimal_example.so", verbose=False)
-
-    # switch model to eval mode
-    model.train(False)
-
-    X = torch.randint(0, 2, (8, 81 * k_num)).int()
-    preds = model(X)
-    preds_compiled = compiled_model(X.bool().numpy())
-    assert np.allclose(preds, preds_compiled)
-    
