@@ -24,7 +24,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Models Module" href="models.html" />
-    <link rel="prev" title="torchlogix.CompiledLogicNet" href="generated/torchlogix.CompiledLogicNet.html" /> 
+    <link rel="prev" title="torchlogix.Circuit" href="generated/torchlogix.Circuit.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -49,13 +49,14 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../guides/installation.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../guides/quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="circuit.html">Circuit</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Layers Module</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#convolutional-layers">Convolutional Layers</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.LogicConv2d"><code class="docutils literal notranslate"><span class="pre">LogicConv2d</span></code></a><ul>
@@ -69,11 +70,13 @@
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.OrPooling2d"><code class="docutils literal notranslate"><span class="pre">OrPooling2d</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling2d.__init__"><code class="docutils literal notranslate"><span class="pre">OrPooling2d.__init__()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling2d.forward"><code class="docutils literal notranslate"><span class="pre">OrPooling2d.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling2d.set_export_mode"><code class="docutils literal notranslate"><span class="pre">OrPooling2d.set_export_mode()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.OrPooling3d"><code class="docutils literal notranslate"><span class="pre">OrPooling3d</span></code></a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling3d.__init__"><code class="docutils literal notranslate"><span class="pre">OrPooling3d.__init__()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling3d.forward"><code class="docutils literal notranslate"><span class="pre">OrPooling3d.forward()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.OrPooling3d.set_export_mode"><code class="docutils literal notranslate"><span class="pre">OrPooling3d.set_export_mode()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -87,6 +90,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LogicDense.get_luts"><code class="docutils literal notranslate"><span class="pre">LogicDense.get_luts()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LogicDense.get_regularization_loss"><code class="docutils literal notranslate"><span class="pre">LogicDense.get_regularization_loss()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LogicDense.rescale_weights"><code class="docutils literal notranslate"><span class="pre">LogicDense.rescale_weights()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.LogicDense.set_export_mode"><code class="docutils literal notranslate"><span class="pre">LogicDense.set_export_mode()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -96,6 +100,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.GroupSum.__init__"><code class="docutils literal notranslate"><span class="pre">GroupSum.__init__()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.GroupSum.forward"><code class="docutils literal notranslate"><span class="pre">GroupSum.forward()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.GroupSum.extra_repr"><code class="docutils literal notranslate"><span class="pre">GroupSum.extra_repr()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.layers.GroupSum.set_export_mode"><code class="docutils literal notranslate"><span class="pre">GroupSum.set_export_mode()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.layers.Binarization"><code class="docutils literal notranslate"><span class="pre">Binarization</span></code></a><ul>
@@ -199,31 +204,37 @@ field, per kernel and per spatial location.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">OrPooling2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">OrPooling2d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d" title="Link to this definition"></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
 <p>Logic gate based pooling layer.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d.__init__" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d.__init__" title="Link to this definition"></a></dt>
 <dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d.forward">
 <span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d.forward" title="Link to this definition"></a></dt>
-<dd><p>Pool the max value in the kernel.</p>
+<dd><p>Pool using logical OR (export) or max pooling (normal).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling2d.set_export_mode">
+<span class="sig-name descname"><span class="pre">set_export_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">export_mode</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling2d.set_export_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling2d.set_export_mode" title="Link to this definition"></a></dt>
+<dd><p>Set export mode for the layer.</p>
 </dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.layers.OrPooling3d">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">OrPooling3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">OrPooling3d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d" title="Link to this definition"></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
 <p>Logic gate based pooling layer.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.layers.OrPooling3d.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d.__init__" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d.__init__" title="Link to this definition"></a></dt>
 <dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
 </dd></dl>
 
@@ -239,6 +250,12 @@ this function, one should call the <code class="xref py py-class docutils litera
 instead of this since the former takes care of running the
 registered hooks while the latter silently ignores them.</p>
 </div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.OrPooling3d.set_export_mode">
+<span class="sig-name descname"><span class="pre">set_export_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">export_mode</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/pool.html#OrPooling3d.set_export_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.OrPooling3d.set_export_mode" title="Link to this definition"></a></dt>
+<dd><p>Set export mode for the layer.</p>
 </dd></dl>
 
 </dd></dl>
@@ -257,15 +274,15 @@ operates on a subset of input features.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>in_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of input features.</p></li>
-<li><p><strong>out_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of neurons (output features).</p></li>
-<li><p><strong>device</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Device to run the layer on (‘cpu’ or ‘cuda’).</p></li>
-<li><p><strong>grad_factor</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Gradient scaling factor.</p></li>
-<li><p><strong>lut_rank</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Rank of the LUTs used in the layer.</p></li>
-<li><p><strong>parametrization</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Type of parametrization to use (‘raw’, ‘warp’, ‘light’).</p></li>
-<li><p><strong>parametrization_kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Additional keyword arguments for parametrization.</p></li>
-<li><p><strong>connections</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Type of connections to use (‘fixed’, ‘learnable’, etc.).</p></li>
-<li><p><strong>connections_kwargs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><em>dict</em></a>) – Additional keyword arguments for connections.</p></li>
+<li><p><strong>in_dim</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – Number of input features.</p></li>
+<li><p><strong>out_dim</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – Number of neurons (output features).</p></li>
+<li><p><strong>device</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Device to run the layer on (‘cpu’ or ‘cuda’).</p></li>
+<li><p><strong>grad_factor</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a></span>) – Gradient scaling factor.</p></li>
+<li><p><strong>lut_rank</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a></span>) – Rank of the LUTs used in the layer.</p></li>
+<li><p><strong>parametrization</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Type of parametrization to use (‘raw’, ‘warp’, ‘light’).</p></li>
+<li><p><strong>parametrization_kwargs</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a></span>) – Additional keyword arguments for parametrization.</p></li>
+<li><p><strong>connections</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span>) – Type of connections to use (‘fixed’, ‘learnable’, etc.).</p></li>
+<li><p><strong>connections_kwargs</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a></span>) – Additional keyword arguments for connections.</p></li>
 </ul>
 </dd>
 </dl>
@@ -378,6 +395,14 @@ neuron (entry is True for output 1, False for 0).</p>
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.LogicDense.set_export_mode">
+<span class="sig-name descname"><span class="pre">set_export_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/dense.html#LogicDense.set_export_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.LogicDense.set_export_mode" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable export mode for circuit/ONNX tracing.</p>
+<p>When enabled, pre-computes and caches LUT IDs as a buffer to avoid
+recomputing argmax in the exported model.</p>
+</dd></dl>
+
 </dd></dl>
 
 </section>
@@ -385,12 +410,12 @@ neuron (entry is True for output 1, False for 0).</p>
 <h2>Other Layers<a class="headerlink" href="#other-layers" title="Link to this heading"></a></h2>
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.layers.GroupSum">
-<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">GroupSum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/groupsum.html#GroupSum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.GroupSum" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.layers.</span></span><span class="sig-name descname"><span class="pre">GroupSum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/groupsum.html#GroupSum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.GroupSum" title="Link to this definition"></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></a></p>
 <p>The GroupSum module.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.layers.GroupSum.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/groupsum.html#GroupSum.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.GroupSum.__init__" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tau</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">export_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/groupsum.html#GroupSum.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.GroupSum.__init__" title="Link to this definition"></a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -424,6 +449,11 @@ registered hooks while the latter silently ignores them.</p>
 this method in your own modules. Both single-line and multi-line
 strings are acceptable.</p>
 </dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.layers.GroupSum.set_export_mode">
+<span class="sig-name descname"><span class="pre">set_export_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">export_mode</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/layers/groupsum.html#GroupSum.set_export_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.layers.GroupSum.set_export_mode" title="Link to this definition"></a></dt>
+<dd></dd></dl>
 
 </dd></dl>
 
@@ -575,7 +605,7 @@ strings are acceptable.</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="generated/torchlogix.CompiledLogicNet.html" class="btn btn-neutral float-left" title="torchlogix.CompiledLogicNet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="generated/torchlogix.Circuit.html" class="btn btn-neutral float-left" title="torchlogix.Circuit" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="models.html" class="btn btn-neutral float-right" title="Models Module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

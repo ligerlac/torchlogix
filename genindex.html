@@ -46,13 +46,14 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="guides/installation.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/circuit.html">Circuit</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/functional.html">Functional Module</a></li>
@@ -88,23 +89,27 @@
  <a href="#_"><strong>_</strong></a>
  | <a href="#B"><strong>B</strong></a>
  | <a href="#C"><strong>C</strong></a>
+ | <a href="#D"><strong>D</strong></a>
  | <a href="#E"><strong>E</strong></a>
  | <a href="#F"><strong>F</strong></a>
  | <a href="#G"><strong>G</strong></a>
  | <a href="#I"><strong>I</strong></a>
  | <a href="#L"><strong>L</strong></a>
  | <a href="#M"><strong>M</strong></a>
+ | <a href="#N"><strong>N</strong></a>
  | <a href="#O"><strong>O</strong></a>
- | <a href="#P"><strong>P</strong></a>
  | <a href="#R"><strong>R</strong></a>
  | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
+ | <a href="#W"><strong>W</strong></a>
  
 </div>
 <h2 id="_">_</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#id0">__init__() (torchlogix.CompiledLogicNet method)</a>, <a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.__init__">[1]</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.__init__">[2]</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.__call__">__call__() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.__call__">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.__call__">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.__init__">__init__() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#id0">[1]</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.__init__">[2]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.__init__">[3]</a>
 
       <ul>
         <li><a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.__init__">(torchlogix.functional.GradFactor method)</a>
@@ -131,8 +136,6 @@
 </li>
         <li><a href="api/generated/torchlogix.models.CNN.html#id0">(torchlogix.models.CNN method)</a>, <a href="api/generated/torchlogix.models.CNN.html#torchlogix.models.CNN.__init__">[1]</a>, <a href="api/models.html#torchlogix.models.CNN.__init__">[2]</a>
 </li>
-        <li><a href="api/torchlogix.html#torchlogix.PackBitsTensor.__init__">(torchlogix.PackBitsTensor method)</a>
-</li>
       </ul></li>
   </ul></td>
 </tr></table>
@@ -142,11 +145,13 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/functional.html#torchlogix.functional.GradFactor.backward">backward() (torchlogix.functional.GradFactor static method)</a>, <a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.backward">[1]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/functional.html#torchlogix.functional.bin_op">bin_op() (in module torchlogix.functional)</a>, <a href="api/generated/torchlogix.functional.bin_op.html#torchlogix.functional.bin_op">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/layers.html#torchlogix.layers.Binarization">Binarization (class in torchlogix.layers)</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.bypass_wires">bypass_wires() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.bypass_wires">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.bypass_wires">[2]</a>
 </li>
   </ul></td>
 </tr></table>
@@ -154,15 +159,27 @@
 <h2 id="C">C</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit">Circuit (class in torchlogix)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit">[2]</a>
+</li>
       <li><a href="api/generated/torchlogix.models.CNN.html#torchlogix.models.CNN">CNN (class in torchlogix.models)</a>, <a href="api/models.html#torchlogix.models.CNN">[1]</a>
 </li>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.compile">compile() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.compile">[1]</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.compile">compile() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.compile">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.compile">[2]</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet">CompiledLogicNet (class in torchlogix)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet">[1]</a>
-</li>
       <li><a href="api/functional.html#torchlogix.functional.compute_all_logic_ops_vectorized">compute_all_logic_ops_vectorized() (in module torchlogix.functional)</a>, <a href="api/generated/torchlogix.functional.compute_all_logic_ops_vectorized.html#torchlogix.functional.compute_all_logic_ops_vectorized">[1]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.constant_fold_gates">constant_fold_gates() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.constant_fold_gates">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.constant_fold_gates">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.constant_fold_sum_reductions">constant_fold_sum_reductions() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.constant_fold_sum_reductions">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.constant_fold_sum_reductions">[2]</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="D">D</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.dedup">dedup() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.dedup">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.dedup">[2]</a>
 </li>
   </ul></td>
 </tr></table>
@@ -170,7 +187,7 @@
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.export_hdl">export_hdl() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.export_hdl">[1]</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.eliminate_dead_gates">eliminate_dead_gates() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.eliminate_dead_gates">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.eliminate_dead_gates">[2]</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
@@ -188,13 +205,9 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/layers.html#torchlogix.layers.FixedBinarization">FixedBinarization (class in torchlogix.layers)</a>
 </li>
-      <li><a href="api/torchlogix.html#torchlogix.PackBitsTensor.flatten">flatten() (torchlogix.PackBitsTensor method)</a>
-</li>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.forward">forward() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.forward">[1]</a>
+      <li><a href="api/functional.html#torchlogix.functional.GradFactor.forward">forward() (torchlogix.functional.GradFactor static method)</a>, <a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.forward">[1]</a>
 
       <ul>
-        <li><a href="api/functional.html#torchlogix.functional.GradFactor.forward">(torchlogix.functional.GradFactor static method)</a>, <a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor.forward">[1]</a>
-</li>
         <li><a href="api/layers.html#torchlogix.layers.Binarization.forward">(torchlogix.layers.Binarization method)</a>
 </li>
         <li><a href="api/layers.html#torchlogix.layers.FixedBinarization.forward">(torchlogix.layers.FixedBinarization method)</a>
@@ -215,18 +228,28 @@
 </li>
       </ul></li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.from_dict">from_dict() (torchlogix.Circuit class method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.from_dict">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.from_dict">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.from_fx_graph">from_fx_graph() (torchlogix.Circuit class method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.from_fx_graph">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.from_fx_graph">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.from_json_file">from_json_file() (torchlogix.Circuit class method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.from_json_file">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.from_json_file">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.from_model">from_model() (torchlogix.Circuit class method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.from_model">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.from_model">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.fuse_not_inputs">fuse_not_inputs() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.fuse_not_inputs">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.fuse_not_inputs">[2]</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="G">G</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.get_c_code">get_c_code() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.get_c_code">[1]</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.gates">gates (torchlogix.Circuit attribute)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.gates">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.gates">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.get_c_code">get_c_code() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.get_c_code">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.get_c_code">[2]</a>
 </li>
       <li><a href="api/layers.html#torchlogix.layers.Binarization.get_distributive_thresholds">get_distributive_thresholds() (torchlogix.layers.Binarization static method)</a>
-</li>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.get_gate_code">get_gate_code() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.get_gate_code">[1]</a>
-</li>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.get_gate_verilog">get_gate_verilog() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.get_gate_verilog">[1]</a>
 </li>
       <li><a href="api/layers.html#torchlogix.layers.Binarization.get_initial_thresholds">get_initial_thresholds() (torchlogix.layers.Binarization static method)</a>
 </li>
@@ -246,11 +269,9 @@
       </ul></li>
       <li><a href="api/layers.html#torchlogix.layers.Binarization.get_uniform_thresholds">get_uniform_thresholds() (torchlogix.layers.Binarization static method)</a>
 </li>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.get_verilog_code">get_verilog_code() (torchlogix.CompiledLogicNet method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.get_verilog_code">[1]</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.get_verilog_code">get_verilog_code() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.get_verilog_code">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.get_verilog_code">[2]</a>
 </li>
       <li><a href="api/functional.html#torchlogix.functional.GradFactor">GradFactor (class in torchlogix.functional)</a>, <a href="api/generated/torchlogix.functional.GradFactor.html#torchlogix.functional.GradFactor">[1]</a>
-</li>
-      <li><a href="api/torchlogix.html#torchlogix.PackBitsTensor.group_sum">group_sum() (torchlogix.PackBitsTensor method)</a>
 </li>
       <li><a href="api/generated/torchlogix.layers.GroupSum.html#torchlogix.layers.GroupSum">GroupSum (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.GroupSum">[1]</a>
 </li>
@@ -263,6 +284,10 @@
       <li><a href="api/functional.html#torchlogix.functional.ID_TO_OP">ID_TO_OP (in module torchlogix.functional)</a>
 </li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.input_shape">input_shape (torchlogix.Circuit attribute)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.input_shape">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.input_shape">[2]</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="L">L</h2>
@@ -270,12 +295,10 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/layers.html#torchlogix.layers.LearnableBinarization">LearnableBinarization (class in torchlogix.layers)</a>
 </li>
-      <li><a href="api/generated/torchlogix.CompiledLogicNet.html#torchlogix.CompiledLogicNet.load">load() (torchlogix.CompiledLogicNet static method)</a>, <a href="api/torchlogix.html#torchlogix.CompiledLogicNet.load">[1]</a>
+      <li><a href="api/generated/torchlogix.layers.LogicConv2d.html#torchlogix.layers.LogicConv2d">LogicConv2d (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicConv2d">[1]</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/generated/torchlogix.layers.LogicConv2d.html#torchlogix.layers.LogicConv2d">LogicConv2d (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicConv2d">[1]</a>
-</li>
       <li><a href="api/generated/torchlogix.layers.LogicConv3d.html#torchlogix.layers.LogicConv3d">LogicConv3d (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicConv3d">[1]</a>
 </li>
       <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense">LogicDense (class in torchlogix.layers)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense">[1]</a>
@@ -296,22 +319,26 @@
   </ul></td>
 </tr></table>
 
+<h2 id="N">N</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.n_inputs">n_inputs (torchlogix.Circuit attribute)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.n_inputs">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.n_inputs">[2]</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="O">O</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/layers.html#torchlogix.layers.OrPooling2d">OrPooling2d (class in torchlogix.layers)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/layers.html#torchlogix.layers.OrPooling3d">OrPooling3d (class in torchlogix.layers)</a>
 </li>
   </ul></td>
-</tr></table>
-
-<h2 id="P">P</h2>
-<table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/torchlogix.html#torchlogix.PackBitsTensor">PackBitsTensor (class in torchlogix)</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.output_shape">output_shape (torchlogix.Circuit attribute)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.output_shape">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.output_shape">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.outputs">outputs (torchlogix.Circuit attribute)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.outputs">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.outputs">[2]</a>
 </li>
   </ul></td>
 </tr></table>
@@ -327,13 +354,33 @@
 <h2 id="S">S</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/generated/torchlogix.layers.GroupSum.html#torchlogix.layers.GroupSum.set_export_mode">set_export_mode() (torchlogix.layers.GroupSum method)</a>, <a href="api/layers.html#torchlogix.layers.GroupSum.set_export_mode">[1]</a>
+
+      <ul>
+        <li><a href="api/generated/torchlogix.layers.LogicDense.html#torchlogix.layers.LogicDense.set_export_mode">(torchlogix.layers.LogicDense method)</a>, <a href="api/layers.html#torchlogix.layers.LogicDense.set_export_mode">[1]</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.OrPooling2d.set_export_mode">(torchlogix.layers.OrPooling2d method)</a>
+</li>
+        <li><a href="api/layers.html#torchlogix.layers.OrPooling3d.set_export_mode">(torchlogix.layers.OrPooling3d method)</a>
+</li>
+      </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.simplify">simplify() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.simplify">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.simplify">[2]</a>
+</li>
       <li><a href="api/layers.html#torchlogix.layers.SoftBinarization">SoftBinarization (class in torchlogix.layers)</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.sum_nodes">sum_nodes (torchlogix.Circuit attribute)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.sum_nodes">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.sum_nodes">[2]</a>
 </li>
   </ul></td>
 </tr></table>
 
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.to_dict">to_dict() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.to_dict">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.to_dict">[2]</a>
+</li>
+  </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     torchlogix
@@ -342,6 +389,20 @@
         <li><a href="api/torchlogix.html#module-torchlogix">module</a>
 </li>
       </ul></li>
+  </ul></td>
+</tr></table>
+
+<h2 id="W">W</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.write_c_code">write_c_code() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_c_code">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_c_code">[2]</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.write_json">write_json() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_json">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_json">[2]</a>
+</li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.write_verilog_code">write_verilog_code() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_verilog_code">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_verilog_code">[2]</a>
+</li>
   </ul></td>
 </tr></table>
 

@@ -30,6 +30,7 @@ Documentation Contents
    :caption: API Reference
 
    api/torchlogix
+   api/circuit
    api/layers
    api/models
    api/functional

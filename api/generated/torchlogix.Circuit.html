@@ -1,0 +1,539 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>torchlogix.Circuit &mdash; TorchLogix 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../../_static/copybutton.js?v=30646c52"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Layers Module" href="../layers.html" />
+    <link rel="prev" title="TorchLogix Package" href="../torchlogix.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            TorchLogix
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/installation.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/concepts.html">Core Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../torchlogix.html">TorchLogix Package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="../torchlogix.html#main-classes">Main Classes</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">torchlogix.Circuit</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#torchlogix.Circuit"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../torchlogix.html#module-torchlogix">Package Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../torchlogix.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../circuit.html">Circuit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../layers.html">Layers Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models.html">Models Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../functional.html">Functional Module</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">TorchLogix</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../torchlogix.html">TorchLogix Package</a></li>
+      <li class="breadcrumb-item active">torchlogix.Circuit</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/api/generated/torchlogix.Circuit.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="torchlogix-circuit">
+<h1>torchlogix.Circuit<a class="headerlink" href="#torchlogix-circuit" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="torchlogix.Circuit">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.</span></span><span class="sig-name descname"><span class="pre">Circuit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sum_nodes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit" title="Link to this definition"></a></dt>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sum_nodes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#torchlogix.Circuit.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.__init__" title="torchlogix.Circuit.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(n_inputs, input_shape[, gates, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.bypass_wires" title="torchlogix.Circuit.bypass_wires"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bypass_wires</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.compile" title="torchlogix.Circuit.compile"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile</span></code></a>([opt_level, pack_bits])</p></td>
+<td><p>Write C code to a temp file, compile to a shared library, and load it.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.constant_fold_gates" title="torchlogix.Circuit.constant_fold_gates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">constant_fold_gates</span></code></a>()</p></td>
+<td><p>Evaluate gates that have constant inputs and replace them with CONST_TRUE or CONST_FALSE gates as appropriate.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.constant_fold_sum_reductions" title="torchlogix.Circuit.constant_fold_sum_reductions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">constant_fold_sum_reductions</span></code></a>()</p></td>
+<td><p>For each SumReduction, fold CONST_TRUE / CONST_FALSE inputs directly into beta, leaving only genuinely variable inputs in input_ids.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.dedup" title="torchlogix.Circuit.dedup"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dedup</span></code></a>()</p></td>
+<td><p>Structural hashing / common-subexpression elimination.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.eliminate_dead_gates" title="torchlogix.Circuit.eliminate_dead_gates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eliminate_dead_gates</span></code></a>()</p></td>
+<td><p>Remove gates that do not contribute to the output (i.e. not on a path from any output ID back to an input ID).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.from_dict" title="torchlogix.Circuit.from_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_dict</span></code></a>(data)</p></td>
+<td><p>Create a Circuit instance from a (JSON-deserialized) dictionary.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.from_fx_graph" title="torchlogix.Circuit.from_fx_graph"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_fx_graph</span></code></a>(gm, input_shape)</p></td>
+<td><p>Build a Circuit directly from a folded FX graph.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.from_json_file" title="torchlogix.Circuit.from_json_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_json_file</span></code></a>(file_path)</p></td>
+<td><p>Load a Circuit instance from a JSON file.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.from_model" title="torchlogix.Circuit.from_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_model</span></code></a>(model, input_shape)</p></td>
+<td><p>Build a Circuit from a PyTorch model by tracing and folding it.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.fuse_not_inputs" title="torchlogix.Circuit.fuse_not_inputs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fuse_not_inputs</span></code></a>()</p></td>
+<td><p>Absorb NOT gates into their single downstream consumer.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.get_c_code" title="torchlogix.Circuit.get_c_code"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_c_code</span></code></a>([inline_single_use, pack_bits])</p></td>
+<td><p>Generate a self-contained C function that evaluates the circuit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.get_verilog_code" title="torchlogix.Circuit.get_verilog_code"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_verilog_code</span></code></a>([inline_single_use])</p></td>
+<td><p>Generate a Verilog module that implements the circuit.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.simplify" title="torchlogix.Circuit.simplify"><code class="xref py py-obj docutils literal notranslate"><span class="pre">simplify</span></code></a>([n_max])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.to_dict" title="torchlogix.Circuit.to_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_dict</span></code></a>()</p></td>
+<td><p>Convert the circuit representation to a JSON-serializable format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.write_c_code" title="torchlogix.Circuit.write_c_code"><code class="xref py py-obj docutils literal notranslate"><span class="pre">write_c_code</span></code></a>(path)</p></td>
+<td><p>Write the generated C code to a file.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.write_json" title="torchlogix.Circuit.write_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">write_json</span></code></a>(path)</p></td>
+<td><p>Write the circuit representation to a JSON file.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.write_verilog_code" title="torchlogix.Circuit.write_verilog_code"><code class="xref py py-obj docutils literal notranslate"><span class="pre">write_verilog_code</span></code></a>(path)</p></td>
+<td><p>Write the generated Verilog code to a file.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.n_inputs" title="torchlogix.Circuit.n_inputs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">n_inputs</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.input_shape" title="torchlogix.Circuit.input_shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">input_shape</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.gates" title="torchlogix.Circuit.gates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gates</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.outputs" title="torchlogix.Circuit.outputs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">outputs</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.output_shape" title="torchlogix.Circuit.output_shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">output_shape</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit.sum_nodes" title="torchlogix.Circuit.sum_nodes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum_nodes</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="torchlogix.Circuit.n_inputs">
+<span class="sig-name descname"><span class="pre">n_inputs</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#torchlogix.Circuit.n_inputs" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="torchlogix.Circuit.input_shape">
+<span class="sig-name descname"><span class="pre">input_shape</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#torchlogix.Circuit.input_shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="torchlogix.Circuit.gates">
+<span class="sig-name descname"><span class="pre">gates</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><span class="pre">Gate</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#torchlogix.Circuit.gates" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="torchlogix.Circuit.outputs">
+<span class="sig-name descname"><span class="pre">outputs</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#torchlogix.Circuit.outputs" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="torchlogix.Circuit.output_shape">
+<span class="sig-name descname"><span class="pre">output_shape</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#torchlogix.Circuit.output_shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="torchlogix.Circuit.sum_nodes">
+<span class="sig-name descname"><span class="pre">sum_nodes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><span class="pre">SumReduction</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#torchlogix.Circuit.sum_nodes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.from_model">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.from_model"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.from_model" title="Link to this definition"></a></dt>
+<dd><p>Build a Circuit from a PyTorch model by tracing and folding it.</p>
+<p>The model should be in export mode (if applicable) and should have
+been traced and folded with the appropriate utilities to ensure the
+FX graph is in the expected form.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit" title="torchlogix.circuit.Circuit"><code class="xref py py-class docutils literal notranslate"><span class="pre">Circuit</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.from_fx_graph">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_fx_graph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.from_fx_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.from_fx_graph" title="Link to this definition"></a></dt>
+<dd><p>Build a Circuit directly from a folded FX graph.</p>
+<p>This is the core logic for walking the FX graph and constructing the
+flat gate list. Assumptions (satisfied after constant_fold_views):
+- Exactly one placeholder node (‘input’)
+- Wiring is done via aten.index.Tensor with folded constant index tensors
+- LUT dispatch is a cascade of aten.eq + aten.where nodes
+- Layers are connected by further aten.index.Tensor nodes</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit" title="torchlogix.circuit.Circuit"><code class="xref py py-class docutils literal notranslate"><span class="pre">Circuit</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.simplify">
+<span class="sig-name descname"><span class="pre">simplify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.simplify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.simplify" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.fuse_not_inputs">
+<span class="sig-name descname"><span class="pre">fuse_not_inputs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.fuse_not_inputs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.fuse_not_inputs" title="Link to this definition"></a></dt>
+<dd><p>Absorb NOT gates into their single downstream consumer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+<p>Recognises patterns that arise when native-torch boolean ops are used
+instead of all 16 gates, and folds them into the equivalent single-gate form:</p>
+<blockquote>
+<div><p>AND(x, NOT_1use(y))  -&gt; AND_NOT_B(x, y)
+AND(NOT_1use(x), y)  -&gt; AND_NOT_A(x, y)
+OR(x,  NOT_1use(y))  -&gt; OR_NOT_B(x, y)
+OR(NOT_1use(x), y)   -&gt; OR_NOT_A(x, y)
+NOT(AND(x, y))_1use  -&gt; NAND(x, y)
+NOT(OR(x, y))_1use   -&gt; NOR(x, y)
+NOT(XOR(x, y))_1use  -&gt; XNOR(x, y)</p>
+</div></blockquote>
+<p>After fusion the absorbed NOT gates become dead and are removed by the
+next eliminate_dead_gates() call (which simplify() already calls).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.eliminate_dead_gates">
+<span class="sig-name descname"><span class="pre">eliminate_dead_gates</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.eliminate_dead_gates"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.eliminate_dead_gates" title="Link to this definition"></a></dt>
+<dd><p>Remove gates that do not contribute to the output (i.e. not on a path
+from any output ID back to an input ID).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.constant_fold_sum_reductions">
+<span class="sig-name descname"><span class="pre">constant_fold_sum_reductions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.constant_fold_sum_reductions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.constant_fold_sum_reductions" title="Link to this definition"></a></dt>
+<dd><p>For each SumReduction, fold CONST_TRUE / CONST_FALSE inputs directly into
+beta, leaving only genuinely variable inputs in input_ids.</p>
+<p>After this pass, a fully-folded reduction has input_ids == [] and beta
+encodes the entire sum; codegen emits a constant rather than a loop.
+output_ids is rebuilt from the remaining live inputs so that
+eliminate_dead_gates can remove the constant gates that were folded away.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.constant_fold_gates">
+<span class="sig-name descname"><span class="pre">constant_fold_gates</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.constant_fold_gates"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.constant_fold_gates" title="Link to this definition"></a></dt>
+<dd><p>Evaluate gates that have constant inputs and replace them with CONST_TRUE
+or CONST_FALSE gates as appropriate. This can simplify the circuit and
+reduce the number of gates.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.bypass_wires">
+<span class="sig-name descname"><span class="pre">bypass_wires</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.bypass_wires"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.bypass_wires" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Eliminate trivial aliases:</dt><dd><p>WIRE(x)    -&gt; x
+NOT(NOT(x)) -&gt; x</p>
+</dd>
+</dl>
+<p>Rewrites all fanins/output IDs transitively and removes dead alias gates.</p>
+<p>This pass is intentionally conservative and cheap.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.dedup">
+<span class="sig-name descname"><span class="pre">dedup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.dedup"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.dedup" title="Link to this definition"></a></dt>
+<dd><p>Structural hashing / common-subexpression elimination.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Deduplicates gates with identical:</dt><dd><p>(op, in0, in1)</p>
+</dd>
+<dt>Commutative ops are canonicalized so:</dt><dd><p>AND(a,b) == AND(b,a)</p>
+</dd>
+</dl>
+<p>After deduplication, all fanins/output IDs are rewritten to the
+canonical representative and duplicate gates are removed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.compile">
+<span class="sig-name descname"><span class="pre">compile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">opt_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pack_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.compile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.compile" title="Link to this definition"></a></dt>
+<dd><p>Write C code to a temp file, compile to a shared library, and load it.
+After calling this, circuit(x) will use the compiled implementation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_compiled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.__call__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.__call__" title="Link to this definition"></a></dt>
+<dd><p>Evaluate the circuit on a given input tensor (shape: batch x n_inputs).</p>
+<p>Uses the compiled C library when available (after compile()), otherwise
+evaluates the gate list in Python.</p>
+<p>Returns a tensor of shape (batch, len(outputs)). The dtype is determined
+by _c_output_dtype over the output sum nodes: uint{N}_t when
+all tau=1, float when tau≠1, bool when there are no sum nodes in outputs.</p>
+<p>Attention: For a fair performance comparison, the compiled code does not
+do type conversions or looping over batches. Instead, it expects numpy
+inputs of the correct shape (batch dim must match number of packed bits)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.pytorch.org/docs/stable/tensors.html#torch.Tensor" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.get_c_code">
+<span class="sig-name descname"><span class="pre">get_c_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inline_single_use</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pack_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.get_c_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.get_c_code" title="Link to this definition"></a></dt>
+<dd><p>Generate a self-contained C function that evaluates the circuit.</p>
+<p>inline_single_use=True (default): gates used by only one other gate are
+inlined into their parent’s expression rather than emitted as variables.
+This eliminates most temporaries and makes each output a single expression
+tree rooted at the inputs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.to_dict" title="Link to this definition"></a></dt>
+<dd><p>Convert the circuit representation to a JSON-serializable format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.from_dict">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.from_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.from_dict" title="Link to this definition"></a></dt>
+<dd><p>Create a Circuit instance from a (JSON-deserialized) dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit" title="torchlogix.circuit.Circuit"><code class="xref py py-class docutils literal notranslate"><span class="pre">Circuit</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.from_json_file">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_json_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.from_json_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.from_json_file" title="Link to this definition"></a></dt>
+<dd><p>Load a Circuit instance from a JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="../torchlogix.html#torchlogix.Circuit" title="torchlogix.circuit.Circuit"><code class="xref py py-class docutils literal notranslate"><span class="pre">Circuit</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.get_verilog_code">
+<span class="sig-name descname"><span class="pre">get_verilog_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inline_single_use</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.get_verilog_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.get_verilog_code" title="Link to this definition"></a></dt>
+<dd><p>Generate a Verilog module that implements the circuit.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a></span></p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Each gate becomes a continuous assignment:</dt><dd><p>wire g&lt;id&gt; = &lt;expr&gt;;</p>
+</dd>
+<dt>Outputs are assigned to an output bus:</dt><dd><p>assign out[k] = &lt;expr&gt;;</p>
+</dd>
+</dl>
+<p>inline_single_use=True: single-use gates are folded into their parent
+expression rather than named wires (same semantics as in emit_c).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.write_c_code">
+<span class="sig-name descname"><span class="pre">write_c_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.write_c_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.write_c_code" title="Link to this definition"></a></dt>
+<dd><p>Write the generated C code to a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.write_verilog_code">
+<span class="sig-name descname"><span class="pre">write_verilog_code</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.write_verilog_code"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.write_verilog_code" title="Link to this definition"></a></dt>
+<dd><p>Write the generated Verilog code to a file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.write_json">
+<span class="sig-name descname"><span class="pre">write_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/torchlogix/circuit.html#Circuit.write_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.write_json" title="Link to this definition"></a></dt>
+<dd><p>Write the circuit representation to a JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_inputs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sum_nodes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../torchlogix.html" class="btn btn-neutral float-left" title="TorchLogix Package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../layers.html" class="btn btn-neutral float-right" title="Layers Module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023-2024 Felix Petersen (original DiffLogic), Lino Gerlach (TorchLogix extensions).</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

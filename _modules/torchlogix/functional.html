@@ -46,13 +46,14 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/installation.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../guides/quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/circuit.html">Circuit</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../api/functional.html">Functional Module</a></li>
@@ -92,11 +93,7 @@
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-
-
-<span class="n">BITS_TO_NP_DTYPE</span> <span class="o">=</span> <span class="p">{</span><span class="mi">8</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">,</span> <span class="mi">16</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int16</span><span class="p">,</span> <span class="mi">32</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">}</span>
 
 
 <span class="c1"># The 16 possible binary logic operations on two inputs A and B</span>
@@ -173,7 +170,7 @@
 <a class="viewcode-back" href="../../api/generated/torchlogix.functional.compute_all_logic_ops_vectorized.html#torchlogix.functional.compute_all_logic_ops_vectorized">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute_all_logic_ops_vectorized</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute all 16 logic operations in a single vectorized operation.</span>
-<span class="sd">    </span>
+
 <span class="sd">    Returns a tensor with shape [..., 16] where the last dimension contains</span>
 <span class="sd">    all 16 logic operations applied to inputs a and b.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -181,11 +178,11 @@
     <span class="n">ab</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>  <span class="c1"># AND operation</span>
     <span class="n">a_plus_b</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
     <span class="n">a_or_b</span> <span class="o">=</span> <span class="n">a_plus_b</span> <span class="o">-</span> <span class="n">ab</span>  <span class="c1"># OR operation</span>
-    
+
     <span class="c1"># Stack all 16 operations efficiently using precomputed terms</span>
     <span class="n">ops</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">a</span><span class="p">),</span>           <span class="c1"># 0: 0</span>
-        <span class="n">ab</span><span class="p">,</span>                           <span class="c1"># 1: A and B  </span>
+        <span class="n">ab</span><span class="p">,</span>                           <span class="c1"># 1: A and B</span>
         <span class="n">a</span> <span class="o">-</span> <span class="n">ab</span><span class="p">,</span>                       <span class="c1"># 2: A and not B</span>
         <span class="n">a</span><span class="p">,</span>                            <span class="c1"># 3: A</span>
         <span class="n">b</span> <span class="o">-</span> <span class="n">ab</span><span class="p">,</span>                       <span class="c1"># 4: B and not A</span>
@@ -196,14 +193,53 @@
         <span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="n">a_plus_b</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">ab</span><span class="p">),</span>     <span class="c1"># 9: not(A xor B)</span>
         <span class="mi">1</span> <span class="o">-</span> <span class="n">b</span><span class="p">,</span>                       <span class="c1"># 10: not B</span>
         <span class="mi">1</span> <span class="o">-</span> <span class="n">b</span> <span class="o">+</span> <span class="n">ab</span><span class="p">,</span>                  <span class="c1"># 11: B implies A</span>
-        <span class="mi">1</span> <span class="o">-</span> <span class="n">a</span><span class="p">,</span>                       <span class="c1"># 12: not A  </span>
+        <span class="mi">1</span> <span class="o">-</span> <span class="n">a</span><span class="p">,</span>                       <span class="c1"># 12: not A</span>
         <span class="mi">1</span> <span class="o">-</span> <span class="n">a</span> <span class="o">+</span> <span class="n">ab</span><span class="p">,</span>                  <span class="c1"># 13: A implies B</span>
         <span class="mi">1</span> <span class="o">-</span> <span class="n">ab</span><span class="p">,</span>                      <span class="c1"># 14: not(A and B)</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>           <span class="c1"># 15: 1</span>
     <span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-    
+
     <span class="k">return</span> <span class="n">ops</span></div>
 
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">apply_luts_export_mode</span><span class="p">(</span>
+    <span class="n">a</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">BoolTensor</span><span class="p">,</span>
+    <span class="n">b</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">BoolTensor</span><span class="p">,</span>
+    <span class="n">lut_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">BoolTensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Tracer-friendly LUT application for circuit export.</span>
+
+<span class="sd">    Iterates only over the LUT IDs that are actually present in `lut_ids`.</span>
+<span class="sd">    When traced with make_fx, `lut_ids` is a concrete tensor, so</span>
+<span class="sd">    `lut_ids.unique().tolist()` evaluates at trace time to a Python list of</span>
+<span class="sd">    active IDs — unused LUT types are never traced and produce no dead gates.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">lut_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">lut_ids</span> <span class="o">==</span> <span class="n">lut_id</span><span class="p">)</span>
+        <span class="n">result</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">_map</span><span class="p">[</span><span class="n">lut_id</span><span class="p">](</span><span class="n">a</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">mask</span><span class="p">],</span> <span class="n">b</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">mask</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+
+<span class="n">_map</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">a</span><span class="p">),</span>              <span class="c1"># 0:  CONST_FALSE</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&amp;</span> <span class="n">b</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">b</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">b</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">a</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">b</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">^</span> <span class="n">b</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">a</span> <span class="o">|</span> <span class="n">b</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="p">(</span><span class="n">a</span> <span class="o">|</span> <span class="n">b</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="p">(</span><span class="n">a</span> <span class="o">^</span> <span class="n">b</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="n">b</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="p">(</span><span class="n">b</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">a</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="n">a</span><span class="p">,</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="p">(</span><span class="n">a</span> <span class="o">&amp;</span> <span class="o">~</span><span class="n">b</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="o">~</span><span class="p">(</span><span class="n">a</span> <span class="o">&amp;</span> <span class="n">b</span><span class="p">),</span>
+    <span class="k">lambda</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">a</span><span class="p">),</span>               <span class="c1"># 15: CONST_TRUE</span>
+<span class="p">]</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">weighted_raw_basis_sum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">einsum_pattern</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
@@ -946,7 +982,6 @@
         <span class="c1"># to enforce a growing norm factor (towards infinity)</span>
         <span class="n">norm_factor</span> <span class="o">=</span> <span class="n">weights</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
         <span class="n">loss</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">norm_factor</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
-        <span class="c1"># print(f&quot;WARP regularization loss: {loss.item()}&quot;)</span>
         <span class="k">return</span> <span class="n">loss</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown regularizer: </span><span class="si">{</span><span class="n">regularizer</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>

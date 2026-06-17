@@ -48,13 +48,14 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="guides/installation.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api/circuit.html">Circuit</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api/functional.html">Functional Module</a></li>
@@ -111,8 +112,11 @@ It also implements convolutions as described in “Convolutional Differentiable 
 <li class="toctree-l2"><a class="reference internal" href="guides/installation.html#supported-versions">Supported Versions</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start Guide</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="guides/quickstart.html#basic-usage">Basic Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/quickstart.html">Quick Start</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/quickstart.html#define-a-model">Define a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/quickstart.html#train">Train</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/quickstart.html#convert-to-circuit-and-compile">Convert to Circuit and compile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/quickstart.html#export-to-c-or-verilog">Export to C or Verilog</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a><ul>
@@ -128,14 +132,10 @@ It also implements convolutions as described in “Convolutional Differentiable 
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html">Hardware Deployment Guide</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#overview">Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#basic-verilog-export">Basic Verilog Export</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#pipelining-for-large-models">Pipelining for Large Models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#testing-generated-verilog">Testing Generated Verilog</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#synthesis-with-vivado">Synthesis with Vivado</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#complete-workflow-examples">Complete Workflow Examples</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#advanced-topics">Advanced Topics</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#summary">Summary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#verilog-interface">Verilog interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#simulation-with-verilator">Simulation with Verilator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#fpga-synthesis-with-vivado">FPGA synthesis with Vivado</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#design-considerations">Design considerations</a></li>
 </ul>
 </li>
 </ul>
@@ -147,6 +147,10 @@ It also implements convolutions as described in “Convolutional Differentiable 
 <li class="toctree-l2"><a class="reference internal" href="api/torchlogix.html#main-classes">Main Classes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/torchlogix.html#module-torchlogix">Package Contents</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/torchlogix.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api/circuit.html">Circuit</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/circuit.html#torchlogix.Circuit"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="api/layers.html">Layers Module</a><ul>

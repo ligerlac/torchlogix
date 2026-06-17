@@ -362,26 +362,6 @@ Inputs can be binarized `per_feature`, or `global`. For image-like data, there i
 
 ## Advanced Topics
 
-### Gradient Scaling for Deep Networks
-
-The `grad_factor` parameter scales gradients during the backward pass:
-
-```python
-layer = LogicDense(
-    in_dim=256,
-    out_dim=256,
-    grad_factor=2.0  # Scale gradients by 2x
-)
-```
-
-**Why needed?** Logic gates can have very small gradients (e.g., AND gate: `∂(a·b)/∂a = b`). For deep networks (>6 layers), this causes vanishing gradients.
-
-**How it works**: Uses a custom autograd function:
-- **Forward pass**: Identity (`y = x`)
-- **Backward pass**: Scale gradient (`∂L/∂x = grad_factor · ∂L/∂y`)
-
-**When to use**: Set `grad_factor=2.0` or higher for networks deeper than 6 layers.
-
 ### Extracting Discrete Boolean Functions
 
 After training, you can extract the learned Boolean functions:
@@ -401,52 +381,139 @@ The `ids` map to the 16 Boolean functions (0=False, 1=AND, 7=OR, 14=NAND, 15=Tru
 ---
 
 ## Deployment: From Training to Inference
-
-TorchLogix provides multiple inference backends optimized for different use cases:
-
-### 1. Standard PyTorch (Training & Validation)
-
-```python
-model = LogicDense(128, 64)
-model.eval()  # Discretizes to Boolean operations
-output = model(input)  # Standard PyTorch inference
+```
+ trained model          torch.fx.graph          tochlogix.Circuit IR       output code
+(fully boolean)           (static)           ┌────────────────────────┐
+┌──────────────┐     ┌──────────────────┐    │ i0─XOR─────┐           |   ┌► circuit.c
+│ LogicConv2d  │     │ aten.bitwise_xor │    │ i1─┘    POPCOUNT──► s0 |  /
+│ OrPooling2d  │───► │ aten.max_pool2d  │───►│ i2─AND─────┘           | /
+│ Flatten      │     │ aten.flatten     │    │ i3─┘                   | \
+│ LogicDense   │     │ aten.sum         │    │ i4─OR──────┐           |  \
+│ GroupSum     │     └──────────────────┘    │ i5─┘    POPCOUNT──► s1 |   └► circuit.v
+└──────────────┘                             │ i6─────────┘           |
+                                             └────────────────────────┘
 ```
 
-**Use case**: Validation during training, small-scale inference.
+```
+  trained model        FX graph (aten)          Circuit IR
 
-### 2. PackBitsTensor (GPU Batch Inference)
+┌───────────────┐   ┌──────────────────┐
+│  LogicConv2d  │   │ aten.bitwise_xor │   in₀─┬─AND─┬─Σ₀ ──► circuit.c
+│  OrPooling2d  │──►│ aten.max_pool2d  │──►in₁─┘     │         circuit.v
+│    Flatten    │   │ aten.reshape     │   in₂─┬─XOR─┘
+│  LogicDense   │   │ aten.bitwise_and │   in₃─┘
+│   GroupSum    │   │ aten.sum         │   in₄─┬─OR──Σ₁
+└───────────────┘   └──────────────────┘   in₅─┘
+        │                   │                   │
+ set_export_mode()  Circuit.from_model()  write_{c,verilog}_code()
+```
+
+### 1. Standard PyTorch eval mode
 
 ```python
-from torchlogix import PackBitsTensor
-
 model.eval()
-model.cuda()
-
-# Pack boolean tensors to single bits
-input_packed = PackBitsTensor.pack(input)  # Requires CUDA
-output_packed = model(input_packed)
-output = output_packed.unpack()
+output = model(input)  # Fully discrete Boolean operations
 ```
 
-**Use case**: Large batch inference on GPU, up to 32× memory savings.
+**Use case**: Validation during training, debugging.
 
-**Limitation**: Requires CUDA device.
+### 2. Export mode
 
-### 3. CompiledLogicNet (CPU Production Inference)
+Before converting a model to a `Circuit`, call `set_export_mode` to switch the
+model into a clean tracing-friendly state:
 
 ```python
-from torchlogix import CompiledLogicNet
+from torchlogix.utils import set_export_mode
 
-# Compile to C code
-compiled = CompiledLogicNet(model, compiler='gcc', optimization_level='-O3')
-
-# Run inference
-output = compiled(input)  # Calls compiled C code
+set_export_mode(model)  # also calls model.eval()
 ```
 
-**Use case**: Production deployment on CPU, edge devices.
+Export mode pre-caches each layer's discrete LUT IDs as integer buffers so that
+`torch.fx` tracing produces pure integer operations — no floating-point LUT
+lookups. This is required before calling `Circuit.from_model()`.
 
-**Benefits**: 10-100× faster than PyTorch, no Python/PyTorch dependencies at runtime.
+**Tip — reset `GroupSum` scaling before export.** During training a non-unit
+`tau` (temperature) or non-zero `beta` (offset) can improve loss landscape and
+convergence. Before compiling to a Circuit, consider resetting them:
+
+```python
+for m in model.modules():
+    if isinstance(m, GroupSum):
+        m.tau = 1.0
+        m.beta = 0.0
+```
+
+Since argmax is invariant under monotone scaling and constant offsets, the
+predicted class is unchanged. With `tau=1, beta=0` the `SumReduction` nodes in
+the Circuit become pure integer popcounts, letting the compiler select the
+narrowest unsigned integer type that fits the group size (`uint8_t` for up to
+255 neurons per class, `uint16_t` for up to 65535, etc.) rather than falling
+back to `float`. This makes C and Verilog codegen more efficient without
+affecting accuracy.
+
+### 3. Circuit: the compiled boolean IR
+
+`Circuit` is a fully-unrolled, flat boolean IR that can be simplified and
+compiled to C or Verilog.
+
+```python
+from torchlogix import Circuit
+from torchlogix.utils import set_export_mode
+
+set_export_mode(model)
+circuit = Circuit.from_model(model, input_shape=(1, 28, 28))
+circuit.simplify()   # prune dead gates, constant-fold, etc.
+
+# Evaluate in Python (slower, for verification)
+output = circuit(x)
+
+# Compile to a shared C library (fast CPU inference)
+circuit.compile()
+output_fast = circuit(x_np, use_compiled=True)
+```
+
+The IR has two node types:
+- **`Gate`** — one of 16 two-input boolean functions (AND, OR, XOR, …)
+- **`SumReduction`** — counts set bits over a group (implements `GroupSum`); when `tau=1` and `beta=0` the result is a pure integer popcount and the compiler selects the narrowest unsigned integer type that fits the group size
+
+**`Circuit` is independent of TorchLogix.** It operates directly on a
+`torch.fx.Graph` and only requires that the graph is purely boolean: every
+intermediate value must be a boolean tensor or a scalar integer sum. Structural
+operations — `reshape`, `flatten`, indexing, slicing, concatenation — are
+allowed and are absorbed transparently into the gate connectivity (they affect
+which inputs wire to which gates, not the gate logic itself). Scalar integer
+sums (`torch.sum` over a boolean tensor) become `SumReduction` nodes. Any
+PyTorch model whose forward pass satisfies these constraints can be compiled to
+a `Circuit`, not just models built from TorchLogix layers.
+
+> **Circuits assume binary (boolean) inputs.** Binarization layers
+> (`FixedBinarization`, `LearnableBinarization`, `SoftBinarization`) are not
+> traced into the circuit — they operate on floating-point inputs and have no
+> boolean equivalent. For circuit export, binarization must be absorbed into
+> the dataset preprocessing instead. This is intentional: in a real deployment
+> the input encoding (ADC thresholds, sensor quantization, etc.) is a
+> hardware-specific decision made outside the circuit, not inside it.
+
+### 4. C code generation
+
+```python
+circuit.write_c_code("circuit.c")   # self-contained C file, no dependencies
+```
+
+Generated C is a single `void circuit(const bool in[N], T out[M])` function
+plus a `circuit_bench` wrapper for batch evaluation. Compile with any C99
+compiler; no Python or PyTorch needed at runtime.
+
+### 5. Verilog generation
+
+```python
+verilog = circuit.get_verilog_code()
+```
+
+Produces a combinational `module circuit(input wire [N-1:0] inp, ...)`.
+For models with `GroupSum`, outputs are packed integers in `scores_flat`.
+See the [Hardware Deployment Guide](hardware_deployment.md) for how to
+simulate with Verilator and synthesize for FPGAs.
 
 ---
 
@@ -503,4 +570,4 @@ This design allows you to:
 
 For detailed API documentation, see the [API Reference](../api/torchlogix.rst).
 
-For hands-on examples, see the [Quickstart Guide](quickstart.md).
+For a hands-on end-to-end walkthrough, see the [MNIST example notebook](../../examples/mnist_example.ipynb).

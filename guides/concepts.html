@@ -24,7 +24,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Hardware Deployment Guide" href="hardware_deployment.html" />
-    <link rel="prev" title="Quick Start Guide" href="quickstart.html" /> 
+    <link rel="prev" title="Quick Start" href="quickstart.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -49,7 +49,7 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Core Concepts</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#design-philosophy">Design Philosophy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#pytorch-api-compatibility">PyTorch API Compatibility</a><ul>
@@ -88,14 +88,15 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#advanced-topics">Advanced Topics</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#gradient-scaling-for-deep-networks">Gradient Scaling for Deep Networks</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#extracting-discrete-boolean-functions">Extracting Discrete Boolean Functions</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#deployment-from-training-to-inference">Deployment: From Training to Inference</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#standard-pytorch-training-validation">1. Standard PyTorch (Training &amp; Validation)</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#packbitstensor-gpu-batch-inference">2. PackBitsTensor (GPU Batch Inference)</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#compiledlogicnet-cpu-production-inference">3. CompiledLogicNet (CPU Production Inference)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#standard-pytorch-eval-mode">1. Standard PyTorch eval mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#export-mode">2. Export mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#circuit-the-compiled-boolean-ir">3. Circuit: the compiled boolean IR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#c-code-generation">4. C code generation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#verilog-generation">5. Verilog generation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#common-patterns">Common Patterns</a><ul>
@@ -111,6 +112,7 @@
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/circuit.html">Circuit</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/layers.html">Layers Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/models.html">Models Module</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../api/functional.html">Functional Module</a></li>
@@ -515,24 +517,6 @@ Output: (batch, out_dim)
 <hr class="docutils" />
 <section id="advanced-topics">
 <h2>Advanced Topics<a class="headerlink" href="#advanced-topics" title="Link to this heading"></a></h2>
-<section id="gradient-scaling-for-deep-networks">
-<h3>Gradient Scaling for Deep Networks<a class="headerlink" href="#gradient-scaling-for-deep-networks" title="Link to this heading"></a></h3>
-<p>The <code class="docutils literal notranslate"><span class="pre">grad_factor</span></code> parameter scales gradients during the backward pass:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">layer</span> <span class="o">=</span> <span class="n">LogicDense</span><span class="p">(</span>
-    <span class="n">in_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
-    <span class="n">out_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
-    <span class="n">grad_factor</span><span class="o">=</span><span class="mf">2.0</span>  <span class="c1"># Scale gradients by 2x</span>
-<span class="p">)</span>
-</pre></div>
-</div>
-<p><strong>Why needed?</strong> Logic gates can have very small gradients (e.g., AND gate: <code class="docutils literal notranslate"><span class="pre">∂(a·b)/∂a</span> <span class="pre">=</span> <span class="pre">b</span></code>). For deep networks (&gt;6 layers), this causes vanishing gradients.</p>
-<p><strong>How it works</strong>: Uses a custom autograd function:</p>
-<ul class="simple">
-<li><p><strong>Forward pass</strong>: Identity (<code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">x</span></code>)</p></li>
-<li><p><strong>Backward pass</strong>: Scale gradient (<code class="docutils literal notranslate"><span class="pre">∂L/∂x</span> <span class="pre">=</span> <span class="pre">grad_factor</span> <span class="pre">·</span> <span class="pre">∂L/∂y</span></code>)</p></li>
-</ul>
-<p><strong>When to use</strong>: Set <code class="docutils literal notranslate"><span class="pre">grad_factor=2.0</span></code> or higher for networks deeper than 6 layers.</p>
-</section>
 <section id="extracting-discrete-boolean-functions">
 <h3>Extracting Discrete Boolean Functions<a class="headerlink" href="#extracting-discrete-boolean-functions" title="Link to this heading"></a></h3>
 <p>After training, you can extract the learned Boolean functions:</p>
@@ -551,45 +535,129 @@ Output: (batch, out_dim)
 <hr class="docutils" />
 <section id="deployment-from-training-to-inference">
 <h2>Deployment: From Training to Inference<a class="headerlink" href="#deployment-from-training-to-inference" title="Link to this heading"></a></h2>
-<p>TorchLogix provides multiple inference backends optimized for different use cases:</p>
-<section id="standard-pytorch-training-validation">
-<h3>1. Standard PyTorch (Training &amp; Validation)<a class="headerlink" href="#standard-pytorch-training-validation" title="Link to this heading"></a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span> <span class="o">=</span> <span class="n">LogicDense</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
-<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>  <span class="c1"># Discretizes to Boolean operations</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Standard PyTorch inference</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span> trained model          torch.fx.graph          tochlogix.Circuit IR       output code
+(fully boolean)           (static)           ┌────────────────────────┐
+┌──────────────┐     ┌──────────────────┐    │ i0─XOR─────┐           |   ┌► circuit.c
+│ LogicConv2d  │     │ aten.bitwise_xor │    │ i1─┘    POPCOUNT──► s0 |  /
+│ OrPooling2d  │───► │ aten.max_pool2d  │───►│ i2─AND─────┘           | /
+│ Flatten      │     │ aten.flatten     │    │ i3─┘                   | \
+│ LogicDense   │     │ aten.sum         │    │ i4─OR──────┐           |  \
+│ GroupSum     │     └──────────────────┘    │ i5─┘    POPCOUNT──► s1 |   └► circuit.v
+└──────────────┘                             │ i6─────────┘           |
+                                             └────────────────────────┘
 </pre></div>
 </div>
-<p><strong>Use case</strong>: Validation during training, small-scale inference.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>  trained model        FX graph (aten)          Circuit IR
+
+┌───────────────┐   ┌──────────────────┐
+│  LogicConv2d  │   │ aten.bitwise_xor │   in₀─┬─AND─┬─Σ₀ ──► circuit.c
+│  OrPooling2d  │──►│ aten.max_pool2d  │──►in₁─┘     │         circuit.v
+│    Flatten    │   │ aten.reshape     │   in₂─┬─XOR─┘
+│  LogicDense   │   │ aten.bitwise_and │   in₃─┘
+│   GroupSum    │   │ aten.sum         │   in₄─┬─OR──Σ₁
+└───────────────┘   └──────────────────┘   in₅─┘
+        │                   │                   │
+ set_export_mode()  Circuit.from_model()  write_{c,verilog}_code()
+</pre></div>
+</div>
+<section id="standard-pytorch-eval-mode">
+<h3>1. Standard PyTorch eval mode<a class="headerlink" href="#standard-pytorch-eval-mode" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Fully discrete Boolean operations</span>
+</pre></div>
+</div>
+<p><strong>Use case</strong>: Validation during training, debugging.</p>
 </section>
-<section id="packbitstensor-gpu-batch-inference">
-<h3>2. PackBitsTensor (GPU Batch Inference)<a class="headerlink" href="#packbitstensor-gpu-batch-inference" title="Link to this heading"></a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">PackBitsTensor</span>
+<section id="export-mode">
+<h3>2. Export mode<a class="headerlink" href="#export-mode" title="Link to this heading"></a></h3>
+<p>Before converting a model to a <code class="docutils literal notranslate"><span class="pre">Circuit</span></code>, call <code class="docutils literal notranslate"><span class="pre">set_export_mode</span></code> to switch the
+model into a clean tracing-friendly state:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_export_mode</span>
 
-<span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-<span class="n">model</span><span class="o">.</span><span class="n">cuda</span><span class="p">()</span>
-
-<span class="c1"># Pack boolean tensors to single bits</span>
-<span class="n">input_packed</span> <span class="o">=</span> <span class="n">PackBitsTensor</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Requires CUDA</span>
-<span class="n">output_packed</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">input_packed</span><span class="p">)</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">output_packed</span><span class="o">.</span><span class="n">unpack</span><span class="p">()</span>
+<span class="n">set_export_mode</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c1"># also calls model.eval()</span>
 </pre></div>
 </div>
-<p><strong>Use case</strong>: Large batch inference on GPU, up to 32× memory savings.</p>
-<p><strong>Limitation</strong>: Requires CUDA device.</p>
+<p>Export mode pre-caches each layer’s discrete LUT IDs as integer buffers so that
+<code class="docutils literal notranslate"><span class="pre">torch.fx</span></code> tracing produces pure integer operations — no floating-point LUT
+lookups. This is required before calling <code class="docutils literal notranslate"><span class="pre">Circuit.from_model()</span></code>.</p>
+<p><strong>Tip — reset <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> scaling before export.</strong> During training a non-unit
+<code class="docutils literal notranslate"><span class="pre">tau</span></code> (temperature) or non-zero <code class="docutils literal notranslate"><span class="pre">beta</span></code> (offset) can improve loss landscape and
+convergence. Before compiling to a Circuit, consider resetting them:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">modules</span><span class="p">():</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">GroupSum</span><span class="p">):</span>
+        <span class="n">m</span><span class="o">.</span><span class="n">tau</span> <span class="o">=</span> <span class="mf">1.0</span>
+        <span class="n">m</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="mf">0.0</span>
+</pre></div>
+</div>
+<p>Since argmax is invariant under monotone scaling and constant offsets, the
+predicted class is unchanged. With <code class="docutils literal notranslate"><span class="pre">tau=1,</span> <span class="pre">beta=0</span></code> the <code class="docutils literal notranslate"><span class="pre">SumReduction</span></code> nodes in
+the Circuit become pure integer popcounts, letting the compiler select the
+narrowest unsigned integer type that fits the group size (<code class="docutils literal notranslate"><span class="pre">uint8_t</span></code> for up to
+255 neurons per class, <code class="docutils literal notranslate"><span class="pre">uint16_t</span></code> for up to 65535, etc.) rather than falling
+back to <code class="docutils literal notranslate"><span class="pre">float</span></code>. This makes C and Verilog codegen more efficient without
+affecting accuracy.</p>
 </section>
-<section id="compiledlogicnet-cpu-production-inference">
-<h3>3. CompiledLogicNet (CPU Production Inference)<a class="headerlink" href="#compiledlogicnet-cpu-production-inference" title="Link to this heading"></a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledLogicNet</span>
+<section id="circuit-the-compiled-boolean-ir">
+<h3>3. Circuit: the compiled boolean IR<a class="headerlink" href="#circuit-the-compiled-boolean-ir" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> is a fully-unrolled, flat boolean IR that can be simplified and
+compiled to C or Verilog.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Circuit</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_export_mode</span>
 
-<span class="c1"># Compile to C code</span>
-<span class="n">compiled</span> <span class="o">=</span> <span class="n">CompiledLogicNet</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">compiler</span><span class="o">=</span><span class="s1">&#39;gcc&#39;</span><span class="p">,</span> <span class="n">optimization_level</span><span class="o">=</span><span class="s1">&#39;-O3&#39;</span><span class="p">)</span>
+<span class="n">set_export_mode</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+<span class="n">circuit</span> <span class="o">=</span> <span class="n">Circuit</span><span class="o">.</span><span class="n">from_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">))</span>
+<span class="n">circuit</span><span class="o">.</span><span class="n">simplify</span><span class="p">()</span>   <span class="c1"># prune dead gates, constant-fold, etc.</span>
 
-<span class="c1"># Run inference</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">compiled</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>  <span class="c1"># Calls compiled C code</span>
+<span class="c1"># Evaluate in Python (slower, for verification)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">circuit</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+<span class="c1"># Compile to a shared C library (fast CPU inference)</span>
+<span class="n">circuit</span><span class="o">.</span><span class="n">compile</span><span class="p">()</span>
+<span class="n">output_fast</span> <span class="o">=</span> <span class="n">circuit</span><span class="p">(</span><span class="n">x_np</span><span class="p">,</span> <span class="n">use_compiled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
-<p><strong>Use case</strong>: Production deployment on CPU, edge devices.</p>
-<p><strong>Benefits</strong>: 10-100× faster than PyTorch, no Python/PyTorch dependencies at runtime.</p>
+<p>The IR has two node types:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">Gate</span></code></strong> — one of 16 two-input boolean functions (AND, OR, XOR, …)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">SumReduction</span></code></strong> — counts set bits over a group (implements <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code>); when <code class="docutils literal notranslate"><span class="pre">tau=1</span></code> and <code class="docutils literal notranslate"><span class="pre">beta=0</span></code> the result is a pure integer popcount and the compiler selects the narrowest unsigned integer type that fits the group size</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> is independent of TorchLogix.</strong> It operates directly on a
+<code class="docutils literal notranslate"><span class="pre">torch.fx.Graph</span></code> and only requires that the graph is purely boolean: every
+intermediate value must be a boolean tensor or a scalar integer sum. Structural
+operations — <code class="docutils literal notranslate"><span class="pre">reshape</span></code>, <code class="docutils literal notranslate"><span class="pre">flatten</span></code>, indexing, slicing, concatenation — are
+allowed and are absorbed transparently into the gate connectivity (they affect
+which inputs wire to which gates, not the gate logic itself). Scalar integer
+sums (<code class="docutils literal notranslate"><span class="pre">torch.sum</span></code> over a boolean tensor) become <code class="docutils literal notranslate"><span class="pre">SumReduction</span></code> nodes. Any
+PyTorch model whose forward pass satisfies these constraints can be compiled to
+a <code class="docutils literal notranslate"><span class="pre">Circuit</span></code>, not just models built from TorchLogix layers.</p>
+<blockquote>
+<div><p><strong>Circuits assume binary (boolean) inputs.</strong> Binarization layers
+(<code class="docutils literal notranslate"><span class="pre">FixedBinarization</span></code>, <code class="docutils literal notranslate"><span class="pre">LearnableBinarization</span></code>, <code class="docutils literal notranslate"><span class="pre">SoftBinarization</span></code>) are not
+traced into the circuit — they operate on floating-point inputs and have no
+boolean equivalent. For circuit export, binarization must be absorbed into
+the dataset preprocessing instead. This is intentional: in a real deployment
+the input encoding (ADC thresholds, sensor quantization, etc.) is a
+hardware-specific decision made outside the circuit, not inside it.</p>
+</div></blockquote>
+</section>
+<section id="c-code-generation">
+<h3>4. C code generation<a class="headerlink" href="#c-code-generation" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_c_code</span><span class="p">(</span><span class="s2">&quot;circuit.c&quot;</span><span class="p">)</span>   <span class="c1"># self-contained C file, no dependencies</span>
+</pre></div>
+</div>
+<p>Generated C is a single <code class="docutils literal notranslate"><span class="pre">void</span> <span class="pre">circuit(const</span> <span class="pre">bool</span> <span class="pre">in[N],</span> <span class="pre">T</span> <span class="pre">out[M])</span></code> function
+plus a <code class="docutils literal notranslate"><span class="pre">circuit_bench</span></code> wrapper for batch evaluation. Compile with any C99
+compiler; no Python or PyTorch needed at runtime.</p>
+</section>
+<section id="verilog-generation">
+<h3>5. Verilog generation<a class="headerlink" href="#verilog-generation" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">verilog</span> <span class="o">=</span> <span class="n">circuit</span><span class="o">.</span><span class="n">get_verilog_code</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Produces a combinational <code class="docutils literal notranslate"><span class="pre">module</span> <span class="pre">circuit(input</span> <span class="pre">wire</span> <span class="pre">[N-1:0]</span> <span class="pre">inp,</span> <span class="pre">...)</span></code>.
+For models with <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code>, outputs are packed integers in <code class="docutils literal notranslate"><span class="pre">scores_flat</span></code>.
+See the <a class="reference internal" href="hardware_deployment.html"><span class="std std-doc">Hardware Deployment Guide</span></a> for how to
+simulate with Verilator and synthesize for FPGAs.</p>
 </section>
 </section>
 <hr class="docutils" />
@@ -647,7 +715,7 @@ Output: (batch, out_dim)
 <li><p>Train with gradients and deploy as efficient Boolean circuits</p></li>
 </ul>
 <p>For detailed API documentation, see the <a class="reference internal" href="../api/torchlogix.html"><span class="std std-doc">API Reference</span></a>.</p>
-<p>For hands-on examples, see the <a class="reference internal" href="quickstart.html"><span class="std std-doc">Quickstart Guide</span></a>.</p>
+<p>For a hands-on end-to-end walkthrough, see the <span class="xref myst">MNIST example notebook</span>.</p>
 </section>
 </section>
 
@@ -655,7 +723,7 @@ Output: (batch, out_dim)
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quick Start Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quick Start" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="hardware_deployment.html" class="btn btn-neutral float-right" title="Hardware Deployment Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

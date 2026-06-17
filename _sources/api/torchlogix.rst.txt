@@ -12,7 +12,7 @@ Main Classes
    :toctree: generated/
    :nosignatures:
 
-   CompiledLogicNet
+   Circuit
 
 Package Contents
 ----------------

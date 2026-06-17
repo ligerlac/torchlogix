@@ -1,0 +1,51 @@
+﻿torchlogix.Circuit
+==================
+
+.. currentmodule:: torchlogix
+
+.. autoclass:: Circuit
+
+   
+   .. automethod:: __init__
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+      ~Circuit.__init__
+      ~Circuit.bypass_wires
+      ~Circuit.compile
+      ~Circuit.constant_fold_gates
+      ~Circuit.constant_fold_sum_reductions
+      ~Circuit.dedup
+      ~Circuit.eliminate_dead_gates
+      ~Circuit.from_dict
+      ~Circuit.from_fx_graph
+      ~Circuit.from_json_file
+      ~Circuit.from_model
+      ~Circuit.fuse_not_inputs
+      ~Circuit.get_c_code
+      ~Circuit.get_verilog_code
+      ~Circuit.simplify
+      ~Circuit.to_dict
+      ~Circuit.write_c_code
+      ~Circuit.write_json
+      ~Circuit.write_verilog_code
+   
+   
+
+   
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~Circuit.n_inputs
+      ~Circuit.input_shape
+      ~Circuit.gates
+      ~Circuit.outputs
+      ~Circuit.output_shape
+      ~Circuit.sum_nodes
+   
+   
