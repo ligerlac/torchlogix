@@ -21,10 +21,8 @@ class OrPooling2d(torch.nn.Module):
     def forward(self, x):
         """Pool using logical OR (export) or max pooling (normal)."""
         if self.export_mode:
-            assert x.dtype == torch.bool, "Export mode requires boolean input"
             return self._torch_or_bool(x)
             
-        assert isinstance(x, torch.Tensor), "Input must be a PyTorch tensor in non-export mode."
         assert x.dim() == 4, "Input tensor must be 4d"
 
         return F.max_pool2d(
@@ -67,10 +65,8 @@ class OrPooling3d(torch.nn.Module):
     def forward(self, x):
 
         if self.export_mode:
-            assert x.dtype == torch.bool, "Export mode requires boolean input"
             return self._torch_or_pool(x)
             
-        assert isinstance(x, torch.Tensor), "Expected torch tensor"
         assert x.dim() == 5, "Input tensor must be 5d"
 
         return F.max_pool3d(
