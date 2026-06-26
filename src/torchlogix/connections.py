@@ -675,7 +675,10 @@ class FixedConvConnections(Connections):
     
     def forward(self, x, tree_level):
         if tree_level == 0:
-            return x[(slice(None), self.indices[0][..., -1], 
-              *self.indices[0][..., :-1].moveaxis(-1, 0))]
+            # unbind is used instead of * unpacking, which torch.compile cannot trace correctly
+            index_tensors = self.indices[0].unbind(-1)  # (h, w[, d], c) — each (L, K, P, S)
+            c_idx = index_tensors[-1]
+            spatial_idx = index_tensors[:-1]
+            return x[(slice(None), c_idx) + spatial_idx]
         else:
             return x[..., self.indices[tree_level]]

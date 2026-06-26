@@ -189,6 +189,7 @@ ALLOWED_FX_TARGETS = {
     torch.ops.aten.transpose.int,
     torch.ops.aten.pad.default,
     torch.ops.aten.unfold.default,
+    torch.ops.aten._unsafe_view.default,
 
     # Advanced view variants
     torch.ops.aten.view.default,
@@ -200,12 +201,14 @@ ALLOWED_FX_TARGETS = {
 
     # Index writes
     torch.ops.aten.index_put_.default,
+    torch.ops.aten.index_put.default,
 
     # Constants and copies
     torch.ops.aten.zeros_like.default,
     torch.ops.aten.ones_like.default,
     torch.ops.aten.empty_like.default,
     torch.ops.aten.lift_fresh_copy.default,
+    torch.ops.aten.clone.default,
 
     # Symbolic shape system (export internals)
     torch.ops.aten.sym_size.int,
