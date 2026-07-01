@@ -86,8 +86,12 @@ class LogicDense(LogicBase):
         if self.grad_factor != 1.0:
             x = GradFactor.apply(x, self.grad_factor)
 
+        # Flatten all leading dims into a single batch dim for internal processing
+        leading_shape = x.shape[:-1]
+        x = x.view(-1, self.in_dim)
+
         # Extract inputs according to connection pattern
-        x = self.connections(x)  # Shape: (batch_size, lut_rank, out_dim)
+        x = self.connections(x)  # Shape: (batch_flat, lut_rank, out_dim)
 
         # Split into train/eval and export path (optimized for efficiency and exportability, respectively)
         # Export path only needs to know which LUT, not how it's parameterized
@@ -98,13 +102,16 @@ class LogicDense(LogicBase):
             a = x[:, 0]
             b = x[:, 1]
             ids = self._export_lut_ids
-            return apply_luts_export_mode(a, b, ids)
-        # Delegate to parametrization with einsum contraction
-        # b=batch, n=neurons, k=num_basis
-        return self.parametrization.forward(
-            x, self.weight, self.training,
-            contraction='n,bn->bn'
-        )
+            out = apply_luts_export_mode(a, b, ids)
+        else:
+            # Delegate to parametrization with einsum contraction
+            # b=batch, n=neurons, k=num_basis
+            out = self.parametrization.forward(
+                x, self.weight, self.training,
+                contraction='n,bn->bn'
+            )
+
+        return out.view(*leading_shape, self.out_dim)
 
     def extra_repr(self):
         weight_repr = f"Parameter containing: [{self.weight.dtype} of size {tuple(self.weight.shape)}"
