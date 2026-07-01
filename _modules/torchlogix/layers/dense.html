@@ -179,8 +179,12 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span> <span class="o">!=</span> <span class="mf">1.0</span><span class="p">:</span>
             <span class="n">x</span> <span class="o">=</span> <span class="n">GradFactor</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_factor</span><span class="p">)</span>
 
+        <span class="c1"># Flatten all leading dims into a single batch dim for internal processing</span>
+        <span class="n">leading_shape</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)</span>
+
         <span class="c1"># Extract inputs according to connection pattern</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Shape: (batch_size, lut_rank, out_dim)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Shape: (batch_flat, lut_rank, out_dim)</span>
 
         <span class="c1"># Split into train/eval and export path (optimized for efficiency and exportability, respectively)</span>
         <span class="c1"># Export path only needs to know which LUT, not how it&#39;s parameterized</span>
@@ -191,13 +195,16 @@
             <span class="n">a</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
             <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
             <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_export_lut_ids</span>
-            <span class="k">return</span> <span class="n">apply_luts_export_mode</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">ids</span><span class="p">)</span>
-        <span class="c1"># Delegate to parametrization with einsum contraction</span>
-        <span class="c1"># b=batch, n=neurons, k=num_basis</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
-            <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
-            <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;n,bn-&gt;bn&#39;</span>
-        <span class="p">)</span></div>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">apply_luts_export_mode</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">ids</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Delegate to parametrization with einsum contraction</span>
+            <span class="c1"># b=batch, n=neurons, k=num_basis</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
+                <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
+                <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;n,bn-&gt;bn&#39;</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">*</span><span class="n">leading_shape</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="LogicDense.extra_repr">
