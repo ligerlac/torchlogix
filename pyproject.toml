@@ -83,4 +83,4 @@ line_length = 88
 skip = ['.git', 'build', 'dist', '*.egg-info']
 
 [project.entry-points."alir_tracer.plugins"]
-torchlogix = "torchlogix._alkaid_plugin:TorchLogixALIRTracer"
+logic = "torchlogix._alkaid_plugin:LogicALIRTracer"

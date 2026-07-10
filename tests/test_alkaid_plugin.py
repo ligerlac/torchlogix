@@ -37,7 +37,7 @@ def test_plugin_matches_eval_mode(model_fixture, input_fixture, request):
 
     input_shape = tuple(x.shape[1:])
     inp = FVArrayInput((1, *input_shape)).quantize(0, 1, 0)
-    inp2, out = trace_model(model, inputs=inp, framework="torchlogix")
+    inp2, out = trace_model(model, inputs=inp, framework="logic")
     comb = trace(inp2, out)
 
     actual = comb.predict(x.numpy())

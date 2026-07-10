@@ -1,5 +1,5 @@
 """
-alkaid plugin for torchlogix export-mode models.
+alkaid plugin for logic neural networks.
 
 Uses make_fx (aten-level tracing) instead of strict torch.fx.Tracer, so all
 Python-level control flow in the export paths is supported — no need to
@@ -8,14 +8,12 @@ rewrite layers for fx-compatibility.
 This module has no dependency on the `torchlogix` package beyond registering
 itself under its entry-point group: tracing (make_fx + constant folding) and
 aten-graph replay operate purely on `torch.fx`/aten IR and alkaid's `FVArray`.
-The only torchlogix-specific behavior is an opt-in duck-typed
-`set_export_mode(enabled)` call on submodules that define it, so the tracer
-works for any PyTorch model built from pure-boolean/integer ops, not just
-torchlogix models.
+So the tracer works for any PyTorch model built from pure-boolean/integer ops,
+not just torchlogix models.
 
 To register with alkaid (add to torchlogix's pyproject.toml):
     [project.entry-points."alir_tracer.plugins"]
-    torchlogix = "torchlogix._alkaid_plugin:TorchLogixALIRTracer"
+    logic = "torchlogix._alkaid_plugin:LogicALIRTracer"
 
 Usage (after registration, or with explicit framework=):
     from alkaid.converter import trace_model
@@ -23,7 +21,7 @@ Usage (after registration, or with explicit framework=):
 
     model = TorchLogixModel()
     inp = FVArrayInput((1, *model.input_shape)).quantize(0, 1, 0)
-    inp2, out = trace_model(model, inputs=inp, framework='torchlogix')
+    inp2, out = trace_model(model, inputs=inp, framework='logic')
     comb = trace(inp2, out)
 """
 from __future__ import annotations
@@ -35,6 +33,7 @@ from torch.fx import Node
 
 aten = torch.ops.aten
 from torch.fx.experimental.proxy_tensor import make_fx
+from torch.fx.experimental.const_fold import split_const_subgraphs
 
 from alkaid.trace import FVArray
 from alkaid.converter.plugin import ALIRTracerPluginBase
@@ -70,143 +69,31 @@ def _resolve(obj, env: dict):
 
 
 # ---------------------------------------------------------------------------
-# Constant folding (generic torch.fx / aten IR pass, no torchlogix dependency)
+# Constant folding
 #
-# Duplicated from torchlogix.circuit.constant_fold_views on purpose: the two
-# copies are allowed to diverge independently, since this one backs a
-# standalone tracer while the other backs torchlogix's own minimal Circuit IR.
+# Delegates to torch's own generic constant-folding pass rather than
+# hand-rolling a per-op-type whitelist: split_const_subgraphs does a proper
+# dependency-closure walk ("foldable if it's a get_attr, or all its inputs
+# are already foldable") and partitions the graph accordingly, so it covers
+# any foldable op automatically - including ones this file doesn't otherwise
+# know about - rather than only the handful of aten ops a hand-rolled pass
+# happened to special-case.
 # ---------------------------------------------------------------------------
 
 def _fold_constant_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
     """
-    Pre-evaluate shape/index ops (movedim, reshape, select, slice, unbind,
-    lift_fresh_copy) that operate on constant weight tensors.
+    Pre-evaluate the parts of the graph that depend only on constant weight/
+    connection tensors (not on the placeholder input), replacing them with
+    folded attributes.
 
     This is *required* (not optional) before replaying the graph, because the
     wiring step (aten.index.Tensor) needs concrete integer index tensors.
     Without folding, those tensors remain as unevaluated call_function nodes
     whose result is not available at replay time.
     """
-    env: dict = {}
-
-    def get_attr_value(gm, target: str):
-        obj = gm
-        for attr in target.split('.'):
-            obj = getattr(obj, attr)
-        return obj
-
-    VIEW_OPS = {
-        torch.ops.aten.movedim.int,
-        torch.ops.aten.reshape.default,
-        torch.ops.aten.permute.default,   # needed for conv wiring (permute → unbind chain)
-        torch.ops.aten.select.int,
-        torch.ops.aten.slice.Tensor,
-        torch.ops.aten.moveaxis.int,
-        torch.ops.aten.unbind.int,
-        torch.ops.aten.lift_fresh_copy.default,
-        torch.ops.aten.eq.Scalar,         # folds lut_ids == k → concrete bool mask
-    }
-
-    for node in gm.graph.nodes:
-        if node.op == 'placeholder':
-            continue
-        if node.op == 'get_attr':
-            env[node] = get_attr_value(gm, node.target)
-            continue
-        if node.op == 'call_function' and node.target in VIEW_OPS:
-            args_resolved = []
-            all_const = True
-            for a in node.args:
-                if isinstance(a, torch.fx.Node):
-                    if a in env:
-                        args_resolved.append(env[a])
-                    else:
-                        all_const = False
-                        break
-                else:
-                    args_resolved.append(a)
-            if all_const:
-                result = node.target(*args_resolved, **node.kwargs)
-                env[node] = result
-        # aten.ones.default / aten.zeros.default: constant tensor creation
-        elif node.op == 'call_function' and node.target in (
-                torch.ops.aten.ones.default, torch.ops.aten.zeros.default):
-            size = node.args[0]
-            if all(isinstance(s, int) for s in size):
-                dtype  = node.kwargs.get('dtype', None)
-                device = node.kwargs.get('device', torch.device('cpu'))
-                if node.target == torch.ops.aten.ones.default:
-                    env[node] = torch.ones(size, dtype=dtype, device=device)
-                else:
-                    env[node] = torch.zeros(size, dtype=dtype, device=device)
-        # aten.fill_.Tensor: in-place fill through a (possibly sliced) view
-        elif node.op == 'call_function' and node.target == torch.ops.aten.fill_.Tensor:
-            target_arg, fill_val_arg = node.args[0], node.args[1]
-            if isinstance(target_arg, torch.fx.Node) and target_arg in env:
-                if isinstance(fill_val_arg, torch.fx.Node) and fill_val_arg in env:
-                    fill_val = env[fill_val_arg]
-                else:
-                    fill_val = fill_val_arg
-                env[target_arg].fill_(fill_val)
-                env[node] = env[target_arg]
-        # aten.triu.default: upper-triangular mask of a constant tensor
-        elif node.op == 'call_function' and node.target == torch.ops.aten.triu.default:
-            input_node = node.args[0]
-            if isinstance(input_node, torch.fx.Node) and input_node in env:
-                diag = node.args[1] if len(node.args) > 1 else 0
-                env[node] = torch.triu(env[input_node], diagonal=diag)
-        # aten.index.Tensor has a list-of-(None|Node) as second arg;
-        # fold it when every element is also a constant.
-        elif node.op == 'call_function' and node.target == torch.ops.aten.index.Tensor:
-            tensor_arg = node.args[0]
-            indices    = node.args[1]
-            if isinstance(tensor_arg, torch.fx.Node) and tensor_arg in env:
-                idx_vals   = []
-                all_idx_const = True
-                for idx in indices:
-                    if idx is None:
-                        idx_vals.append(None)
-                    elif isinstance(idx, torch.fx.Node):
-                        if idx in env:
-                            idx_vals.append(env[idx])
-                        else:
-                            all_idx_const = False
-                            break
-                    else:
-                        idx_vals.append(idx)
-                if all_idx_const:
-                    src = env[tensor_arg]
-                    env[node] = src[tuple(
-                        slice(None) if v is None else v for v in idx_vals
-                    )]
-
-    for node, value in env.items():
-        if node.op in ('placeholder', 'get_attr'):
-            continue
-
-        const_name = f"_folded_{node.name}"
-
-        if isinstance(value, torch.Tensor):
-            gm.register_buffer(const_name, value)
-            with gm.graph.inserting_before(node):
-                new_node = gm.graph.get_attr(const_name)
-            node.replace_all_uses_with(new_node)
-
-        elif isinstance(value, (tuple, list)):
-            for user in list(node.users):
-                if user.op == 'call_function' and user.target is operator.getitem:
-                    idx = user.args[1]
-                    item = value[idx]
-                    item_name = f"_folded_{node.name}_{idx}"
-                    if isinstance(item, torch.Tensor):
-                        gm.register_buffer(item_name, item)
-                        with gm.graph.inserting_before(user):
-                            new_node = gm.graph.get_attr(item_name)
-                        user.replace_all_uses_with(new_node)
-
-    gm.graph.eliminate_dead_code()
-    gm.recompile()
-    return gm
+    folded = split_const_subgraphs(gm)
+    folded.run_folding()
+    return folded
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +112,14 @@ def _register(*targets):
 
 
 # ---- Shape / indexing ops (no new circuit nodes) --------------------------
+
+@_register(operator.getitem)
+def _getitem(seq, idx):
+    # split_const_subgraphs bundles folded constants into one container
+    # attribute (e.g. a ParameterList) and unpacks individual values via
+    # plain Python getitem, rather than one get_attr node per constant.
+    return seq[idx]
+
 
 @_register(aten.index.Tensor)
 def _index(src, indices):
@@ -315,28 +210,12 @@ def _pad(src, pad_list, mode='constant', value=None):
                   constant_values=int(value) if value is not None else 0)
 
 
-# @_register(aten.unfold.default)
-# def _unfold(src, dim, size, step):
-#     # Build sliding-window index array
-#     n = src.shape[dim]
-#     n_windows = (n - size) // step + 1
-#     starts = np.arange(n_windows) * step            # (n_windows,)
-#     offsets = np.arange(size)                        # (size,)
-#     idx = starts[:, None] + offsets[None, :]        # (n_windows, size)
-#     # Index along `dim`, then move the window dim to the end
-#     slices = [slice(None)] * src.ndim
-#     slices[dim] = idx                               # broadcasting-safe for ndarray
-#     result = src[tuple(slices)]
-#     # result.shape: (..., n_windows, size, ...)  — size dim is at position dim+1
-#     # torch.unfold convention: (..., n_windows, ..., size)  — size at the END
-#     ndim_r = result.ndim
-#     size_ax = dim + 1
-#     perm = list(range(size_ax)) + list(range(size_ax + 1, ndim_r)) + [size_ax]
-#     return np.transpose(result, perm)
-
-
 @_register(aten.unfold.default)
 def _unfold(src, dim, size, step):
+    # Used by OrPooling2d/OrPooling3d's export-mode forward (pool.py), which
+    # calls x.unfold(...) to extract the pooling kernel's receptive-field
+    # windows before OR-reducing them (F.max_pool2d only supports floats,
+    # so boolean pooling needs its own window extraction).
     n = src.shape[dim]
     n_windows = (n - size) // step + 1
 
@@ -468,16 +347,14 @@ def _index_put_(result, indices, value, accumulate=False):
 # Plugin class
 # ---------------------------------------------------------------------------
 
-class TorchLogixALIRTracer(ALIRTracerPluginBase):
+class LogicALIRTracer(ALIRTracerPluginBase):
     """
-    Top-level alkaid tracer for torchlogix export-mode models.
+    Top-level alkaid tracer for logic neural networks.
 
     Traces via make_fx (aten-level IR) rather than strict torch.fx.Tracer,
-    so dynamic shapes and Python control flow in export-mode forward passes
-    are fully supported. Despite the name, this tracer has no dependency on
-    torchlogix's own code (see module docstring) — it works for any model
-    whose export-mode forward pass lowers to the aten ops handled by
-    `_DISPATCH` below.
+    so dynamic shapes and Python control flow in forward passes are fully
+    supported. It works for any model whose export-mode forward pass lowers
+    to the aten ops handled by `_DISPATCH` below.
     """
 
     def get_input_shapes(self) -> list[tuple[int, ...]] | None:
@@ -490,17 +367,10 @@ class TorchLogixALIRTracer(ALIRTracerPluginBase):
         verbose: bool,
         inputs: tuple[FVArray, ...],
     ) -> tuple[dict, list[str]]:
-        assert len(inputs) == 1, 'TorchLogixALIRTracer expects a single input FVArray'
+        assert len(inputs) == 1, 'LogicALIRTracer expects a single input FVArray'
         inp_fv = inputs[0]
 
         # --- Trace with make_fx -----------------------------------------
-        self.model.eval()
-        # Opt-in duck-typed export-mode switch (torchlogix layers define
-        # `set_export_mode`; models that don't are traced as-is).
-        for module in self.model.modules():
-            if hasattr(module, 'set_export_mode'):
-                module.set_export_mode(True)
-
         x_dummy = torch.zeros(inp_fv.shape, dtype=torch.bool)
         gm = make_fx(self.model)(x_dummy)
 
@@ -508,13 +378,19 @@ class TorchLogixALIRTracer(ALIRTracerPluginBase):
         gm = _fold_constant_views(gm)
 
         if verbose:
-            print('[TorchLogixALIRTracer] aten graph:')
+            print('[LogicALIRTracer] aten graph:')
             gm.print_readable(print_output=True)
-            aten_ops_not_in_dispatch = {
-                node.target for node in gm.graph.nodes
-                if node.op == 'call_function' and node.target not in _DISPATCH
-            }
-            print(f'[TorchLogixALIRTracer] aten ops in graph not in dispatch table: {aten_ops_not_in_dispatch}')
+
+        unhandled = sorted(
+            {str(node.target) for node in gm.graph.nodes
+             if node.op == 'call_function' and node.target not in _DISPATCH}
+        )
+        if unhandled:
+            raise NotImplementedError(
+                f'LogicALIRTracer: no dispatch handler for aten op(s): {unhandled}. '
+                f'Add a handler to _DISPATCH in _alkaid_plugin.py, or run with '
+                f'verbose=True to print the full aten graph.'
+            )
 
         # --- Replay aten graph on FVArray --------------------------------
         env: dict[str, object] = {}
@@ -543,18 +419,15 @@ class TorchLogixALIRTracer(ALIRTracerPluginBase):
             if node.op == 'call_function':
                 args = _resolve(node.args, env)
                 kwargs = _resolve(node.kwargs, env)
-                handler = _DISPATCH.get(node.target)
-                if handler is not None:
-                    result = handler(*args, **kwargs)
-                    env[node.name] = result
-                elif verbose:
-                    print(f'  [skip] {node.target}')
+                # Every call_function target is guaranteed to be in _DISPATCH
+                # at this point - checked upfront, above.
+                env[node.name] = _DISPATCH[node.target](*args, **kwargs)
                 continue
 
             # call_module / call_method: skip (should not appear after make_fx)
 
         assert out_fv is not None, (
-            'TorchLogixALIRTracer: failed to produce an output FVArray. '
+            'LogicALIRTracer: failed to produce an output FVArray. '
             'Check that the model is in export mode and that all aten ops are handled.'
         )
 
