@@ -35,6 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+alkaid = [
+    "alkaid>=0.7.1",
+]
 dev = [
     "flake8>=6.1.0",
     "black>=23.12.1",
@@ -75,3 +78,6 @@ force_grid_wrap = 0
 use_parentheses = true
 line_length = 88
 skip = ['.git', 'build', 'dist', '*.egg-info']
+
+[project.entry-points."alir_tracer.plugins"]
+torchlogix = "torchlogix._alkaid_plugin:TorchLogixALIRTracer"

@@ -22,7 +22,7 @@ class OrPooling2d(torch.nn.Module):
         """Pool using logical OR (export) or max pooling (normal)."""
         if self.export_mode:
             return self._torch_or_bool(x)
-            
+
         assert x.dim() == 4, "Input tensor must be 4d"
 
         return F.max_pool2d(
@@ -46,7 +46,7 @@ class OrPooling2d(torch.nn.Module):
         return result 
 
 
-    def set_export_mode(self, export_mode: bool):
+    def set_export_mode(self, export_mode: bool = True):
         """Set export mode for the layer."""
         self.eval()
         self.export_mode = export_mode
@@ -88,9 +88,8 @@ class OrPooling3d(torch.nn.Module):
         for i in range(1, x.shape[-1]):
             result = result | x[..., i]
         return result
-    
 
-    def set_export_mode(self, export_mode: bool):
+    def set_export_mode(self, export_mode: bool = True):
         """Set export mode for the layer."""
         self.eval()
         self.export_mode = export_mode

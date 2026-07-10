@@ -23,7 +23,7 @@ class GroupSum(torch.nn.Module):
     def forward(self, x):
         assert x.shape[-1] % self.k == 0, "The number of input features must be divisible by k."
 
-        result = x.reshape(*x.shape[:-1], self.k, x.shape[-1] // self.k).sum(-1)
+        result = x.reshape(x.shape[:-1] + (self.k, x.shape[-1] // self.k)).sum(-1)
         if self.beta != 0.0:
             result = result + self.beta
         if self.tau != 1.0:
