@@ -36,7 +36,10 @@ dependencies = [
 
 [project.optional-dependencies]
 alkaid = [
-    "alkaid>=0.7.1",
+    # Temporary: tracks a fix branch (not yet released to PyPI) for a zero-
+    # constant bug that corrupts comb.predict() output - see ZERO_CONSTANT_BUG.md
+    # in the alkaid repo. Repoint to a released "alkaid>=X.Y" once merged upstream.
+    "alkaid @ git+https://github.com/ligerlac/alkaid.git@fix-zero-valued-constants",
 ]
 dev = [
     "flake8>=6.1.0",
