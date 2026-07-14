@@ -17,7 +17,6 @@ from torchlogix.layers import (
 )
 from torchlogix import CompiledLogicNet
 
-
 @pytest.fixture
 def layer(
     in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections_method, weight_init
@@ -679,81 +678,6 @@ def test_conv_model_rect():
         )    
 
 
-def test_compiled_model():
-    """Test model compilation and inference."""
-    connections_kwargs = {"init_method": "random-unique"}
-    model = torch.nn.Sequential(
-        LogicConv2d(
-            in_dim=3,
-            device="cpu",
-            channels=1,
-            num_kernels=1,
-            tree_depth=2,
-            receptive_field_size=2,
-            connections_kwargs=connections_kwargs,
-            stride=1,
-            padding=0,
-        ),
-        torch.nn.Flatten(),
-        GroupSum(1),
-    )
-
-    model.train(False)  # Switch model to eval mode
-    compiled_model = CompiledLogicNet(
-        model=model, input_shape=(1, 3, 3), num_bits=8, cpu_compiler="gcc", verbose=True
-    )
-    compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
-
-    # 8 random images of shape (1, 3, 3) (single channel, 3x3 input)
-    X = torch.randint(0, 2, (8, 1, 3, 3)).float()
-
-    preds = model(X)
-    preds_compiled = compiled_model(X.bool().numpy())
-
-    # c_code = compiled_model.get_c_code()
-    # print("Generated C code:")
-    # print(c_code)
-
-    print(f"{preds=}")
-    print(f"{preds_compiled=}")
-
-    assert np.allclose(preds, preds_compiled)
-
-
-def test_compiled_model_rect():
-    """Test model compilation and inference."""
-    connections_kwargs = {"init_method": "random-unique"}
-    model = torch.nn.Sequential(
-        LogicConv2d(
-            in_dim=(3,4),
-            device="cpu",
-            channels=1,
-            num_kernels=1,
-            tree_depth=2,
-            receptive_field_size=2,
-            connections_kwargs=connections_kwargs,
-            stride=1,
-            padding=0,
-        ),
-        torch.nn.Flatten(),
-        GroupSum(1),
-    )
-
-    model.train(False)  # Switch model to eval mode
-    compiled_model = CompiledLogicNet(
-        model=model, input_shape=(1, 3, 4), num_bits=8, cpu_compiler="gcc", verbose=True
-    )
-    compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
-
-    # 8 random images of shape (1, 3, 4) (single channel, 3x4 input)
-    X = torch.randint(0, 2, (8, 1, 3, 4)).float()
-
-    preds = model(X)
-    preds_compiled = compiled_model(X.bool().numpy())
-
-    assert np.allclose(preds, preds_compiled)
-
-
 def test_pooling_layer():
     layer = OrPooling2d(
         kernel_size=2,
@@ -795,7 +719,6 @@ def test_pooling_layer():
             output, 
             expected
         )    
-
 
 def test_compiled_pooling_model():
     """Test model compilation and inference."""

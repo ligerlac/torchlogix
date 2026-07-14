@@ -1,224 +1,135 @@
 #!/usr/bin/env python3
-"""Generate test vectors for Verilog testbench.
+"""Generate test vectors for a TorchLogix Circuit.
 
-This script generates random binary test inputs and computes expected outputs
-using a trained TorchLogix model. The test vectors are saved in a format
-compatible with the Verilog testbench template.
+Compiles a trained model to a Circuit, runs random boolean inputs through it,
+and writes the results in $readmemb-compatible text format for use with the
+Verilog testbench template.
 
 Usage:
-    python generate_test_vectors.py --model model.pt --num-tests 100 --output test_vectors/
+    # Load a saved model (must also specify --input-shape)
+    python generate_test_vectors.py --model model.pt --input-shape 1 28 28 --num-tests 100
+
+    # Generate vectors for a small demo circuit (no model file needed)
+    python generate_test_vectors.py --input-size 8 --num-tests 100
 """
 
 import argparse
+import sys
 import numpy as np
 import torch
 import torch.nn as nn
 from pathlib import Path
-import sys
 
 
-def generate_test_vectors(model, num_tests: int, input_shape, output_dir: Path):
-    """Generate test vectors for a TorchLogix model.
+def build_circuit(model, input_shape):
+    from torchlogix import Circuit
+    from torchlogix.utils import set_export_mode
 
-    Args:
-        model: Trained TorchLogix model
-        num_tests: Number of test cases to generate
-        input_shape: Shape of input tensor (without batch dimension)
-        output_dir: Directory to save test vectors
-    """
-    from torchlogix import CompiledLogicNet
+    model.eval()
+    set_export_mode(model)
+    circuit = Circuit.from_model(model, input_shape=input_shape)
+    circuit.simplify()
+    return circuit
 
+
+def generate_test_vectors(circuit, num_tests: int, output_dir: Path):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    n_in = circuit.n_inputs
+    print(f"Circuit inputs:  {n_in} bits")
     print(f"Generating {num_tests} test vectors...")
-    print(f"Input shape: {input_shape}")
 
-    # Compile model
-    compiled = CompiledLogicNet(model)
-    compiled.compile()
+    rng = np.random.default_rng(42)
+    inputs = rng.integers(0, 2, (num_tests, n_in), dtype=np.uint8)
 
-    # Determine input size
-    if isinstance(input_shape, tuple):
-        input_size = int(np.prod(input_shape))
-    else:
-        input_size = input_shape
+    outputs = []
+    for i, row in enumerate(inputs):
+        if (i + 1) % max(1, num_tests // 10) == 0:
+            print(f"  {i + 1}/{num_tests}", end="\r")
+        out = circuit(row.reshape(1, -1).astype(bool))
+        outputs.append(out[0])
+    print(f"  {num_tests}/{num_tests} done")
 
-    print(f"Input size: {input_size} bits")
+    outputs = np.array(outputs)
 
-    # Generate random binary inputs
-    test_inputs = np.random.randint(0, 2, (num_tests, input_size), dtype=np.int8)
-
-    # Get expected outputs
-    print("Computing expected outputs...")
-    test_outputs = []
-    for i, inp in enumerate(test_inputs):
-        if (i + 1) % 10 == 0 or i == 0:
-            print(f"  Processing test {i+1}/{num_tests}...", end='\r')
-
-        # Reshape if needed
-        if isinstance(input_shape, tuple):
-            inp_shaped = inp.reshape(1, *input_shape)
-        else:
-            inp_shaped = inp.reshape(1, -1)
-
-        out = compiled.forward(inp_shaped)
-        test_outputs.append(out[0])
-
-    print(f"  Processing test {num_tests}/{num_tests}... Done!")
-
-    test_outputs = np.array(test_outputs)
-    output_size = test_outputs.shape[1]
-
-    print(f"Output size: {output_size} bits")
-
-    # Save to files (binary format for Verilog $readmemb)
     input_file = output_dir / "test_vectors_input.txt"
     output_file = output_dir / "test_vectors_output.txt"
 
-    print(f"\nSaving test vectors:")
-    print(f"  Inputs:  {input_file}")
-    print(f"  Outputs: {output_file}")
+    with open(input_file, "w") as f:
+        for row in inputs:
+            f.write("".join(str(b) for b in row) + "\n")
 
-    # Write in binary format
-    with open(input_file, 'w') as f:
-        for inp in test_inputs:
-            # Convert to binary string
-            binary = ''.join(str(bit) for bit in inp)
-            f.write(binary + '\n')
+    # outputs may be bool or integer; write as binary for bool, decimal for int
+    is_bool = outputs.dtype == bool or (outputs.ndim == 2 and outputs.max() <= 1)
+    with open(output_file, "w") as f:
+        for row in outputs:
+            if is_bool or outputs.max() <= 1:
+                f.write("".join(str(int(b)) for b in row) + "\n")
+            else:
+                # GroupSum outputs — write space-separated integers
+                f.write(" ".join(str(int(v)) for v in row) + "\n")
 
-    with open(output_file, 'w') as f:
-        for out in test_outputs:
-            binary = ''.join(str(int(bit)) for bit in out)
-            f.write(binary + '\n')
+    np.savez(output_dir / "test_vectors.npz", inputs=inputs, outputs=outputs)
 
-    # Also save in NumPy format for debugging
-    np.savez(output_dir / "test_vectors.npz",
-             inputs=test_inputs,
-             outputs=test_outputs)
+    print(f"\nWrote {num_tests} vectors to {output_dir}/")
+    print(f"  {input_file.name}  — $readmemb input file")
+    print(f"  {output_file.name} — $readmemb output file")
+    print(f"  test_vectors.npz   — NumPy archive for debugging")
 
-    print(f"\nTest vector generation complete!")
-    print(f"Use these files with the Verilog testbench template.")
-
-    # Print some example vectors
-    print(f"\nExample test vectors:")
-    print(f"{'Input':<20} | Output")
-    print("-" * 30)
+    print(f"\nSample (first 5):")
+    print(f"  {'Input':<{min(n_in, 20)}}  Output")
     for i in range(min(5, num_tests)):
-        inp_str = ''.join(str(bit) for bit in test_inputs[i])
-        out_str = ''.join(str(int(bit)) for bit in test_outputs[i])
-        print(f"{inp_str:<20} | {out_str}")
-
+        inp_s = "".join(str(b) for b in inputs[i])[:20]
+        out_s = "".join(str(int(b)) for b in outputs[i]) if is_bool else str(outputs[i])
+        print(f"  {inp_s}  {out_s}")
     if num_tests > 5:
-        print(f"... ({num_tests - 5} more)")
+        print(f"  ... ({num_tests - 5} more)")
 
-    return test_inputs, test_outputs
+    return inputs, outputs
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate test vectors for TorchLogix Verilog testbench",
+        description="Generate Verilog test vectors from a TorchLogix Circuit",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Generate 100 test vectors for an 8-input model
-  python generate_test_vectors.py --input-size 8 --num-tests 100
-
-  # Load a saved model and generate vectors
-  python generate_test_vectors.py --model model.pt --num-tests 1000
-
-  # For a convolutional model with specific input shape
-  python generate_test_vectors.py --input-shape 8 8 --num-tests 500
-        """
+        epilog=__doc__,
     )
 
-    # Input specification (one of these is required)
-    input_group = parser.add_mutually_exclusive_group()
-    input_group.add_argument('--model', type=str,
-                            help='Path to saved TorchLogix model (.pt file)')
-    input_group.add_argument('--input-size', type=int,
-                            help='Input size in bits (for flat input)')
-    input_group.add_argument('--input-shape', type=int, nargs='+',
-                            help='Input shape (for convolutional models, e.g., 8 8 for 8x8)')
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("--model", type=str,
+                             help="Path to a saved model (.pt) — also requires --input-shape")
+    input_group.add_argument("--input-size", type=int,
+                             help="Build a small demo LogicDense circuit with this many inputs")
 
-    parser.add_argument('--num-tests', type=int, default=100,
-                       help='Number of test vectors to generate (default: 100)')
-    parser.add_argument('--output-dir', type=str, default='.',
-                       help='Output directory for test vectors (default: current directory)')
-    parser.add_argument('--seed', type=int, default=None,
-                       help='Random seed for reproducibility')
+    parser.add_argument("--input-shape", type=int, nargs="+",
+                        help="Input shape for --model (e.g. 1 28 28 for MNIST)")
+    parser.add_argument("--num-tests", type=int, default=100,
+                        help="Number of test vectors to generate (default: 100)")
+    parser.add_argument("--output-dir", type=str, default=".",
+                        help="Output directory (default: current directory)")
 
     args = parser.parse_args()
 
-    # Set random seed if provided
-    if args.seed is not None:
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        print(f"Random seed: {args.seed}")
-
-    # Determine how to get the model
     if args.model:
-        print(f"Loading model from: {args.model}")
-        model = torch.load(args.model)
-        model.eval()
-
-        # Try to infer input shape
-        # This is a heuristic - may need adjustment for your model
-        try:
-            from torchlogix import CompiledLogicNet
-            compiled = CompiledLogicNet(model)
-            if compiled.input_shape is not None:
-                input_shape = compiled.input_shape
-            else:
-                # Fallback: try first layer
-                first_layer = next(model.modules())
-                if hasattr(first_layer, 'in_features'):
-                    input_shape = first_layer.in_features
-                elif hasattr(first_layer, 'in_dim'):
-                    input_shape = first_layer.in_dim
-                else:
-                    print("ERROR: Could not infer input shape from model")
-                    print("Please specify --input-size or --input-shape")
-                    sys.exit(1)
-        except Exception as e:
-            print(f"ERROR: Failed to infer input shape: {e}")
-            print("Please specify --input-size or --input-shape")
-            sys.exit(1)
-
-    elif args.input_size:
-        print(f"Creating dummy model with input size: {args.input_size}")
-        # Create a simple identity model for testing
+        if not args.input_shape:
+            parser.error("--model requires --input-shape")
+        print(f"Loading model: {args.model}")
+        model = torch.load(args.model, map_location="cpu", weights_only=False)
+        input_shape = tuple(args.input_shape)
+    else:
+        n = args.input_size
+        print(f"Building demo LogicDense circuit ({n} → {max(1, n // 2)} → {max(1, n // 4)})")
         from torchlogix.layers import LogicDense
         model = nn.Sequential(
-            LogicDense(args.input_size, args.input_size, connections="random", device="cpu")
+            LogicDense(n, max(1, n // 2)),
+            LogicDense(max(1, n // 2), max(1, n // 4)),
         )
-        input_shape = args.input_size
+        input_shape = (n,)
 
-    elif args.input_shape:
-        print(f"Creating dummy model with input shape: {args.input_shape}")
-        from torchlogix.layers import LogicConv2d
-        if len(args.input_shape) == 2:
-            h, w = args.input_shape
-            input_shape = (h, w)
-            # Create a simple conv model
-            model = nn.Sequential(
-                LogicConv2d(in_dim=(h, w), channels=1, num_kernels=1,
-                           receptive_field_size=3, tree_depth=1,
-                           connections="random", device="cpu"),
-                nn.Flatten()
-            )
-        else:
-            print("ERROR: --input-shape must have 2 values (height, width)")
-            sys.exit(1)
-
-    else:
-        print("ERROR: Must specify one of --model, --input-size, or --input-shape")
-        parser.print_help()
-        sys.exit(1)
-
-    # Generate test vectors
-    generate_test_vectors(model, args.num_tests, input_shape, args.output_dir)
+    circuit = build_circuit(model, input_shape)
+    generate_test_vectors(circuit, args.num_tests, args.output_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

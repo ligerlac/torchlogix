@@ -1,5 +1,4 @@
 import math
-import random
 from typing import Union
 
 import torch
@@ -8,7 +7,7 @@ from torch.nn.modules.utils import _pair, _triple
 
 from ..connections import setup_connections
 from ..functional import (
-    get_regularization_loss, rescale_weights
+    get_regularization_loss, rescale_weights, apply_luts_export_mode
     )
 from .base import LogicBase
 
@@ -86,7 +85,11 @@ class _LogicConvNd(LogicBase):
         self.padding = padding
         self.tree_weights = self._init_weights()
         self.connections = self._init_connections()
-        
+        self.kernel_positions = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
+                   for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
+        self.n_kernel_positions = math.prod(self.kernel_positions)
+
+
     def _init_weights(self):
         # Initialize tree weights using parametrization
         tree_weights = torch.nn.ParameterList()
@@ -148,6 +151,9 @@ class _LogicConvNd(LogicBase):
             * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``
             * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.
         """
+        if self.export_mode:
+            return self._forward_export_mode(x)
+        
         if self.padding > 0:
             pad = (self.padding, self.padding) * self.conv_dimension
             x = torch.nn.functional.pad(x, pad, mode="constant", value=0)
@@ -169,11 +175,42 @@ class _LogicConvNd(LogicBase):
                 contraction='fc,bcsf->bcsf'
             )
         # Reshape flattened output
-        reshape = [(in_dim + 2*self.padding - rfs) // self.stride + 1 
-                   for in_dim, rfs in zip(self.in_dim, self.receptive_field_size)]
-        x = x.view(x.shape[0], x.shape[1], *reshape)
+        x = x.view(x.shape[0], x.shape[1], *self.kernel_positions)
 
         return x
+    
+
+    def _forward_export_mode(self, x):
+
+        # Padding
+        if self.padding > 0:
+            x = torch.nn.functional.pad(
+                x,
+                (self.padding, self.padding, self.padding, self.padding, 0, 0),
+                mode="constant",
+                value=0
+            )
+
+        # First level
+        x = self.connections(x, 0)
+        a, b = x[:, 0], x[:, 1]
+
+        lut_ids_bc = getattr(self, f'_export_lut_ids_L0')
+
+        x = apply_luts_export_mode(a, b, lut_ids_bc)
+
+        # Remaining levels
+        for level in range(1, self.tree_depth):
+            x = self.connections(x, level)
+            a, b = x[..., 0, :], x[..., 1, :]
+            lut_ids_bc = getattr(self, f'_export_lut_ids_L{level}')
+
+            x = apply_luts_export_mode(a, b, lut_ids_bc)
+
+        x = x.reshape(x.shape[0], x.shape[1], *self.kernel_positions)
+
+        return x
+
 
     def get_luts_and_ids(self):
         """Computes the most probable LUT and its ID for each neuron.
@@ -220,6 +257,29 @@ class _LogicConvNd(LogicBase):
     def rescale_weights(self, method):
         for w in self.tree_weights:
             rescale_weights(w, method)
+
+    def set_export_mode(self, enabled: bool = True):
+        self.eval()
+        self.export_mode = enabled
+
+        if enabled:
+            _, tree_ids = self.get_luts_and_ids()
+
+            for level_idx, level_ids in enumerate(tree_ids):
+                stacked = torch.stack(level_ids)  # (lut_rank**i, num_kernels)
+                # shape: (num_kernels, spatial, n_nodes) — broadcasts over any batch dim
+                stacked = stacked.T.unsqueeze(-2)
+                stacked = stacked.expand(-1, self.n_kernel_positions, -1)
+                self.register_buffer(f'_export_lut_ids_L{level_idx}',
+                                    stacked, persistent=True)
+        else:
+            buffers_to_delete = [name for name in self._buffers.keys()
+                                if name.startswith('_export_lut')]
+            for name in buffers_to_delete:
+                delattr(self, name)
+
+    def _get_export_lut_ids(self, level):
+        return getattr(self, f'_export_lut_ids_L{level}')
 
 
 class LogicConv2d(_LogicConvNd):

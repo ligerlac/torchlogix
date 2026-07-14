@@ -12,7 +12,6 @@ from torch.nn.modules.utils import _triple
 from torchlogix.layers import LogicConv3d, LogicConvTranspose3d, OrPooling3d, GroupSum
 from torchlogix import CompiledLogicNet
 
-
 @pytest.fixture
 def layer(
     in_dim, channels, num_kernels, tree_depth, receptive_field_size, stride, padding, connections_method
@@ -523,7 +522,6 @@ def test_pooling_layer():
 
         print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(output, expected)
-
 
 def test_compiled_model():
     """Test model compilation and inference."""
