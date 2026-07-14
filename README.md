@@ -23,8 +23,7 @@
   </a>
 </p>
 
-`torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a
-million images of MNIST per second on CPU.
+`torchlogix` is a `PyTorch`-based library for training and inference of **logic neural networks**. These solve machine learning tasks by learning combinations of boolean logic expressions. As the choice of boolean expressions is conventionally non-differentiable, relaxations are applied to allow training with gradient-based methods. The final model can be discretized again, resulting in a fully boolean expression with extremely efficient inference, e.g., beyond a million images of MNIST per second on CPU.
 
 **Note:** `torchlogix` is based on the `difflogic` package ([https://github.com/Felix-Petersen/difflogic/](https://github.com/Felix-Petersen/difflogic/)), and extends it by new concepts such as additional layer types, compact parametrizations, higher-dimensional logic blocks, learnable connections and binarization as described in "WARP Logic Neural Networks" (Paper @ [ArXiv](https://arxiv.org/abs/2602.03527)). It also implements a graph-based intermediate representation (IR) for efficient compilation to different targets (currently FPGA & CPU).
 
@@ -57,12 +56,12 @@ model = torch.nn.Sequential(
     GroupSum(k=10, tau=8)
 )
 ```
-Like ordinary PyTorch neural networks, this model may be trained, e.g., with `torch.nn.CrossEntropyLoss`. The Adam optimizer with a learning rate of `0.01` works well. Every layer and hence the entire model can be switched between the relaxed trainable and discrete, fully boolean version with the standard `model.train()` / `model.eval()` commands. Furthermore, there is a dedicated `model.set_export_mode()`, which expresses the forward path as pure boolean and indexing operations. This can be represented as a fully unrolled combinational `Circuit`, which can be compiled for fast inference:
+Like ordinary PyTorch neural networks, this model may be trained, e.g., with `torch.nn.CrossEntropyLoss`. The Adam optimizer with a learning rate of `0.01` works well. Every layer and hence the entire model can be switched between the relaxed trainable and discrete, fully boolean version with the standard `model.train()` / `model.eval()` commands. Furthermore, there is a dedicated `model.set_export_mode()`, which expresses the forward path as pure boolean- and indexing operations. This can be represented as a fully unrolled combinational `Circuit`, which can be compiled for fast inference:
 ```python
 from torchlogix import Circuit
 circuit = Circuit.from_model(model, input_shape=(1, 28, 28))
 circuit.compile()
-preds = model(X_np)  # ~6 ms for 100k images on my laptop
+preds = circuit(X_np, use_compiled=True)  # ~6 ms for 100k images on my laptop
 ```
 The graph-based IR of a `Circuit` can be simplified and emit `C` and `Verilog` code directly:
 ```python
