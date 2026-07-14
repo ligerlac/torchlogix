@@ -199,7 +199,7 @@ all 16 logic operations applied to inputs a and b.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="torchlogix.functional.GradFactor">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">torchlogix.functional.</span></span><span class="sig-name descname"><span class="pre">GradFactor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#GradFactor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor" title="Link to this definition"></a></dt>
-<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/autograd.html#torch.autograd.Function" title="(in PyTorch v2.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Function</span></code></a></p>
+<dd><p>Bases: <a class="reference external" href="https://docs.pytorch.org/docs/stable/autograd.html#torch.autograd.Function" title="(in PyTorch v2.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Function</span></code></a></p>
 <dl class="py method">
 <dt class="sig sig-object py" id="torchlogix.functional.GradFactor.forward">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/functional.html#GradFactor.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.functional.GradFactor.forward" title="Link to this definition"></a></dt>
@@ -215,7 +215,7 @@ There are two ways to define forward:</p>
 <ul class="simple">
 <li><p>It must accept a context ctx as the first argument, followed by any
 number of arguments (tensors or other types).</p></li>
-<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#combining-forward-context" title="(in PyTorch v2.12)"><span>Combined or separate forward() and setup_context()</span></a> for more details</p></li>
+<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#combining-forward-context" title="(in PyTorch v2.13)"><span>Combined or separate forward() and setup_context()</span></a> for more details</p></li>
 </ul>
 <p>Usage 2 (Separate forward and ctx):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@staticmethod</span>
@@ -234,7 +234,7 @@ number of arguments (tensors or other types).</p></li>
 staticmethod to handle setting up the <code class="docutils literal notranslate"><span class="pre">ctx</span></code> object.
 <code class="docutils literal notranslate"><span class="pre">output</span></code> is the output of the forward, <code class="docutils literal notranslate"><span class="pre">inputs</span></code> are a Tuple of inputs
 to the forward.</p></li>
-<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#extending-autograd" title="(in PyTorch v2.12)"><span>Extending torch.autograd</span></a> for more details</p></li>
+<li><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/notes/extending.html#extending-autograd" title="(in PyTorch v2.13)"><span>Extending torch.autograd</span></a> for more details</p></li>
 </ul>
 <p>The context can be used to store arbitrary data that can be then
 retrieved during the backward pass. Tensors should not be stored
