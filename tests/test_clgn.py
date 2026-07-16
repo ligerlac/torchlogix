@@ -7,8 +7,15 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, OrPooling2d, GroupSum, FixedBinarization, LearnableBinarization
-
+from torchlogix.layers import (
+    LogicConv2d, 
+    LogicConvTranspose2d, 
+    OrPooling2d, 
+    GroupSum, 
+    FixedBinarization, 
+    LearnableBinarization
+)
+from torchlogix import CompiledLogicNet
 
 @pytest.fixture
 def layer(
@@ -712,3 +719,267 @@ def test_pooling_layer():
             output, 
             expected
         )    
+
+def test_compiled_pooling_model():
+    """Test model compilation and inference."""
+    connections_kwargs = {"init_method": "random-unique"}
+    model = torch.nn.Sequential(
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=1,
+            num_kernels=1,
+            tree_depth=2,
+            receptive_field_size=2,
+            connections_kwargs=connections_kwargs,
+            stride=1,
+            padding=0,
+        ),
+        OrPooling2d(kernel_size=2, stride=2, padding=0),
+        torch.nn.Flatten(),
+        GroupSum(1),
+    )
+
+    model.train(False)  # Switch model to eval mode
+    compiled_model = CompiledLogicNet(
+        model=model, input_shape=(1, 3, 3), num_bits=8, cpu_compiler="gcc", verbose=True
+    )
+    compiled_model.compile(save_lib_path="compiled_conv_model.so", verbose=False)
+
+    # 8 random images of shape (1, 3, 3) (single channel, 3x3 input)
+    X = torch.randint(0, 2, (8, 1, 3, 3)).float()
+
+    preds = model(X)
+    preds_compiled = compiled_model(X.bool().numpy())
+
+    # c_code = compiled_model.get_c_code()
+    # print("Generated C code:")
+    # print(c_code)
+
+    assert np.allclose(preds, preds_compiled)
+
+
+def test_compiled_model_with_thresholding():
+    """Test model compilation and inference with FixedBinarization."""
+    # Create thresholding layer with frozen thresholds
+    thresholds = [10, 20, 30, 40, 50]  # 5 thresholds
+    thresholding_layer = FixedBinarization(thresholds=thresholds, one_per="global", feature_dim=1)
+    
+    # Create a simple model: Thresholding -> Conv -> Flatten -> GroupSum
+    connections_kwargs = {"init_method": "random"}
+    model = torch.nn.Sequential(
+        thresholding_layer,
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=5,  # Must match number of thresholds
+            num_kernels=2,
+            tree_depth=2,
+            receptive_field_size=2,
+            connections_kwargs=connections_kwargs,
+            stride=1,
+            padding=0,
+        ),
+        torch.nn.Flatten(),
+        GroupSum(2),  # 2 classes
+    )
+
+    model.train(False)  # Switch model to eval mode
+
+    # Test with integer input (will be thresholded)
+    X = torch.randint(0, 60, (8, 1, 3, 3)).float()  # 8 samples of shape (1, 3, 3)
+
+    # Get predictions from original model
+    preds = model(X)
+
+    # Compile the model (no need to specify apply_thresholding - auto-detected!)
+    compiled_model = CompiledLogicNet(
+        model=model,
+        input_shape=(3, 3),  # Input shape BEFORE thresholding
+        num_bits=1,  # Thresholding requires num_bits=1
+        cpu_compiler="gcc",
+        verbose=True,
+        use_bitpacking=True
+        # use_bitpacking=False
+    )
+    compiled_model.compile(save_lib_path="compiled_thresholding_model.so", verbose=False)
+
+    # Get predictions from compiled model
+    # Note: compiled model expects integer input (will be thresholded internally)
+    preds_compiled = compiled_model(X.int().numpy())
+
+    print(f"Original predictions:\n{preds}")
+    print(f"Compiled predictions:\n{preds_compiled}")
+
+    # Verify outputs match
+    assert np.allclose(preds.numpy(), preds_compiled, atol=1e-5), \
+        "Compiled model with thresholding predictions do not match original model"
+    
+
+def test_compiled_model_with_thresholding_float():
+    """Test model compilation and inference with FixedBinarization."""
+    # Create thresholding layer with frozen thresholds
+    thresholds = [0.1, 0.2, 0.3, 0.4, 0.5]  # 5 thresholds
+    thresholding_layer = FixedBinarization(thresholds=thresholds, one_per="global", feature_dim=1)
+    
+    # Create a simple model: Thresholding -> Conv -> Flatten -> GroupSum
+    connections_kwargs = {"init_method": "random"}
+    model = torch.nn.Sequential(
+        thresholding_layer,
+        LogicConv2d(
+            in_dim=3,
+            device="cpu",
+            channels=5,  # Must match number of thresholds
+            num_kernels=2,
+            tree_depth=2,
+            receptive_field_size=2,
+            connections_kwargs=connections_kwargs,
+            stride=1,
+            padding=0,
+        ),
+        torch.nn.Flatten(),
+        GroupSum(2, tau=2),  # 2 classes
+    )
+
+    model.train(False)  # Switch model to eval mode
+
+    # Test with float input (will be thresholded)
+    X = torch.rand(8, 1, 3, 3).float()  # 8 samples of shape (1, 3, 3)
+
+    # Get predictions from original model
+    preds = model(X)
+
+    # Compile the model (no need to specify apply_thresholding - auto-detected!)
+    compiled_model = CompiledLogicNet(
+        model=model,
+        input_shape=(3, 3),  # Input shape BEFORE thresholding
+        num_bits=1,  # Thresholding requires num_bits=1
+        cpu_compiler="gcc",
+        verbose=True,
+        use_bitpacking=True
+        # use_bitpacking=False
+    )
+    compiled_model.compile(save_lib_path="compiled_thresholding_model.so", verbose=False)
+
+    # Get predictions from compiled model
+    # Note: compiled model expects integer input (will be thresholded internally)
+    preds_compiled = compiled_model(X.numpy())
+    print(f"Original predictions:\n{preds}")
+    print(f"Compiled predictions:\n{preds_compiled}")
+
+    # Verify outputs match
+    assert np.allclose(preds.numpy(), preds_compiled, atol=1e-5), \
+        "Compiled model with thresholding predictions do not match original model"
+
+@pytest.mark.parametrize("stride,output_padding", [(1, 0), (2, 0), (2, 1), (3, 0), (3, 2)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose2d_output_shape(stride, output_padding, padding):
+    """LogicConvTranspose2d must produce the correct spatial output shape."""
+    in_h, in_w = 6, 6
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if output_padding >= stride:
+        pytest.skip("output_padding must be < stride")
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    layer = LogicConvTranspose2d(
+        in_dim=(in_h, in_w),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_h, in_w)
+    out = layer(x)
+
+    expected_h = (in_h - 1) * stride - 2 * padding + kH + output_padding
+    expected_w = (in_w - 1) * stride - 2 * padding + kH + output_padding
+    assert out.shape == (batch, num_kernels, expected_h, expected_w), (
+        f"Expected shape {(batch, num_kernels, expected_h, expected_w)}, got {tuple(out.shape)}"
+    )
+
+def test_conv_transpose2d_gradients():
+    """Gradients must flow through LogicConvTranspose2d to all tree-weight parameters."""
+    layer = LogicConvTranspose2d(
+        in_dim=(4, 4),
+        channels=2,
+        num_kernels=4,
+        tree_depth=2,
+        receptive_field_size=3,
+        stride=2,
+        padding=0,
+        output_padding=0,
+        parametrization="warp",
+        device="cpu",
+    )
+    layer.train()
+
+    x = torch.rand(2, 2, 4, 4)
+    out = layer(x)
+    out.sum().backward()
+
+    for i, w in enumerate(layer.tree_weights):
+        assert w.grad is not None, f"tree_weights[{i}] has no gradient"
+        assert w.grad.abs().sum() > 0, f"tree_weights[{i}] gradient is all zero"
+
+@pytest.mark.parametrize("stride,in_h", [(1, 8), (2, 6), (3, 5)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose2d_shape_inverse_of_conv2d(stride, in_h, padding):
+    """LogicConvTranspose2d must invert the spatial dimensions of LogicConv2d.
+
+    Given a conv that maps (B, C, H, W) → (B, K, H', W'), a transpose conv
+    with the same stride/padding/receptive_field_size and output_padding=0
+    should map (B, K, H', W') → (B, C', H, W).
+    """
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    conv = LogicConv2d(
+        in_dim=(in_h, in_h),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        device="cpu",
+    )
+
+    # Compute what spatial size the conv produces
+    x = torch.rand(batch, channels, in_h, in_h)
+    conv_out = conv(x)
+    out_h = conv_out.shape[2]
+
+    output_padding = (in_h + 2 * padding - kH) % stride
+
+    # Transpose conv with the same parameters should map back to (in_h, in_h)
+    transpose_conv = LogicConvTranspose2d(
+        in_dim=(out_h, out_h),
+        channels=num_kernels,
+        num_kernels=channels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    reconstructed = transpose_conv(conv_out)
+    assert reconstructed.shape == (batch, channels, in_h, in_h), (
+        f"Expected shape {(batch, channels, in_h, in_h)}, got {tuple(reconstructed.shape)}"
+    )
