@@ -35,6 +35,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+alkaid = [
+    # Temporary: tracks a fix branch (not yet released to PyPI) for a zero-
+    # constant bug that corrupts comb.predict() output - see ZERO_CONSTANT_BUG.md
+    # in the alkaid repo. Repoint to a released "alkaid>=X.Y" once merged upstream.
+    "alkaid @ git+https://github.com/ligerlac/alkaid.git@fix-zero-valued-constants",
+]
 dev = [
     "flake8>=6.1.0",
     "black>=23.12.1",
@@ -75,3 +81,6 @@ force_grid_wrap = 0
 use_parentheses = true
 line_length = 88
 skip = ['.git', 'build', 'dist', '*.egg-info']
+
+[project.entry-points."alir_tracer.plugins"]
+logic = "torchlogix._alkaid_plugin:LogicALIRTracer"

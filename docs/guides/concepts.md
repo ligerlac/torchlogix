@@ -429,10 +429,10 @@ set_export_mode(model)  # also calls model.eval()
 ```
 
 Export mode pre-caches each layer's discrete LUT IDs as integer buffers so that
-`torch.fx` tracing produces pure integer operations — no floating-point LUT
+`torch.fx` tracing produces pure integer operations - no floating-point LUT
 lookups. This is required before calling `Circuit.from_model()`.
 
-**Tip — reset `GroupSum` scaling before export.** During training a non-unit
+**Tip - reset `GroupSum` scaling before export.** During training a non-unit
 `tau` (temperature) or non-zero `beta` (offset) can improve loss landscape and
 convergence. Before compiling to a Circuit, consider resetting them:
 
@@ -473,13 +473,13 @@ output_fast = circuit(x_np, use_compiled=True)
 ```
 
 The IR has two node types:
-- **`Gate`** — one of 16 two-input boolean functions (AND, OR, XOR, …)
-- **`SumReduction`** — counts set bits over a group (implements `GroupSum`); when `tau=1` and `beta=0` the result is a pure integer popcount and the compiler selects the narrowest unsigned integer type that fits the group size
+- **`Gate`** - one of 16 two-input boolean functions (AND, OR, XOR, …)
+- **`SumReduction`** - counts set bits over a group (implements `GroupSum`); when `tau=1` and `beta=0` the result is a pure integer popcount and the compiler selects the narrowest unsigned integer type that fits the group size
 
 **`Circuit` is independent of TorchLogix.** It operates directly on a
 `torch.fx.Graph` and only requires that the graph is purely boolean: every
 intermediate value must be a boolean tensor or a scalar integer sum. Structural
-operations — `reshape`, `flatten`, indexing, slicing, concatenation — are
+operations - `reshape`, `flatten`, indexing, slicing, concatenation - are
 allowed and are absorbed transparently into the gate connectivity (they affect
 which inputs wire to which gates, not the gate logic itself). Scalar integer
 sums (`torch.sum` over a boolean tensor) become `SumReduction` nodes. Any
@@ -488,7 +488,7 @@ a `Circuit`, not just models built from TorchLogix layers.
 
 > **Circuits assume binary (boolean) inputs.** Binarization layers
 > (`FixedBinarization`, `LearnableBinarization`, `SoftBinarization`) are not
-> traced into the circuit — they operate on floating-point inputs and have no
+> traced into the circuit - they operate on floating-point inputs and have no
 > boolean equivalent. For circuit export, binarization must be absorbed into
 > the dataset preprocessing instead. This is intentional: in a real deployment
 > the input encoding (ADC thresholds, sensor quantization, etc.) is a
