@@ -444,12 +444,6 @@ class Circuit:
 
             lit_of[g.gate_id] = lit
 
-        # Step 4a: turn self.outputs (a list of ids) into a list of literals.
-        # Most output ids are just plain gates - lit_of already has those.
-        # Some ids instead point to a SumReduction (e.g. from GroupSum) -
-        # those represent a whole integer, not a single bit, so they can't
-        # be given a literal yet. Leave them as None for now (step 4b).
-
 
         outputs = []
         # we need a new, empty list, which will hold AIG literals
@@ -589,8 +583,7 @@ class Circuit:
         # which is exactly the object that later gets written out to the .aig file
     
     
-          
-        
+  
     def write_to_aiger_file(self, path="circuit.aig"):
         # defines a method on the Circuit class itself
         deliverable = self.to_and_inverter_graph()
