@@ -445,6 +445,7 @@ class Circuit:
             lit_of[g.gate_id] = lit
 
 
+
         outputs = []
         # we need a new, empty list, which will hold AIG literals
         # this loop will walk through the circuit's original output list, one ID at a time in order
