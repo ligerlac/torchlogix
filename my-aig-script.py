@@ -41,7 +41,7 @@ assert torch.equal(preds_model, preds_circuit), "Predictions from model and circ
 
 and_inverter_graph = circuit.to_and_inverter_graph()
 print(and_inverter_graph)
-and_inverter_graph.("circuit.aig")
+and_inverter_graph.write_to_aiger_file("circuit.aig")
 
 ## or: write directly?
 circuit.write_to_aiger_file("circuit.aig")
