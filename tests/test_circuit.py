@@ -272,7 +272,6 @@ def test_json_roundtrip(model_cls):
     assert torch.equal(preds_before, preds_after), "Predictions differ after export/import roundtrip!"
 
 
-
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
 def test_c_codegen_group_sum_scores(model_cls):
     """GroupSum reduction is inlined into circuit and compiles cleanly."""

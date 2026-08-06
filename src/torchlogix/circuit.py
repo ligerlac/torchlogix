@@ -447,7 +447,6 @@ class Circuit:
 
         outputs = []
         # we need a new, empty list, which will hold AIG literals
-
         # this loop will walk through the circuit's original output list, one ID at a time in order
         for out_id in self.outputs:
             # "fork in the road"
