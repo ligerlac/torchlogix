@@ -78,3 +78,8 @@ synthesis reports.
 | Critical path | dominated by the deepest gate chain; use `circuit.simplify()` to reduce gate count before export |
 | GroupSum | synthesizes as an integer adder tree; synthesis tools map efficiently to carry chains |
 | Timing | no registers in generated RTL; add pipeline registers in post-processing if needed |
+
+---
+
+For synthesis/verification flows built around And-Inverter Graphs instead of
+RTL (e.g. ABC, mockturtle), see the [AIG Export Guide](aig_export.md).

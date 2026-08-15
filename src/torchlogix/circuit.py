@@ -191,66 +191,40 @@ def _c_output_dtype(reductions: list[SumReduction]) -> str:
 
 
 @dataclass
-class AIGGraph: # starts the class definition, and this is the object that to_and_inverter_graph() returns # and the object that write_to_aiger_file() gets called on
-    n_inputs: int # tells @dataclass dectorator "every AIGGraph instance needs exactly these three attrributes with these types"
-    and_gates: list # tells @dataclass dectorator "every AIGGraph instance needs exactly these three attrributes with these types"
-    outputs: list # tells @dataclass dectorator "every AIGGraph instance needs exactly these three attrributes with these types"
+class AIGGraph: 
+    n_inputs: int 
+    and_gates: list 
+    outputs: list 
 
     def write_to_aiger_file(self, path="circuit.aig"):
-        # make sure that 3rd party tools can read AIG file
-
-        # M I L O A
-        # maximum variable index
-        # number of inputs
-        # number of latches
-        # number of outputs
-        # number of AND gates
-
-        # input variable indices 1, 2, ... , I
-        # latch variable indices I+1, I+2, ... , (I+L)
-        # AND variable indices I+L+1, I+L+2, ... , (I+L+A) == M
-        # 
-        # The corresponding unsigned literals are
-        # # input literals 2, 4, ... , 2*I
-        # latch literals 2*I+2, 2*I+4, ... , 2*(I+L)
-        # AND literals 2*(I+L)+2, 2*(I+L)+4, ... , 2*(I+L+A) == 2*M
-        # lhs > rhs0 >= rhs1
         
-        i = self.n_inputs # note that it's not "i = n_inputs" because n_inputs is a field that belongs to 'this specific AIGGraph instance', not a local variable or parameter of write_to_aiger_file
+        i = self.n_inputs 
         l = 0
-        # len(x) is basically length of x
         o = len(self.outputs)
         a = len(self.and_gates)
         m = i + l + a
-        with open(path, "wb") as f: #opens file at path (such as "circuit.aig") in write-binary mode, creates it, shortens it, and returns a 'file object' you can call .write() on
+        with open(path, "wb") as f:
             f.write(f"aig {m} {i} {l} {o} {a}\n".encode())
             for lit in self.outputs:
-                f.write(f"{lit}\n".encode()) #this loop goes through all the outputs and writes their respective literals ( conversion process took place back in Circuit.to_and_inverter_graph()); pure serialization
+                f.write(f"{lit}\n".encode())
             for lhs, rhs0, rhs1 in self.and_gates:
-                # remember that lhs > rhs0 >= rhs1
-                # if we see that rhs0 < rhs1, then we simply swap them
+
                 if rhs0 < rhs1:
                     rhs0, rhs1 = rhs1, rhs0
-                
-                # delta0 >= 0 since lhs > rhs0
-                delta0 = lhs - rhs0
 
-                # delta1 >= 0 since rhs0 > 1
+                if not (lhs > rhs0 >= rhs1):
+                    raise ValueError(
+                        "invalid AND gate: AIGER requires lhs > rhs0 >= rhs1, "
+                        f"got lhs={lhs}, rhs0={rhs0}, rhs1={rhs1}"
+                    )
+
+                delta0 = lhs - rhs0
                 delta1 = rhs0 - rhs1
 
-                # making sure that delta0, delta1 >= 0
-                assert delta0 >= 0 and delta1 >= 0, f"negative delta: lhs = {lhs}, rhs0 = {rhs0}, rhs1 = {rhs1}"
-                
-                # this next part is basically just storing everything
                 n = delta0
                 delta0_bytes = []
 
-                # this part was especially confusing, but the main idea of this part is to store numbers under 7 bits if possible
-                # we use the 8th bit to determine if the number is greater than 128
-                # take n = 300, and in binary, 300 is 100101100
-                # if we split up into "the last 7 bits" and everything else, we get 10 (2, which is n // 128) and 0101100 (44, which is n % 128)
-                # byte 1 = continuation-flag bit + the bottom 7 bits of 300 → 1 + 0101100 = 10101100 (172)
-                # byte 2 = the leftover bits after removing those 7 → just 2, written as 00000010
+                
                 while n>= 128:
                     remain = n % 128
                     delta0_bytes.append(remain + 128)
@@ -288,57 +262,22 @@ class Circuit:
         return {sr.node_id: sr for sr in self.sum_nodes}
     
     def to_and_inverter_graph(self):
-        # format is lhs rhs0 rhs1
-        # delta0 = lhs - rhs0
-        # delta1 = rhs0 - rhs1        
-        # convert logic gate operators in AND-not
-
-        # Step 1: give every input a "literal" number.
-        # Even = use the value as-is, odd = use the opposite (NOT) of it.
-        # literal 0 = always False, literal 1 = always True.
-        # Input i gets literal 2 * (i+1).
-
-        # lit_of = {} serves as a dictionary that will map every gate ID
-        # and every input index to its AIG literal
-        # it's basically the LUT
+     
         lit_of = {}
         
         for i in range(self.n_inputs):
             lit_of[i] = 2 * (i + 1)
-        # for each of the circuit's (1st, 2nd, n_inputs) primary inputs (indices 0 to n_inputs - 1)
-        # assign it a literal following the AIGER number convention
-        # input 0 -> variable 1 -> literal 2
-        # input 1 -> variable 2 -> litearl 4
-        # input i -> variable i + 1 -> literal 2 * (i + 1)
-
-        # Every new AND gate needs its own fresh variable number, counting up
-        # from the last input. and_gates stores one (lhs, rhs0, rhs1) tuple
-        # per AND gate we create.
+       
         and_gates = []
-        # define and_gates
+        
         next_var = self.n_inputs + 1
-        # define this
-
-        # Step 2a: go through every gate and figure out its literal.
-        # Some ops are "free" - they don't need a new AND gate at all,
-        # they just reuse or flip an existing literal.
-
-        # iterates over every gate in the circuit, and importantly in the order they were built in
-        # the ordering of the gates matters a lot
+        
         for g in self.gates:
             
             a_lit = lit_of[g.in0] if g.in0 >= 0 else 0
-            # this is a gate ID (integer), not a literal (you can tell because it's not var * 2)
-            # specifically 2 cases to look out for here
-            # g.in0 >= 0 means a real input exists either as a primary input
-            # whose literal was set up in Step 1, or an earlier gate,
-            # whose literal got stored in
-            # lit_of[g.gate_id] - lit at the bottom of a previous loop iteration
-            # otherwise, g.in0 == -1 means that the gate doesn't use an "A" input at all which defaults to literal 0
-
+            
             b_lit = lit_of[g.in1] if g.in1 >= 0 else 0
-            # same idea, for the "B" input
-
+           
             if g.op == GateOp.CONST_FALSE:
                 lit = 0
             elif g.op == GateOp.CONST_TRUE:
@@ -350,30 +289,13 @@ class Circuit:
             elif g.op == GateOp.NOT_B:
                 lit = b_lit ^ 1
             elif g.op == GateOp.AND:
-                # i'm writing this because var and next_var are a bit confusing
-                #
-                # treat next_var as a running counter, basically the next unused
-                # variable number in the entire AIG
-                # since every input already has a number, like 1st input, 2nd input, etc
-                # so this counter starts right after those and assigns a new number
-                # everytime a new ANG gate is created
-
-                # although it might be better to just next_var directly everywhere skipping var,
-                # next_var keeps changing as we create more gates
+                
                 var = next_var
-                # basically snapshot the current value of the counter
-                # this snapshot is the ID for the AND gate you're building right now
-
+                
                 next_var = next_var + 1
-                # this increases the counter, so the NEXT time anything asks for a new variable,
-                # it gets a different number
+               
                 and_gates.append( (2 * var, a_lit, b_lit) )
-                # remember that this is formatted as
-                # and_gates.append( (lhs, rhs0, rhs1) )
-                # lhs, rhs0, rhs1 are all literals, literals = var_num * 2
-                # XOR-ing it with 1 flips it "as-is" and "negated" (even = positive, odd = negated)
-                # the tuple is basically "define a new gate w/ output literal lhs"
-                # "computed as rhs0 AND rhs1"
+                
                 lit = var * 2
             elif g.op == GateOp.NAND:
                 var = next_var
@@ -405,7 +327,7 @@ class Circuit:
             elif g.op == GateOp.OR_NOT_B:
                 var = next_var
                 next_var = next_var + 1
-                # A OR NOT B !(!A AND B)
+              
                 and_gates.append( (2 * var, a_lit ^ 1, b_lit) )
                 lit = (var * 2) ^ 1
             elif g.op == GateOp.OR_NOT_A:
@@ -414,7 +336,7 @@ class Circuit:
                 and_gates.append( (2 * var, a_lit, b_lit ^ 1) )
                 lit = (var * 2) ^ 1
             elif g.op == GateOp.XOR:
-                # XNOR !(!(type A) AND !(type B)), type A = A AND B, type B = !A AND !B
+                
                 var = next_var
                 next_var = next_var + 1
                 and_gates.append( (2 * var, a_lit, b_lit ^ 1) )
@@ -428,7 +350,7 @@ class Circuit:
                 and_gates.append( (2 * var, t1 ^ 1, t2 ^ 1) )
                 lit = (var * 2) ^ 1
             elif g.op == GateOp.XNOR:
-                # XNOR (!(type A) AND !(type B)), type A = A AND B, type B = !A AND !B
+                
                 var = next_var
                 next_var = next_var + 1
                 and_gates.append( (2 * var, a_lit, b_lit ^ 1) )
@@ -447,69 +369,30 @@ class Circuit:
 
 
         outputs = []
-        # we need a new, empty list, which will hold AIG literals
-        # this loop will walk through the circuit's original output list, one ID at a time in order
+      
         for out_id in self.outputs:
-            # "fork in the road"
+           
             if out_id in self._sum_by_id:
-                # Self._sum_by_id is a LUT that maps an output’s ID to a SumReduction object but only for outputs that are sums 
-                # (like GroupSum’s class scores). If out_id shows up as a key, it means the output is just a bundle of many wires
-                # that need to be added together into one number. If it’s not there, it’s a single-bit output and gets handled differently.
-                
                 sr = self._sum_by_id[out_id]
-                # Grabs actual SumReduction object and stores it in variable sr (sum reduction)
-                # It holds everything we need to build the sum: which gate outputs are added together (sr.input_ids)
-                # and tau/beta numbers from the original GroupSum layer.
-
-                # beta - number that gets added to sum
-                # A digital circuit made up of AND/NOT gates represents integers in binary, so there’s no way to wire up “half a bit”
-                # this checks if beta is a whole number
                 if sr.beta != round(sr.beta):
-                    # round(sr.beta) rounds it to the nearest integer
-                    # If sr.beta does not equal its own rounded value,
-                    # the two won’t be equal so the code stops and yields an error message
+                    
                     raise ValueError("beta must be a whole number to export to AIG")
                 
 
                 max_value = len(sr.input_ids) + int(round(sr.beta))
-                # Calculates the largest number this sum could ever be
-                # sr.input_ids is a list of wires (each one is 0 or 1) being added together
-                # The biggest total happens when all the wires are 1 at the same time
-                # The maximum sum equals number of wires there are (len(sr.input_ids)
-                # Then we add the (now-confirmed-whole-number) beta on top,
-                # since beta gets added after the summing
-                # int(round(sr.beta)) converts it cleanly to a plain integer
+                
 
                 n_bits = max(1, max_value.bit_length())
-                # We know the biggest number to store (max_value) so we need to know the number of bits required to write that number down
-                # e.g., 5.bit_length() is 3, because 5 in binary is 101, which is 3 digits
 
                 beta_int = int(round(sr.beta))
-                # Takes sr.beta and converts it to python int.
+               
 
                 accumulator = []
-                # Empty list - represents the running total in binary, one entry per digit
-                # Accumulator[0] is the least-significant bit
-                # Goes all the way up to accumulator[n_bits - 1]
-
+                
                 for i in range(n_bits):
-                # Loops over every bit position from 0 to n_bits - 1
-                # n_bits is exactly how many digits we calculated earlier are enough to hold the worst-case sum.
-
+               
                     bit = (beta_int // (2**i)) % 2
-                    # Pulls out a single binary digit (bit number i) from beta_int without using bitwise operators
-                    # 2**i is that digit's "place value" (1, 2, 4, 8, ...)
-                    # Dividing beta_int by it (integer division //) pushes all the lower digits off the end,
-                    # leaving digit i sitting in the ones place
-                    # % 2 (remainder after dividing by 2) strips away everything except that very last digit — giving back exactly 0 or 1
-                    # e.g., beta_int = 6 (binary 110)
-                    # For i=1: 6 // 2 = 3, then 3 % 2 = 1
-
-                    # 1 means "the constant wire that is always True,"
-                    # 0 means "the constant wire that is always False"
-                    # by the end of this loop, accumulator holds beta's value spelled out in binary,
-                    # but as a list of wires rather than plain digits
-
+                    
                     if bit == 1:
                         accumulator.append(1)
                     else:
@@ -519,16 +402,7 @@ class Circuit:
                 for gid in sr.input_ids:
                     wire_lit = lit_of[gid]
                     carry = wire_lit
-                    # lines 525-527
-                    # Loop over every wire that needs to be counted
-                    # wire_lit is that wire's AIG literal. carry is set to the wire itself
-                    # because we're about to add this single bit (0 or 1) into accumulator,
-                    # and this loop reuses the variable carry to mean "the thing currently being added into this bit position."
-                    # For bit 0, that "thing" is the wire itself; for every bit after that,
-                    # it becomes the actual carry produced by the previous bit's addition.
-
-
-                    # Computing the new bit value — a hand-built XOR
+                    
                     for i in range(n_bits):
                         var = next_var
                         next_var = next_var + 1
@@ -547,56 +421,27 @@ class Circuit:
                         next_var = next_var + 1
                         and_gates.append( (2 * var, accumulator[i], carry) )   
                         carry_lit = (var * 2)
-                        # lines 554-555
-                        # "overflow" part of addition — no XOR trick needed,
-                        # since two bits only overflow into the next column when both were 1,
-                        # which is just a plain AND.
+                        
 
                         accumulator[i] = sum_lit
                         carry = carry_lit
-                        # accumulator[i] gets replaced with its new value
-                        # carry gets replaced with the carry-out
-                        # which becomes the carry-in for bit i+1 in the next pass of the inner loop.
-                        # This is the "ripple": each bit's overflow flows into the next bit.
-                        # Once all bit positions are done,
-                        # the outer loop moves to the next wire gid and repeats the whole process,
-                        # using the now-updated accumulator as the new starting point.
-
-                
-
-                # once every wire for this particular sum has been folded in
-                # accumulator  holds the finished total written out as n_bits separate AIG literals
-                # these all get added to the graph's output list
-                # so one GroupSum class score becomes several output wires and not just one
-
+                        
                 outputs.extend(accumulator)
             else:
-                # other branch of the very first if in this function:
-                # any output that isn't a sum is just a single existing wire
-                # so it is appended directly with no adder involved
+                
                 outputs.append(lit_of[out_id])
         return AIGGraph(n_inputs = self.n_inputs, and_gates = and_gates, outputs = outputs)
-        # finally, once every output has been processed this way
-        # the function returns the finished AIGGraph
-        # - the complete list of inputs, every AND-gate built (both original logic-gate conversions and newly built adder gates),
-        # and the final output list -
-        # which is exactly the object that later gets written out to the .aig file
+        
     
     
   
     def write_to_aiger_file(self, path="circuit.aig"):
-        # defines a method on the Circuit class itself
+        
         deliverable = self.to_and_inverter_graph()
-        # calls the big conversion function - the one that loops over every gate and sum-node 
-        # and builds the AND-inverter graph
-        # that function returns an AIGGraph object (which holds n_inputs, and_gates, outputs)
-        # all of this is stored in a local variable called deliverable
+       
 
         deliverable.write_to_aiger_file(path)
-        # call write-to_aiger_file again but this on the deliverable (the AIGGraph object), not on the Circuit
-        # This is the version that actually opens the file and
-        # writes the VLQ-encoded bytes
-        # it forwards along the same path the caller originally passed in
+        
 
     def __repr__(self) -> str:
         return (

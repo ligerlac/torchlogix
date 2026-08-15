@@ -1,3 +1,5 @@
+import itertools
+import random
 import pytest
 import subprocess
 import ctypes
@@ -7,6 +9,7 @@ import tempfile
 import torch
 import torch.nn as nn
 from torchlogix import Circuit
+from torchlogix.circuit import AIGGraph, Gate, GateOp, SumReduction
 from torchlogix.utils import set_export_mode
 from torchlogix.layers import (
     GroupSum,
@@ -123,50 +126,163 @@ def test_functional_equivalence(model_cls):
 
     set_export_mode(model)
     preds_model = model(x)
-    
+
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     preds_circuit = circuit(x)
     assert torch.equal(preds_model, preds_circuit.to(preds_model.dtype)), \
         "Circuit predictions differ from Eval-mode model predictions"
 
+
+# ---------------------------------------------------------------------------
+# AIG helpers
+#
+# _eval_aig is an independent, pure-Python AIGER evaluator: given an AIGGraph
+# (or anything with .and_gates / .outputs in the same shape) and concrete
+# primary-input values, it walks the AND gates and resolves literal polarity
+# itself, without going through Circuit at all. This lets tests check AIG
+# *function*, not just that a file round-trips through some other tool.
+# ---------------------------------------------------------------------------
+
+def _eval_aig(aig: AIGGraph, inputs: list) -> list:
+    """Evaluate an AIGGraph in pure Python for one concrete input assignment.
+
+    inputs[k] is the value of AIGER variable k+1 (i.e. Circuit input id k).
+    Returns one bool per aig.outputs literal, in order.
+    """
+    values = {idx + 1: bool(v) for idx, v in enumerate(inputs)}
+
+    def lit_val(lit: int) -> bool:
+        if lit == 0:
+            return False
+        if lit == 1:
+            return True
+        v = values[lit // 2]
+        return (not v) if (lit & 1) else v
+
+    for lhs, rhs0, rhs1 in aig.and_gates:
+        values[lhs // 2] = lit_val(rhs0) and lit_val(rhs1)
+
+    return [lit_val(lit) for lit in aig.outputs]
+
+
+def _decode_aig_outputs(circuit: Circuit, aig_bits: list) -> list:
+    """Group a flat list of AIG output bits back into one value per circuit
+    output, mirroring the layout Circuit.to_and_inverter_graph() produces:
+    a plain boolean output consumes one bit; a SumReduction output consumes
+    max(1, (len(input_ids) + int(beta)).bit_length()) bits, LSB first.
+    """
+    sum_by_id = circuit._sum_by_id
+    pos = 0
+    decoded = []
+    for out_id in circuit.outputs:
+        sr = sum_by_id.get(out_id)
+        if sr is None:
+            decoded.append(int(aig_bits[pos]))
+            pos += 1
+        else:
+            max_value = len(sr.input_ids) + int(round(sr.beta))
+            n_bits = max(1, max_value.bit_length())
+            bits = aig_bits[pos:pos + n_bits]
+            pos += n_bits
+            decoded.append(sum((1 << k) for k, bit in enumerate(bits) if bit))
+    assert pos == len(aig_bits)
+    return decoded
+
+
+def _parse_aiger_file(path: str) -> AIGGraph:
+    """Parse a binary AIGER (.aig) file back into an AIGGraph. Only supports
+    what Circuit.write_to_aiger_file emits: no latches, an ASCII header line,
+    one output literal per line, then delta-encoded AND gates.
+    """
+    data = open(path, "rb").read()
+    nl = data.index(b"\n")
+    mode, m, i, l, o, a = data[:nl].decode().split()
+    assert mode == "aig"
+    i, l, o, a = int(i), int(l), int(o), int(a)
+    assert l == 0, "latches are not supported"
+
+    pos = nl + 1
+    outputs = []
+    for _ in range(o):
+        nl2 = data.index(b"\n", pos)
+        outputs.append(int(data[pos:nl2]))
+        pos = nl2 + 1
+
+    def read_delta(pos):
+        delta, shift = 0, 0
+        while True:
+            ch = data[pos]
+            pos += 1
+            if ch & 0x80:
+                delta |= (ch & 0x7F) << shift
+            else:
+                delta |= ch << shift
+                break
+            shift += 7
+        return delta, pos
+
+    and_gates = []
+    for gate_idx in range(a):
+        var = i + l + gate_idx + 1
+        lhs = var * 2
+        delta0, pos = read_delta(pos)
+        rhs0 = lhs - delta0
+        delta1, pos = read_delta(pos)
+        rhs1 = rhs0 - delta1
+        and_gates.append((lhs, rhs0, rhs1))
+
+    return AIGGraph(n_inputs=i, and_gates=and_gates, outputs=outputs)
+
+
+def test_aiger_serializer_rejects_self_referencing_and_gate():
+    """AIGGraph.write_to_aiger_file must reject a malformed AND gate with a
+    real exception rather than silently emitting a corrupt file.
+
+    The AIGER invariant is the strict lhs > rhs0 >= rhs1. delta0 == 0 (i.e.
+    lhs == rhs0, a self-referencing gate) used to pass the old
+    `delta0 >= 0` assertion -- and assertions are stripped entirely under
+    `python -O`, so this must be a normal exception, not an assert.
+    """
+    aig = AIGGraph(n_inputs=1, and_gates=[(4, 4, 2)], outputs=[4])  # lhs == rhs0
+    with tempfile.NamedTemporaryFile(suffix=".aig") as tmp_file:
+        with pytest.raises(ValueError, match="lhs > rhs0 >= rhs1"):
+            aig.write_to_aiger_file(tmp_file.name)
+
+
+def test_aiger_serializer_accepts_valid_and_gate():
+    """Sanity check that the stronger validation doesn't reject a
+    well-formed AND gate."""
+    aig = AIGGraph(n_inputs=2, and_gates=[(6, 4, 2)], outputs=[6])
+    with tempfile.NamedTemporaryFile(suffix=".aig") as tmp_file:
+        aig.write_to_aiger_file(tmp_file.name)  # must not raise
+        assert _parse_aiger_file(tmp_file.name).and_gates == [(6, 4, 2)]
+
+
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
 def test_aig_functional_equivalence(model_cls):
+    """Round-trips a trained model's Circuit through the AIGER file format and
+    checks -- via the independent Python AIG evaluator above, not a third-party
+    tool -- that decoding the file reproduces circuit()'s output exactly.
+    """
     model = model_cls()
     set_export_mode(model)
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
+
     with tempfile.NamedTemporaryFile(suffix=".aig") as tmp_file:
         circuit.write_to_aiger_file(tmp_file.name)
-        data = open(tmp_file.name, "rb").read()
-        nl = data.index(b"\n")
-        mode, m, i, l, o, a = data[:nl].decode().split()
-        i, l, o, a = int(i), int(l), int(o), int(a)
-        pos = nl + 1
-        outputs = []
-        for _ in range(o):
-            nl2 = data.index(b"\n", pos)
-            outputs.append(int(data[pos:nl2]))
-            pos = nl2 + 1
-        def read_delta(pos):
-            delta, shift = 0, 0
-            while True:
-                ch = data[pos]
-                pos += 1
-                if ch & 0x80:
-                    delta |= (ch & 0x7F) << shift
-                else:
-                    delta |= ch << shift
-                    break
-                shift += 7
-            return delta, pos
-        ands = []
-        for gate_idx in range(a):
-            var = i + l + gate_idx + 1
-            lhs = var * 2
-            delta0, pos = read_delta(pos)
-            rhs0 = lhs - delta0
-            delta1, pos = read_delta(pos)
-            rhs1 = rhs0 - delta1
-            ands.append((lhs, rhs0, rhs1))
+        aig = _parse_aiger_file(tmp_file.name)
+
+    assert aig.n_inputs == circuit.n_inputs
+
+    rng = random.Random(0)
+    for _ in range(8):
+        bits = [rng.random() < 0.5 for _ in range(circuit.n_inputs)]
+        x = torch.tensor(bits, dtype=torch.bool).reshape(1, *circuit.input_shape)
+        expected = [int(v) for v in circuit(x)[0].tolist()]
+
+        aig_bits = _eval_aig(aig, bits)
+        actual = _decode_aig_outputs(circuit, aig_bits)
+        assert actual == expected
 
 
 
@@ -175,7 +291,16 @@ ABC_PATH = shutil.which("abc")
 
 @pytest.mark.skipif(ABC_PATH is None, reason="abc binary not found on PATH")
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
-def test_third_party_functional_equivalence(model_cls):
+def test_abc_reads_and_rewrites_aiger(model_cls):
+    """Parser/compatibility check: ABC can read a TorchLogix .aig file and
+    write out a functionally equivalent one.
+
+    This intentionally does NOT check the AIG against the source
+    circuit/model -- see test_aig_functional_equivalence for that. This test
+    only checks that ABC's read/write round trip preserves the AIG's own
+    function, i.e. that our AIGER encoding is something a real third-party
+    tool can consume without corrupting it.
+    """
     model = model_cls()
     set_export_mode(model)
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
@@ -183,6 +308,7 @@ def test_third_party_functional_equivalence(model_cls):
     with tempfile.NamedTemporaryFile(suffix=".aig") as tmp_file, \
         tempfile.NamedTemporaryFile(suffix=".aig") as tmp_roundtrip:
         circuit.write_to_aiger_file(tmp_file.name)
+        original = _parse_aiger_file(tmp_file.name)
 
         result = subprocess.run(
             [ABC_PATH, "-q", f"read_aiger {tmp_file.name}; write_aiger {tmp_roundtrip.name}"],
@@ -190,30 +316,17 @@ def test_third_party_functional_equivalence(model_cls):
         )
         assert result.returncode == 0, f"ABC failed to read and write the circuit: {result.stderr}"
 
-        data = open(tmp_roundtrip.name, "rb").read()
-    nl = data.index(b"\n")
-    mode, m, i, l, o, a = data[:nl].decode().split()
-    i, l, o, a = int(i), int(l), int(o), int(a)
-    pos = nl + 1
-    outputs = []
-    for _ in range(o):
-        nl2 = data.index(b"\n", pos)
-        outputs.append(int(data[pos:nl2]))
-        pos = nl2 + 1
+        roundtrip = _parse_aiger_file(tmp_roundtrip.name)
 
+    assert roundtrip.n_inputs == original.n_inputs
+    assert len(roundtrip.outputs) == len(original.outputs)
 
-    pass
-# create a testing method
-# make the circuit, convert to AIG format, then test it?
+    rng = random.Random(0)
+    for _ in range(8):
+        bits = [rng.random() < 0.5 for _ in range(original.n_inputs)]
+        assert _eval_aig(roundtrip, bits) == _eval_aig(original, bits), \
+            "ABC's read/write round trip changed the AIG's function"
 
-# assert that the outputs of circuit are identical to the outputs of the AIG graph
-# assert that writing to the file also works, take an AIG, write it to a file, read it back from the file
-# and assert that the OG one and the one i read from the file are still producing the same outputs
-# for this, use mockturtle or ABC
-
-# on meeting on monday, have a short slide/presentation, in bullet points you put the whole idea of the project
-# what i have been up to so far, some screenshot of code i wrote, some pictures that shows a simple circuit, what their corresponding AIG graph looks like
-# 
 
 @pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
@@ -226,7 +339,7 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
 
     set_export_mode(model)
     preds_model = model(x)
-    
+
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
     circuit.compile(pack_bits=pack_bits)
     input_np = x.numpy()
@@ -309,3 +422,274 @@ def test_c_codegen_group_sum_scores(model_cls):
     assert preds_python.shape[-1] == k
 
 
+# ---------------------------------------------------------------------------
+# Small, hand-built circuits: exhaustive truth-table coverage.
+#
+# The tests above exercise Circuit end-to-end through real trained models with
+# random inputs. The tests below instead build tiny Circuit objects by hand
+# (bypassing from_model/tracing entirely) so every input combination can be
+# enumerated exactly, for the cases that matter most to get right: every
+# GateOp, constant/passthrough outputs, simplify()'s effect on function,
+# SumReduction, mixed boolean+reduction outputs, and tau/beta edge cases.
+# ---------------------------------------------------------------------------
+
+GATE_ORACLE = {
+    GateOp.CONST_FALSE: lambda a, b: False,
+    GateOp.CONST_TRUE:  lambda a, b: True,
+    GateOp.WIRE:        lambda a, b: a,
+    GateOp.NOT:         lambda a, b: not a,
+    GateOp.NOT_A:       lambda a, b: not a,
+    GateOp.NOT_B:       lambda a, b: not b,
+    GateOp.AND:         lambda a, b: a and b,
+    GateOp.OR:          lambda a, b: a or b,
+    GateOp.XOR:         lambda a, b: a != b,
+    GateOp.NAND:        lambda a, b: not (a and b),
+    GateOp.NOR:         lambda a, b: not (a or b),
+    GateOp.XNOR:        lambda a, b: a == b,
+    GateOp.AND_NOT_B:   lambda a, b: a and not b,
+    GateOp.AND_NOT_A:   lambda a, b: (not a) and b,
+    GateOp.OR_NOT_B:    lambda a, b: a or not b,
+    GateOp.OR_NOT_A:    lambda a, b: (not a) or b,
+}
+
+
+def test_gate_oracle_covers_all_gate_ops():
+    """Guards the table above itself: if GateOp ever grows a new member,
+    this fails until GATE_ORACLE (and therefore test_gate_op_truth_tables)
+    is updated to cover it.
+    """
+    assert set(GATE_ORACLE) == set(GateOp)
+
+
+def _single_gate_circuit(op: GateOp) -> Circuit:
+    """A minimal 2-input, 1-gate circuit: out = op(in0, in1)."""
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.gates = [Gate(gate_id=2, op=op, in0=0, in1=1)]
+    circuit.outputs = [2]
+    circuit.output_shape = [1]
+    return circuit
+
+
+@pytest.mark.parametrize("op", list(GateOp))
+def test_gate_op_truth_tables(op):
+    """Exhaustively checks every GateOp's truth table (all 4 input
+    combinations) against an independent oracle, both via Circuit's Python
+    evaluator and via its AIG (AND-inverter) lowering.
+    """
+    circuit = _single_gate_circuit(op)
+    aig = circuit.to_and_inverter_graph()
+
+    for a, b in itertools.product([False, True], repeat=2):
+        expected = GATE_ORACLE[op](a, b)
+
+        x = torch.tensor([[a, b]], dtype=torch.bool)
+        actual = bool(circuit(x)[0, 0])
+        assert actual == expected, f"{op}: circuit({a}, {b}) = {actual}, expected {expected}"
+
+        aig_actual = _eval_aig(aig, [a, b])[0]
+        assert aig_actual == expected, f"{op}: AIG({a}, {b}) = {aig_actual}, expected {expected}"
+
+
+def test_constant_and_direct_input_outputs():
+    """Outputs that are direct passthroughs of a primary input (no gates at
+    all), and outputs that are CONST_TRUE/CONST_FALSE gates (independent of
+    every input).
+    """
+    # Direct passthrough: outputs reference input ids with zero gates.
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.outputs = [0, 1]
+    circuit.output_shape = [2]
+    aig = circuit.to_and_inverter_graph()
+
+    for a, b in itertools.product([False, True], repeat=2):
+        x = torch.tensor([[a, b]], dtype=torch.bool)
+        assert circuit(x)[0].tolist() == [a, b]
+        assert _eval_aig(aig, [a, b]) == [a, b]
+
+    # Constant outputs, independent of the (unused) input.
+    circuit = Circuit(n_inputs=1, input_shape=[1])
+    circuit.gates = [
+        Gate(gate_id=1, op=GateOp.CONST_TRUE),
+        Gate(gate_id=2, op=GateOp.CONST_FALSE),
+    ]
+    circuit.outputs = [1, 2]
+    circuit.output_shape = [2]
+    aig = circuit.to_and_inverter_graph()
+
+    for a in (False, True):
+        x = torch.tensor([[a]], dtype=torch.bool)
+        assert circuit(x)[0].tolist() == [True, False]
+        assert _eval_aig(aig, [a]) == [True, False]
+
+
+def _redundant_gate_circuit() -> Circuit:
+    """out0 = x AND y, out1 = a structurally different but functionally
+    identical expression (double-NOT and a WIRE), so simplify() has real
+    dead code and duplicate structure to collapse.
+    """
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.gates = [
+        Gate(gate_id=2, op=GateOp.NOT, in0=1),          # not y
+        Gate(gate_id=3, op=GateOp.NOT, in0=2),           # not (not y) == y
+        Gate(gate_id=4, op=GateOp.AND, in0=0, in1=3),    # x and y
+        Gate(gate_id=5, op=GateOp.WIRE, in0=0),          # wire x
+        Gate(gate_id=6, op=GateOp.WIRE, in0=3),          # wire y
+        Gate(gate_id=7, op=GateOp.AND, in0=5, in1=6),    # x and y, again
+    ]
+    circuit.outputs = [4, 7]
+    circuit.output_shape = [2]
+    return circuit
+
+
+def test_circuit_simplify_preserves_truth_table():
+    circuit = _redundant_gate_circuit()
+    gates_before = len(circuit.gates)
+
+    truth_before = {}
+    for a, b in itertools.product([False, True], repeat=2):
+        x = torch.tensor([[a, b]], dtype=torch.bool)
+        truth_before[(a, b)] = circuit(x)[0].tolist()
+
+    circuit.simplify()
+    assert len(circuit.gates) < gates_before, "simplify() should have removed redundant gates"
+
+    for a, b in itertools.product([False, True], repeat=2):
+        x = torch.tensor([[a, b]], dtype=torch.bool)
+        assert circuit(x)[0].tolist() == truth_before[(a, b)], \
+            f"simplify() changed the truth table at ({a}, {b})"
+
+
+def test_sum_reduction_truth_table():
+    circuit = Circuit(n_inputs=3, input_shape=[3])
+    circuit.sum_nodes = [SumReduction(node_id=3, input_ids=[0, 1, 2])]
+    circuit.outputs = [3]
+    circuit.output_shape = [1]
+    aig = circuit.to_and_inverter_graph()
+
+    for bits in itertools.product([False, True], repeat=3):
+        x = torch.tensor([list(bits)], dtype=torch.bool)
+        expected = sum(bits)
+        assert int(circuit(x)[0, 0]) == expected
+
+        aig_bits = _eval_aig(aig, list(bits))
+        assert _decode_aig_outputs(circuit, aig_bits) == [expected]
+
+
+def test_sum_reduction_with_beta_truth_table():
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=3.0)]
+    circuit.outputs = [2]
+    circuit.output_shape = [1]
+    aig = circuit.to_and_inverter_graph()
+
+    for bits in itertools.product([False, True], repeat=2):
+        x = torch.tensor([list(bits)], dtype=torch.bool)
+        expected = sum(bits) + 3
+        assert int(circuit(x)[0, 0]) == expected
+
+        aig_bits = _eval_aig(aig, list(bits))
+        assert _decode_aig_outputs(circuit, aig_bits) == [expected]
+
+
+def test_mixed_boolean_and_reduction_outputs():
+    """A single circuit whose outputs mix a plain boolean gate and a
+    SumReduction, in the same order documented in docs/guides/aig_export.md.
+    """
+    circuit = Circuit(n_inputs=3, input_shape=[3])
+    circuit.gates = [Gate(gate_id=3, op=GateOp.AND, in0=0, in1=1)]
+    circuit.sum_nodes = [SumReduction(node_id=4, input_ids=[0, 1, 2])]
+    circuit.outputs = [3, 4]  # boolean output, then a reduction output
+    circuit.output_shape = [2]
+    aig = circuit.to_and_inverter_graph()
+
+    for a, b, c in itertools.product([False, True], repeat=3):
+        x = torch.tensor([[a, b, c]], dtype=torch.bool)
+        expected = [int(a and b), int(a) + int(b) + int(c)]
+        assert circuit(x)[0].tolist() == expected
+
+        aig_bits = _eval_aig(aig, [a, b, c])
+        assert _decode_aig_outputs(circuit, aig_bits) == expected
+
+
+def _random_small_circuit(seed: int, n_inputs: int = 4, n_gates: int = 15) -> Circuit:
+    rng = random.Random(seed)
+    circuit = Circuit(n_inputs=n_inputs, input_shape=[n_inputs])
+    next_id = n_inputs
+    for _ in range(n_gates):
+        op = rng.choice(list(GateOp))
+        in0 = rng.randrange(next_id)
+        in1 = rng.randrange(next_id)
+        circuit.gates.append(Gate(gate_id=next_id, op=op, in0=in0, in1=in1))
+        next_id += 1
+    circuit.outputs = sorted(rng.sample(range(n_inputs, next_id), 3))
+    circuit.output_shape = [len(circuit.outputs)]
+    return circuit
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_random_small_circuit_aig_equivalence(seed):
+    """A handful of small, randomly-wired circuits (all 16 GateOps, arbitrary
+    fan-in DAGs), exhaustively checked against their AIG lowering.
+    """
+    circuit = _random_small_circuit(seed)
+    aig = circuit.to_and_inverter_graph()
+
+    for bits in itertools.product([False, True], repeat=circuit.n_inputs):
+        x = torch.tensor([list(bits)], dtype=torch.bool)
+        expected = [int(v) for v in circuit(x)[0].tolist()]
+
+        aig_bits = _eval_aig(aig, list(bits))
+        assert _decode_aig_outputs(circuit, aig_bits) == expected
+
+
+def test_aig_export_rejects_fractional_beta():
+    """Unsupported case: to_and_inverter_graph() requires a whole-number beta,
+    since it encodes beta as an integer added into the adder tree.
+    """
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=0.5)]
+    circuit.outputs = [2]
+    circuit.output_shape = [1]
+
+    with pytest.raises(ValueError, match="beta must be a whole number"):
+        circuit.to_and_inverter_graph()
+
+
+def test_aig_export_accepts_whole_beta():
+    """Supported case: a whole-number beta (even as a float, e.g. 2.0) is
+    folded into the adder tree's initial value.
+    """
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=2.0)]
+    circuit.outputs = [2]
+    circuit.output_shape = [1]
+
+    aig = circuit.to_and_inverter_graph()
+    for bits in itertools.product([False, True], repeat=2):
+        aig_bits = _eval_aig(aig, list(bits))
+        assert _decode_aig_outputs(circuit, aig_bits) == [sum(bits) + 2]
+
+
+def test_aig_export_silently_ignores_tau():
+    """Known limitation (see docs/guides/aig_export.md): unlike circuit()/
+    get_c_code()/get_verilog_code(), to_and_inverter_graph() never divides by
+    tau -- it only ever encodes the raw integer sum(inputs) + beta. This test
+    pins down that current behavior so a future fix to support tau doesn't
+    silently regress without the docs also being updated.
+    """
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], tau=2.0)]
+    circuit.outputs = [2]
+    circuit.output_shape = [1]
+
+    aig = circuit.to_and_inverter_graph()  # does not raise, despite tau != 1
+
+    bits = [True, True]
+    x = torch.tensor([bits], dtype=torch.bool)
+    true_output = circuit(x)[0, 0].item()          # (2 + 0) / 2 == 1.0
+    assert true_output == pytest.approx(1.0)
+
+    aig_bits = _eval_aig(aig, bits)
+    raw_decoded = _decode_aig_outputs(circuit, aig_bits)[0]
+    assert raw_decoded == 2                        # raw sum -- tau not applied
+    assert raw_decoded != true_output
