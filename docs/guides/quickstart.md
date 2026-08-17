@@ -1,7 +1,7 @@
 # Quick Start
 
-For a complete end-to-end walkthrough — training, evaluating, compiling, and
-exporting to C/Verilog — see the
+For a complete end-to-end walkthrough - training, evaluating, compiling, and
+exporting to C/Verilog - see the
 [MNIST example notebook](../../examples/mnist_example.ipynb).
 
 This page shows the minimal API surface for building and exporting a model.
@@ -26,7 +26,7 @@ model = nn.Sequential(
 
 ## Train
 
-Logic layers are standard `nn.Module` objects — use any PyTorch training loop:
+Logic layers are standard `nn.Module` objects - use any PyTorch training loop:
 
 ```python
 import torch
@@ -42,7 +42,7 @@ for x, y in train_loader:
 
 ## Convert to Circuit and compile
 
-> `Circuit` requires **binary inputs** — binarize at the dataset level before
+> `Circuit` requires **binary inputs** - binarize at the dataset level before
 > passing data to the model. Binarization layers are not exported.
 
 ```python

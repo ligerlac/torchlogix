@@ -35,6 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+alkaid = [
+    "alkaid>=0.8.1",
+]
 dev = [
     "flake8>=6.1.0",
     "black>=23.12.1",
@@ -57,6 +60,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.black]
 line-length = 88
 target-version = ['py310']
@@ -75,3 +81,6 @@ force_grid_wrap = 0
 use_parentheses = true
 line_length = 88
 skip = ['.git', 'build', 'dist', '*.egg-info']
+
+[project.entry-points."alir_tracer.plugins"]
+logic = "torchlogix._alkaid_plugin:LogicALIRTracer"

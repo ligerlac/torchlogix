@@ -286,7 +286,6 @@ def test_binary_model():
         x = x.unsqueeze(0).unsqueeze(0).float()
         output = layer(x)
         expected = y.float()
-        print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(output, expected)
 
 
@@ -456,9 +455,7 @@ def test_conv_model_rect():
     for x, y in test_cases:
         x = x.unsqueeze(0).unsqueeze(0).float()
         output = model(x)
-        print("output = ", output)
         expected = torch.tensor(y, dtype=torch.float)
-        print("expected = ", expected)
         assert torch.allclose(
             output,
             expected
@@ -516,9 +513,7 @@ def test_pooling_layer():
         # Add batch + channel dims: [1, 1, H, W, D]
         x = x.unsqueeze(0).unsqueeze(0)
 
-        print(f"x.shape = {x.shape}")
         output = layer(x)
         expected = y.unsqueeze(0).unsqueeze(0)  # [1, 1, H_out, W_out, D_out]
 
-        print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(output, expected)
