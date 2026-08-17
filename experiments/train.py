@@ -338,9 +338,7 @@ def run_training(args, callbacks=None):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        # loss is a mean over the batch, so weight it by the batch size before
-        # accumulating; dividing the sum by n then gives a true per-sample mean
-        # that is batch-size independent and correct for a ragged final batch.
+
         bsz = y.size(0)
         n += bsz
         running_train_loss += loss.detach() * bsz
