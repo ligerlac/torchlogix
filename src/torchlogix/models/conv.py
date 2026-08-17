@@ -180,8 +180,6 @@ class ClgnCifar10(torch.nn.Sequential):
 
         group_size_input = self.group_size_input if self.group_size_input is not None else self.group_size
         
-        print(f"connctions_kwargs for {self.__class__.__name__}: {connections_kwargs}")
-
         layers = [binarization_module]
         layers.append(
             LogicConv2d(

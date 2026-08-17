@@ -489,7 +489,6 @@ def test_and_model_warp():
         x = torch.tensor([[x]], dtype=torch.float32)
         output = layer(x)
         expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
-        print(f"Input:\n{x},\n Output:\n{output},\n Expected:\n{expected}")
         assert torch.allclose(
             output, 
             expected
@@ -537,10 +536,8 @@ def test_binary_model():
 
     for x, y in test_cases:
         x = torch.tensor([[x]], dtype=torch.float32)
-        print(f"x.shape = {x.shape}")
         output = layer(x)
         expected = torch.tensor(y, dtype=torch.float32)
-        print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(
             output, 
             expected
@@ -704,10 +701,8 @@ def test_pooling_layer():
     for x, y in test_cases:
         x = torch.tensor([[x]], dtype=torch.float32)
 
-        print(f"x.shape = {x.shape}")
         output = layer(x)
         expected = torch.tensor(y, dtype=torch.float32).reshape(1, 1, 2, 2)
-        print(f"Input: {x}, Output: {output}, Expected: {expected}")
         assert torch.allclose(
             output, 
             expected

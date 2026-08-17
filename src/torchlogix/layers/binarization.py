@@ -49,7 +49,6 @@ class Binarization(torch.nn.Module, ABC):
     
     @staticmethod
     def get_uniform_thresholds(data_set: Tensor, num_bits: int, one_per: str) -> Tensor:
-        print(f"Data set shape for uniform threshold calculation (per={one_per}): {data_set.shape}")
         if one_per == "feature":
             min_value = data_set.min(dim=0)[0]
             max_value = data_set.max(dim=0)[0]
@@ -68,8 +67,6 @@ class Binarization(torch.nn.Module, ABC):
             raise ValueError(f"one_per must be 'feature', 'channel', or 'global'. Got {one_per}.")
         threshs = min_value.unsqueeze(-1) + torch.arange(1, num_bits+1).unsqueeze(0) * (
             (max_value - min_value) / (num_bits + 1)).unsqueeze(-1)
-        print(f"Uniform thresholds shape: {threshs.shape}")
-        print(f"threshs =\n{threshs}")
         return threshs
         
     @staticmethod
