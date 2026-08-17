@@ -108,6 +108,8 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -578,9 +580,9 @@ model into a clean tracing-friendly state:</p>
 </pre></div>
 </div>
 <p>Export mode pre-caches each layer’s discrete LUT IDs as integer buffers so that
-<code class="docutils literal notranslate"><span class="pre">torch.fx</span></code> tracing produces pure integer operations — no floating-point LUT
+<code class="docutils literal notranslate"><span class="pre">torch.fx</span></code> tracing produces pure integer operations - no floating-point LUT
 lookups. This is required before calling <code class="docutils literal notranslate"><span class="pre">Circuit.from_model()</span></code>.</p>
-<p><strong>Tip — reset <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> scaling before export.</strong> During training a non-unit
+<p><strong>Tip - reset <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> scaling before export.</strong> During training a non-unit
 <code class="docutils literal notranslate"><span class="pre">tau</span></code> (temperature) or non-zero <code class="docutils literal notranslate"><span class="pre">beta</span></code> (offset) can improve loss landscape and
 convergence. Before compiling to a Circuit, consider resetting them:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">modules</span><span class="p">():</span>
@@ -618,13 +620,13 @@ compiled to C or Verilog.</p>
 </div>
 <p>The IR has two node types:</p>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">Gate</span></code></strong> — one of 16 two-input boolean functions (AND, OR, XOR, …)</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">SumReduction</span></code></strong> — counts set bits over a group (implements <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code>); when <code class="docutils literal notranslate"><span class="pre">tau=1</span></code> and <code class="docutils literal notranslate"><span class="pre">beta=0</span></code> the result is a pure integer popcount and the compiler selects the narrowest unsigned integer type that fits the group size</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">Gate</span></code></strong> - one of 16 two-input boolean functions (AND, OR, XOR, …)</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">SumReduction</span></code></strong> - counts set bits over a group (implements <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code>); when <code class="docutils literal notranslate"><span class="pre">tau=1</span></code> and <code class="docutils literal notranslate"><span class="pre">beta=0</span></code> the result is a pure integer popcount and the compiler selects the narrowest unsigned integer type that fits the group size</p></li>
 </ul>
 <p><strong><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> is independent of TorchLogix.</strong> It operates directly on a
 <code class="docutils literal notranslate"><span class="pre">torch.fx.Graph</span></code> and only requires that the graph is purely boolean: every
 intermediate value must be a boolean tensor or a scalar integer sum. Structural
-operations — <code class="docutils literal notranslate"><span class="pre">reshape</span></code>, <code class="docutils literal notranslate"><span class="pre">flatten</span></code>, indexing, slicing, concatenation — are
+operations - <code class="docutils literal notranslate"><span class="pre">reshape</span></code>, <code class="docutils literal notranslate"><span class="pre">flatten</span></code>, indexing, slicing, concatenation - are
 allowed and are absorbed transparently into the gate connectivity (they affect
 which inputs wire to which gates, not the gate logic itself). Scalar integer
 sums (<code class="docutils literal notranslate"><span class="pre">torch.sum</span></code> over a boolean tensor) become <code class="docutils literal notranslate"><span class="pre">SumReduction</span></code> nodes. Any
@@ -633,7 +635,7 @@ a <code class="docutils literal notranslate"><span class="pre">Circuit</span></c
 <blockquote>
 <div><p><strong>Circuits assume binary (boolean) inputs.</strong> Binarization layers
 (<code class="docutils literal notranslate"><span class="pre">FixedBinarization</span></code>, <code class="docutils literal notranslate"><span class="pre">LearnableBinarization</span></code>, <code class="docutils literal notranslate"><span class="pre">SoftBinarization</span></code>) are not
-traced into the circuit — they operate on floating-point inputs and have no
+traced into the circuit - they operate on floating-point inputs and have no
 boolean equivalent. For circuit export, binarization must be absorbed into
 the dataset preprocessing instead. This is intentional: in a real deployment
 the input encoding (ADC thresholds, sensor quantization, etc.) is a
@@ -642,7 +644,7 @@ hardware-specific decision made outside the circuit, not inside it.</p>
 </section>
 <section id="c-code-generation">
 <h3>4. C code generation<a class="headerlink" href="#c-code-generation" title="Link to this heading"></a></h3>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_c_code</span><span class="p">(</span><span class="s2">&quot;circuit.c&quot;</span><span class="p">)</span>   <span class="c1"># self-contained C file, no dependencies</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_c_code</span><span class="p">(</span><span class="s2">"circuit.c"</span><span class="p">)</span>   <span class="c1"># self-contained C file, no dependencies</span>
 </pre></div>
 </div>
 <p>Generated C is a single <code class="docutils literal notranslate"><span class="pre">void</span> <span class="pre">circuit(const</span> <span class="pre">bool</span> <span class="pre">in[N],</span> <span class="pre">T</span> <span class="pre">out[M])</span></code> function

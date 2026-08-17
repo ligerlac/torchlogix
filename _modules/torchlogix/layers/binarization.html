@@ -49,6 +49,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -96,15 +98,15 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">setup_binarization</span><span class="p">(</span><span class="n">thresholds</span><span class="p">,</span> <span class="n">binarization</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">binarization_kwargs</span><span class="p">):</span>
     <span class="n">bin_dict</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="s2">&quot;dummy&quot;</span><span class="p">:</span> <span class="n">DummyBinarization</span><span class="p">,</span>
-        <span class="s2">&quot;fixed&quot;</span><span class="p">:</span> <span class="n">FixedBinarization</span><span class="p">,</span>
-        <span class="s2">&quot;soft&quot;</span><span class="p">:</span> <span class="n">SoftBinarization</span><span class="p">,</span>
-        <span class="s2">&quot;learnable&quot;</span><span class="p">:</span> <span class="n">LearnableBinarization</span>
+        <span class="s2">"dummy"</span><span class="p">:</span> <span class="n">DummyBinarization</span><span class="p">,</span>
+        <span class="s2">"fixed"</span><span class="p">:</span> <span class="n">FixedBinarization</span><span class="p">,</span>
+        <span class="s2">"soft"</span><span class="p">:</span> <span class="n">SoftBinarization</span><span class="p">,</span>
+        <span class="s2">"learnable"</span><span class="p">:</span> <span class="n">LearnableBinarization</span>
     <span class="p">}</span>
     <span class="k">if</span> <span class="n">binarization</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">bin_dict</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Unsupported binarization method: </span><span class="si">{</span><span class="n">binarization</span><span class="si">}</span><span class="s2">. &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Choose from </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">bin_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="sa">f</span><span class="s2">"Unsupported binarization method: </span><span class="si">{</span><span class="n">binarization</span><span class="si">}</span><span class="s2">. "</span>
+            <span class="sa">f</span><span class="s2">"Choose from </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">bin_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">."</span>
         <span class="p">)</span>
     <span class="n">bin_cls</span> <span class="o">=</span> <span class="n">bin_dict</span><span class="p">[</span><span class="n">binarization</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">bin_cls</span><span class="p">(</span><span class="n">thresholds</span><span class="o">=</span><span class="n">thresholds</span><span class="p">,</span> <span class="o">**</span><span class="n">binarization_kwargs</span><span class="p">)</span>
@@ -113,7 +115,7 @@
 <div class="viewcode-block" id="Binarization">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Binarization</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">ABC</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Abstract base class for binarization modules.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Abstract base class for binarization modules."""</span>
 <div class="viewcode-block" id="Binarization.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -125,14 +127,14 @@
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">thresholds</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="n">thresholds</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">thresholds</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s1">&#39;thresholds&#39;</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s1">'thresholds'</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">feature_dim</span> <span class="o">=</span> <span class="n">feature_dim</span></div>
 
 
 <div class="viewcode-block" id="Binarization.get_thresholds">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization.get_thresholds">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_thresholds</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return thresholds. Subclasses can override for learnable thresholds.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Return thresholds. Subclasses can override for learnable thresholds."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholds</span></div>
 
     
@@ -140,7 +142,7 @@
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization.forward">[docs]</a>
     <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Subclasses must implement forward.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Subclasses must implement forward."""</span>
         <span class="k">pass</span></div>
 
     
@@ -148,11 +150,10 @@
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization.get_uniform_thresholds">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_uniform_thresholds</span><span class="p">(</span><span class="n">data_set</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">one_per</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Data set shape for uniform threshold calculation (per=</span><span class="si">{</span><span class="n">one_per</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">data_set</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">&quot;feature&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">"feature"</span><span class="p">:</span>
             <span class="n">min_value</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
             <span class="n">max_value</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">&quot;channel&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">"channel"</span><span class="p">:</span>
             <span class="c1"># For conv: (batch_size, num_channels, h, w)</span>
             <span class="c1"># We want min/max per channel across all other dimensions</span>
             <span class="n">batch_size</span><span class="p">,</span> <span class="n">num_channels</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
@@ -160,15 +161,13 @@
             <span class="n">reshaped</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">num_channels</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">min_value</span> <span class="o">=</span> <span class="n">reshaped</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># (num_channels,)</span>
             <span class="n">max_value</span> <span class="o">=</span> <span class="n">reshaped</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># (num_channels,)</span>
-        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">&quot;global&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">"global"</span><span class="p">:</span>
             <span class="n">min_value</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
             <span class="n">max_value</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;one_per must be &#39;feature&#39;, &#39;channel&#39;, or &#39;global&#39;. Got </span><span class="si">{</span><span class="n">one_per</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"one_per must be 'feature', 'channel', or 'global'. Got </span><span class="si">{</span><span class="n">one_per</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
         <span class="n">threshs</span> <span class="o">=</span> <span class="n">min_value</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_bits</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
             <span class="p">(</span><span class="n">max_value</span> <span class="o">-</span> <span class="n">min_value</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">num_bits</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Uniform thresholds shape: </span><span class="si">{</span><span class="n">threshs</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;threshs =</span><span class="se">\n</span><span class="si">{</span><span class="n">threshs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">threshs</span></div>
 
         
@@ -180,15 +179,15 @@
         <span class="n">num_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">one_per</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Compute distributive (quantile-based) thresholds.</span>
 
 <span class="sd">        one_per:</span>
-<span class="sd">            - &quot;global&quot;:   one set of thresholds for entire tensor</span>
-<span class="sd">            - &quot;feature&quot;:  per-feature thresholds (last dimension)</span>
-<span class="sd">            - &quot;channel&quot;:  per-channel thresholds (dim=1, conv tensors)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">&quot;global&quot;</span><span class="p">:</span>
+<span class="sd">            - "global":   one set of thresholds for entire tensor</span>
+<span class="sd">            - "feature":  per-feature thresholds (last dimension)</span>
+<span class="sd">            - "channel":  per-channel thresholds (dim=1, conv tensors)</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">"global"</span><span class="p">:</span>
             <span class="c1"># Flatten everything</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">data_set</span><span class="o">.</span><span class="n">flatten</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># (N,)</span>
             <span class="n">indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span>
@@ -198,7 +197,7 @@
             <span class="n">thresholds</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">indices</span><span class="p">]</span>  <span class="c1"># (num_bits,)</span>
             <span class="k">return</span> <span class="n">thresholds</span>
 
-        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">&quot;feature&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">"feature"</span><span class="p">:</span>
             <span class="c1"># Feature = last dimension</span>
             <span class="c1"># Shape: (..., F)</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># sort along batch dimension</span>
@@ -212,7 +211,7 @@
             <span class="n">thresholds</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">indices</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>  <span class="c1"># (num_bits, F)</span>
             <span class="k">return</span> <span class="n">thresholds</span><span class="o">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># (F, num_bits)</span>
 
-        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">&quot;channel&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">one_per</span> <span class="o">==</span> <span class="s2">"channel"</span><span class="p">:</span>
             <span class="c1"># Expected shape: (batch, channels, ...)</span>
             <span class="n">batch_size</span><span class="p">,</span> <span class="n">num_channels</span> <span class="o">=</span> <span class="n">data_set</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
 
@@ -231,7 +230,7 @@
 
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;one_per must be &#39;global&#39;, &#39;feature&#39;, or &#39;channel&#39;. Got </span><span class="si">{</span><span class="n">one_per</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="sa">f</span><span class="s2">"one_per must be 'global', 'feature', or 'channel'. Got </span><span class="si">{</span><span class="n">one_per</span><span class="si">}</span><span class="s2">."</span>
             <span class="p">)</span></div>
 
 
@@ -239,15 +238,15 @@
 <div class="viewcode-block" id="Binarization.get_initial_thresholds">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization.get_initial_thresholds">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_initial_thresholds</span><span class="p">(</span><span class="n">data_set</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">one_per</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;uniform&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="n">one_per</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;feature&quot;</span><span class="p">,</span> <span class="s2">&quot;channel&quot;</span><span class="p">,</span> <span class="s2">&quot;global&quot;</span><span class="p">],</span> <span class="s2">&quot;one_per must be &#39;feature&#39;, &#39;channel&#39;, or &#39;global&#39;.&quot;</span>
-        <span class="k">assert</span> <span class="n">method</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;uniform&quot;</span><span class="p">,</span> <span class="s2">&quot;distributive&quot;</span><span class="p">],</span> <span class="s2">&quot;method must be &#39;uniform&#39; or &#39;distributive&#39;&quot;</span>
-        <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;uniform&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_initial_thresholds</span><span class="p">(</span><span class="n">data_set</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">one_per</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"uniform"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">one_per</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"feature"</span><span class="p">,</span> <span class="s2">"channel"</span><span class="p">,</span> <span class="s2">"global"</span><span class="p">],</span> <span class="s2">"one_per must be 'feature', 'channel', or 'global'."</span>
+        <span class="k">assert</span> <span class="n">method</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"uniform"</span><span class="p">,</span> <span class="s2">"distributive"</span><span class="p">],</span> <span class="s2">"method must be 'uniform' or 'distributive'"</span>
+        <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"uniform"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">Binarization</span><span class="o">.</span><span class="n">get_uniform_thresholds</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">,</span> <span class="n">one_per</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;distributive&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"distributive"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">Binarization</span><span class="o">.</span><span class="n">get_distributive_thresholds</span><span class="p">(</span><span class="n">data_set</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">,</span> <span class="n">one_per</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown threshold initialization method: </span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span></div>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown threshold initialization method: </span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span></div>
 </div>
 
 
@@ -255,7 +254,7 @@
 <div class="viewcode-block" id="FixedBinarization">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.FixedBinarization">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">FixedBinarization</span><span class="p">(</span><span class="n">Binarization</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Binarization with fixed (non-learnable) thresholds.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Binarization with fixed (non-learnable) thresholds."""</span>
 <div class="viewcode-block" id="FixedBinarization.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.FixedBinarization.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">feature_dim</span><span class="o">=-</span><span class="mi">2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -266,7 +265,7 @@
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.FixedBinarization.forward">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Need to fit before calling apply&#39;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">'Need to fit before calling apply'</span><span class="p">)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thresholds</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>  <span class="c1"># Conv with channel-wise thresholds</span>
             <span class="c1"># thresholds: (num_channels, num_bits)</span>
@@ -282,7 +281,7 @@
         
 
 <span class="k">class</span><span class="w"> </span><span class="nc">DummyBinarization</span><span class="p">(</span><span class="n">Binarization</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot; Dummy binarization module that does nothing.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">""" Dummy binarization module that does nothing."""</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
     
@@ -293,7 +292,7 @@
 <div class="viewcode-block" id="SoftBinarization">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.SoftBinarization">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">SoftBinarization</span><span class="p">(</span><span class="n">Binarization</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot; Soft binarization with fixed thresholds using sigmoid.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">""" Soft binarization with fixed thresholds using sigmoid."""</span>
 <div class="viewcode-block" id="SoftBinarization.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.SoftBinarization.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">feature_dim</span><span class="o">=-</span><span class="mi">2</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
@@ -332,7 +331,7 @@
         <span class="n">feature_dim</span><span class="o">=-</span><span class="mi">2</span><span class="p">,</span>
         <span class="n">temperature_sampling</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
         <span class="n">temperature_softplus</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
-        <span class="n">forward_sampling</span><span class="o">=</span><span class="s2">&quot;soft&quot;</span><span class="p">,</span> 
+        <span class="n">forward_sampling</span><span class="o">=</span><span class="s2">"soft"</span><span class="p">,</span> 
         <span class="n">max_grad_norm</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
@@ -378,18 +377,18 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_sample_train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Apply sigmoid/gumbel_sigmoid based on forward_sampling mode.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;soft&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">"soft"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">thresholds</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_sampling</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;hard&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">"hard"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">thresholds</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_sampling</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_soft&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">"gumbel_soft"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">gumbel_sigmoid</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">thresholds</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_sampling</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">&quot;gumbel_hard&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">forward_sampling</span> <span class="o">==</span> <span class="s2">"gumbel_hard"</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">gumbel_sigmoid</span><span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">thresholds</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_sampling</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_sample_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Threshold for discrete output.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Threshold for discrete output."""</span>
         <span class="k">return</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;</span> <span class="n">thresholds</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
 
 <div class="viewcode-block" id="LearnableBinarization.forward">
@@ -413,7 +412,7 @@
     
 
 <span class="k">def</span><span class="w"> </span><span class="nf">merge_dim_with_last</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Merge dimension k with the last dimension of x.</span>
 
 <span class="sd">    Input shape:  (d0, d1, ..., d{k}, ..., d{n-2}, d{n-1})</span>
@@ -421,14 +420,14 @@
 <span class="sd">    i.e., last dim is folded into dim k, and the last dim disappears.</span>
 
 <span class="sd">    The order of the other dimensions is preserved.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span>
     <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Need at least 2 dimensions to merge with last.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Need at least 2 dimensions to merge with last."</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">k</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">k</span> <span class="o">+=</span> <span class="n">n</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">k</span> <span class="o">&lt;</span> <span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;k must be in [0, </span><span class="si">{</span><span class="n">n</span><span class="o">-</span><span class="mi">2</span><span class="si">}</span><span class="s2">] (cannot be the last dim). Got </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"k must be in [0, </span><span class="si">{</span><span class="n">n</span><span class="o">-</span><span class="mi">2</span><span class="si">}</span><span class="s2">] (cannot be the last dim). Got </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
 
     <span class="n">last</span> <span class="o">=</span> <span class="n">n</span> <span class="o">-</span> <span class="mi">1</span>
 

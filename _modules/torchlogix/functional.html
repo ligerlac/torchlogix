@@ -49,6 +49,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -84,13 +86,13 @@
            <div itemprop="articleBody">
              
   <h1>Source code for torchlogix.functional</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Functional operations for differentiable logic neural networks.</span>
+<span></span><span class="sd">"""Functional operations for differentiable logic neural networks.</span>
 
 <span class="sd">This module provides the core mathematical operations for computing logic neural</span>
 <span class="sd">operations in a differentiable manner. It includes implementations for binary</span>
 <span class="sd">operations, vectorized operations, and utility functions for building logic</span>
 <span class="sd">gate networks.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
@@ -169,11 +171,11 @@
 <div class="viewcode-block" id="compute_all_logic_ops_vectorized">
 <a class="viewcode-back" href="../../api/generated/torchlogix.functional.compute_all_logic_ops_vectorized.html#torchlogix.functional.compute_all_logic_ops_vectorized">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute_all_logic_ops_vectorized</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute all 16 logic operations in a single vectorized operation.</span>
+<span class="w">    </span><span class="sd">"""Compute all 16 logic operations in a single vectorized operation.</span>
 
 <span class="sd">    Returns a tensor with shape [..., 16] where the last dimension contains</span>
 <span class="sd">    all 16 logic operations applied to inputs a and b.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="c1"># Precompute common terms to avoid redundant calculations</span>
     <span class="n">ab</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>  <span class="c1"># AND operation</span>
     <span class="n">a_plus_b</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
@@ -208,13 +210,13 @@
     <span class="n">b</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">BoolTensor</span><span class="p">,</span>
     <span class="n">lut_ids</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">IntTensor</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">BoolTensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Tracer-friendly LUT application for circuit export.</span>
+<span class="w">    </span><span class="sd">"""Tracer-friendly LUT application for circuit export.</span>
 
 <span class="sd">    Iterates only over the LUT IDs that are actually present in `lut_ids`.</span>
 <span class="sd">    When traced with make_fx, `lut_ids` is a concrete tensor, so</span>
 <span class="sd">    `lut_ids.unique().tolist()` evaluates at trace time to a Python list of</span>
 <span class="sd">    active IDs — unused LUT types are never traced and produce no dead gates.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">lut_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
         <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">lut_ids</span> <span class="o">==</span> <span class="n">lut_id</span><span class="p">)</span>
@@ -243,11 +245,11 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">weighted_raw_basis_sum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">einsum_pattern</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Compute the weighted sum of the raw basis functions.</span>
 <span class="sd">    The 16-term weighted sum can be expressed using only</span>
 <span class="sd">    4 coefficients, which is computationally more efficient.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">w</span> <span class="o">=</span> <span class="n">weights</span>
 
     <span class="n">C1</span> <span class="o">=</span> <span class="p">(</span>
@@ -306,11 +308,11 @@
 <span class="c1">##########################################################################</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">gumbel_sigmoid</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">hard</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Fast Gumbel-Sigmoid implementation using logistic noise trick.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">tau</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Temperature must be positive&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Temperature must be positive"</span><span class="p">)</span>
 
     <span class="c1"># Logistic(0,1) noise from uniform: log(U) - log(1-U)</span>
     <span class="n">U</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">rand_like</span><span class="p">(</span><span class="n">logits</span><span class="p">)</span>
@@ -344,10 +346,10 @@
 <span class="c1">##################################################################</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">fwht</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Fast Walsh–Hadamard transform on the last dimension.</span>
 <span class="sd">    x: (..., n) with n a power of 2</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">lut_entries</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
     <span class="n">y</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">lut_entries</span><span class="p">)</span>  <span class="c1"># collapse batch dims</span>
     <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
@@ -378,16 +380,16 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">walsh_hadamard_transform</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> 
                              <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fast</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Walsh-Hadamard transform on the last dimension.</span>
 <span class="sd">    x: (..., 2^n)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">fast</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">fwht</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
        <span class="c1"># Always use float32 for matrix multiplication</span>
-        <span class="c1"># (CUDA doesn&#39;t support int32 matmul)</span>
-        <span class="c1"># We&#39;ll convert the result back to the requested dtype if needed</span>
+        <span class="c1"># (CUDA doesn't support int32 matmul)</span>
+        <span class="c1"># We'll convert the result back to the requested dtype if needed</span>
         <span class="c1"># Use device from input tensor if device parameter is None</span>
         <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">device</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">device</span>
@@ -403,13 +405,13 @@
     
 <span class="c1"># Needs to be CUDAized</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">kron_pairwise_basis</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    # x: (..., n) where x[...,k] is the kth scalar input</span>
 <span class="sd">    # returns: (..., 2**n) basis vector </span>
 <span class="sd">    #          matching EXACTLY the example:</span>
 <span class="sd">    #          [1, A] x [1, B] = [1, B, A, A*B]</span>
 <span class="sd">    #          etc.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="o">*</span><span class="n">batch</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span>
     <span class="n">m</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">n</span>
     <span class="n">out</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">new_empty</span><span class="p">(</span><span class="o">*</span><span class="n">batch</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
@@ -449,7 +451,7 @@
         <span class="p">)</span>
         <span class="n">basis</span> <span class="o">=</span> <span class="n">walsh_basis_6</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="n">E</span><span class="p">,</span> <span class="n">F</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">basis</span>
 
 
@@ -472,7 +474,7 @@
         <span class="p">)</span>
         <span class="n">basis</span> <span class="o">=</span> <span class="n">weighted_walsh_basis_sum_6</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="n">E</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">einsum_pattern</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">basis</span>
 
 
@@ -733,7 +735,7 @@
         <span class="p">)</span>
         <span class="n">basis</span> <span class="o">=</span> <span class="n">light_basis_6</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="n">E</span><span class="p">,</span> <span class="n">F</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">basis</span>
 
 
@@ -753,7 +755,7 @@
         <span class="p">)</span>
         <span class="n">basis</span> <span class="o">=</span> <span class="n">weighted_light_basis_sum_6</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">D</span><span class="p">,</span> <span class="n">E</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">einsum_pattern</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Hard basis not supported for lut_rank=</span><span class="si">{</span><span class="n">lut_rank</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">basis</span>
 
 
@@ -974,39 +976,39 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">get_regularization_loss</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">regularizer</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">regularizer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">return</span> <span class="mf">0.0</span>
-    <span class="k">elif</span> <span class="n">regularizer</span> <span class="o">==</span> <span class="s2">&quot;L2&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">regularizer</span> <span class="o">==</span> <span class="s2">"L2"</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">weights</span><span class="o">.</span><span class="n">pow</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">pow</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">regularizer</span> <span class="o">==</span> <span class="s2">&quot;abs_sum&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">regularizer</span> <span class="o">==</span> <span class="s2">"abs_sum"</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">weights</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">abs</span><span class="p">())</span><span class="o">.</span><span class="n">pow</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="n">regularizer</span> <span class="o">==</span> <span class="s2">&quot;warp&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">regularizer</span> <span class="o">==</span> <span class="s2">"warp"</span><span class="p">:</span>
         <span class="c1"># to enforce a growing norm factor (towards infinity)</span>
         <span class="n">norm_factor</span> <span class="o">=</span> <span class="n">weights</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
         <span class="n">loss</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">norm_factor</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">loss</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown regularizer: </span><span class="si">{</span><span class="n">regularizer</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown regularizer: </span><span class="si">{</span><span class="n">regularizer</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     
 
 <span class="k">def</span><span class="w"> </span><span class="nf">rescale_weights</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
         <span class="k">if</span> <span class="n">method</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">pass</span>
-        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;clip&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"clip"</span><span class="p">:</span>
             <span class="n">weights</span><span class="o">.</span><span class="n">clamp_</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;abs_sum&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"abs_sum"</span><span class="p">:</span>
             <span class="n">abs_sum</span> <span class="o">=</span> <span class="n">weights</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span>
             <span class="n">weights</span><span class="o">.</span><span class="n">div_</span><span class="p">(</span><span class="n">abs_sum</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;L2&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">"L2"</span><span class="p">:</span>
             <span class="n">l2_norm</span> <span class="o">=</span> <span class="n">weights</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="n">weights</span><span class="o">.</span><span class="n">div_</span><span class="p">(</span><span class="n">l2_norm</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown rescale method: </span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown rescale method: </span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         
 
 <span class="c1">##########################################################################</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">build_binom_table</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build table C[x, i] = binom(x, i) for x in [0..n-1], i in [0..k].&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Build table C[x, i] = binom(x, i) for x in [0..n-1], i in [0..k]."""</span>
     <span class="n">C</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
     <span class="n">C</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
@@ -1021,7 +1023,7 @@
     <span class="k">return</span> <span class="n">C</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">unrank_combinations_batched</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">ranks</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Map ranks in [0, C(n,k)) to k-combinations of {0,...,n-1}, batched.</span>
+<span class="w">    </span><span class="sd">"""Map ranks in [0, C(n,k)) to k-combinations of {0,...,n-1}, batched.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n: Total number of items.</span>
@@ -1030,7 +1032,7 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Tensor of combinations of shape (..., k), dtype long.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">device</span> <span class="o">=</span> <span class="n">ranks</span><span class="o">.</span><span class="n">device</span>
     <span class="n">ranks</span> <span class="o">=</span> <span class="n">ranks</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>           <span class="c1"># (B,)</span>
     <span class="n">B</span> <span class="o">=</span> <span class="n">ranks</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
@@ -1061,7 +1063,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_combination_indices</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">sample_size</span><span class="p">,</span> <span class="n">num_sets</span><span class="p">,</span> <span class="n">device</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get unique combination indices for K samples of size sample_size from n items.</span>
+<span class="w">    </span><span class="sd">"""Get unique combination indices for K samples of size sample_size from n items.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n: Total number of items.</span>
@@ -1069,10 +1071,10 @@
 <span class="sd">        sample_size: Number of unique combinations to sample.</span>
 <span class="sd">        num_sets: Number of sets of combinations to generate.</span>
 <span class="sd">        device: Target device for returned tensor.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">total_tuples</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">comb</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">),</span> <span class="n">k</span><span class="p">)</span>
     <span class="k">assert</span> <span class="n">sample_size</span> <span class="o">&lt;=</span> <span class="n">total_tuples</span><span class="p">,</span> <span class="p">(</span>
-        <span class="sa">f</span><span class="s2">&quot;Not enough unique </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">-tuples: need </span><span class="si">{</span><span class="n">sample_size</span><span class="si">}</span><span class="s2">, have </span><span class="si">{</span><span class="n">total_tuples</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">"Not enough unique </span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">-tuples: need </span><span class="si">{</span><span class="n">sample_size</span><span class="si">}</span><span class="s2">, have </span><span class="si">{</span><span class="n">total_tuples</span><span class="si">}</span><span class="s2">"</span>
         <span class="p">)</span>
     <span class="n">ranks</span> <span class="o">=</span> <span class="n">sample_unique_ranks</span><span class="p">(</span><span class="n">total_tuples</span><span class="p">,</span> <span class="n">sample_size</span><span class="p">,</span> <span class="n">num_sets</span><span class="p">,</span> <span class="n">device</span><span class="p">)</span>
     <span class="n">comb_indices</span> <span class="o">=</span> <span class="n">unrank_combinations_batched</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> 
@@ -1088,7 +1090,7 @@
     <span class="n">stride_within</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
     <span class="n">step_between</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Take k-tuples from the last dimension of x with full control over:</span>
 <span class="sd">      - start index</span>
 <span class="sd">      - stride within each tuple</span>
@@ -1104,7 +1106,7 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        y with shape (..., tuple_size, num_groups)</span>
 <span class="sd">        where last two dims are (k, num_groups).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">N</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">step_between</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1113,8 +1115,8 @@
     <span class="c1"># Maximum starting index that still fits a full tuple</span>
     <span class="n">max_start</span> <span class="o">=</span> <span class="n">N</span> <span class="o">-</span> <span class="p">(</span><span class="n">tuple_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">stride_within</span>
     <span class="k">if</span> <span class="n">max_start</span> <span class="o">&lt;=</span> <span class="n">start</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not enough elements to take a single tuple &quot;</span>
-                         <span class="sa">f</span><span class="s2">&quot;with start=</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">, tuple_size=</span><span class="si">{</span><span class="n">tuple_size</span><span class="si">}</span><span class="s2">, stride_within=</span><span class="si">{</span><span class="n">stride_within</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Not enough elements to take a single tuple "</span>
+                         <span class="sa">f</span><span class="s2">"with start=</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">, tuple_size=</span><span class="si">{</span><span class="n">tuple_size</span><span class="si">}</span><span class="s2">, stride_within=</span><span class="si">{</span><span class="n">stride_within</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
 
     <span class="c1"># All possible starting positions</span>
     <span class="n">starts</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">max_start</span><span class="p">,</span> <span class="n">step_between</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>  <span class="c1"># (num_groups,)</span>

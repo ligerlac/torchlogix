@@ -50,6 +50,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -250,10 +252,10 @@ operates on a subset of input features.</p>
 <td><p>See <a class="reference external" href="https://docs.pytorch.org/docs/stable/generated/torch.Tensor.share_memory_.html#torch.Tensor.share_memory_" title="(in PyTorch v2.13)"><code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.share_memory_()</span></code></a>.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">state_dict</span></code>(*args[, destination, prefix, ...])</p></td>
-<td><p></p></td>
+<td><p>Return a dictionary containing references to the whole state of the module.</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">to</span></code>(*args, **kwargs)</p></td>
-<td><p></p></td>
+<td><p>Move and/or cast the parameters and buffers.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_empty</span></code>(*, device[, recurse])</p></td>
 <td><p>Move the parameters and buffers to the specified device without copying storage.</p></td>

@@ -49,6 +49,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -93,11 +95,11 @@
 <div class="viewcode-block" id="CNN">
 <a class="viewcode-back" href="../../../api/models.html#torchlogix.models.CNN">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">CNN</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;An implementation of a logic gate convolutional neural network.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""An implementation of a logic gate convolutional neural network."""</span>
 
 <div class="viewcode-block" id="CNN.__init__">
 <a class="viewcode-back" href="../../../api/models.html#torchlogix.models.CNN.__init__">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_count</span><span class="p">,</span> <span class="n">tau</span><span class="p">,</span> <span class="n">parametrization</span><span class="o">=</span><span class="s2">&quot;raw&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">class_count</span><span class="p">,</span> <span class="n">tau</span><span class="p">,</span> <span class="n">parametrization</span><span class="o">=</span><span class="s2">"raw"</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">CNN</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="n">logic_layers</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># specifically written for mnist</span>
@@ -156,22 +158,22 @@
 <div class="viewcode-block" id="CNN.forward">
 <a class="viewcode-back" href="../../../api/models.html#torchlogix.models.CNN.forward">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward pass of the logic gate convolutional neural network.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Forward pass of the logic gate convolutional neural network."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div>
 </div>
 
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnist</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Model as described in the paper &#39;Convolutional Logic Gate Networks&#39;</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Model as described in the paper 'Convolutional Logic Gate Networks'</span>
 <span class="sd">    for the MNIST dataset.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">binarization</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">binarization_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> 
-                 <span class="n">k_num</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">parametrization</span><span class="o">=</span><span class="s2">&quot;raw&quot;</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
+                 <span class="n">k_num</span><span class="p">:</span> <span class="nb">int</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">parametrization</span><span class="o">=</span><span class="s2">"raw"</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
         
-        <span class="n">binarization</span> <span class="o">=</span> <span class="s2">&quot;dummy&quot;</span>
+        <span class="n">binarization</span> <span class="o">=</span> <span class="s2">"dummy"</span>
         <span class="n">binarization_module</span> <span class="o">=</span> <span class="n">setup_binarization</span><span class="p">(</span><span class="n">thresholds</span><span class="p">,</span> <span class="n">binarization</span><span class="p">,</span> <span class="o">**</span><span class="n">binarization_kwargs</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">k_num</span> <span class="o">=</span> <span class="n">k_num</span>
         <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">binarization_module</span><span class="p">]</span>
@@ -228,35 +230,35 @@
 
 <span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistTiny</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
-        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tau&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"tau"</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistTiny</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistSmall</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
-        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tau&quot;</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">)</span>
+        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"tau"</span><span class="p">,</span> <span class="mf">6.5</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistSmall</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistMedium</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
-        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tau&quot;</span><span class="p">,</span> <span class="mf">28.</span><span class="p">)</span>
+        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"tau"</span><span class="p">,</span> <span class="mf">28.</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistMedium</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">ClgnMnistLarge</span><span class="p">(</span><span class="n">ClgnMnist</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
-        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tau&quot;</span><span class="p">,</span> <span class="mf">35.</span><span class="p">)</span>
+        <span class="n">tau</span> <span class="o">=</span> <span class="n">llkw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"tau"</span><span class="p">,</span> <span class="mf">35.</span><span class="p">)</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">ClgnMnistLarge</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">k_num</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">tau</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">)</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">ClgnCifar10</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    An implementation of a logic gate convolutional neural network for CIFAR-10,</span>
-<span class="sd">    as described in the paper &#39;convolutional logic gate networks&#39;.</span>
+<span class="sd">    as described in the paper 'convolutional logic gate networks'.</span>
 <span class="sd">    Provided in three sizes: small, medium, large.</span>
 <span class="sd">    Small and medium take 2-bit-thresholded inputs, large takes 5-bit-thresholded inputs. </span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">n_input_bits</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">k_num</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">tau</span> <span class="o">=</span> <span class="kc">None</span>
@@ -264,19 +266,17 @@
     <span class="n">group_size_input</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">binarization</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">binarization_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="o">**</span><span class="n">llkw</span><span class="p">):</span>
-        <span class="k">assert</span> <span class="n">thresholds</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_input_bits</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> model requires </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_input_bits</span><span class="si">}</span><span class="s2">-bit thresholds.&quot;</span>
+        <span class="k">assert</span> <span class="n">thresholds</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_input_bits</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> model requires </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n_input_bits</span><span class="si">}</span><span class="s2">-bit thresholds."</span>
         <span class="n">binarization_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">binarization_kwargs</span><span class="p">)</span>  <span class="c1"># make a copy to avoid modifying the original</span>
-        <span class="n">binarization_kwargs</span><span class="p">[</span><span class="s2">&quot;feature_dim&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># image data</span>
+        <span class="n">binarization_kwargs</span><span class="p">[</span><span class="s2">"feature_dim"</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># image data</span>
         <span class="n">n_bits</span> <span class="o">=</span> <span class="n">thresholds</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
         <span class="n">binarization_module</span> <span class="o">=</span> <span class="n">setup_binarization</span><span class="p">(</span><span class="n">thresholds</span><span class="p">,</span> <span class="n">binarization</span><span class="p">,</span> <span class="o">**</span><span class="n">binarization_kwargs</span><span class="p">)</span>
 
         <span class="n">connections_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">connections_kwargs</span><span class="p">)</span>  <span class="c1"># make a copy to avoid modifying the original</span>
-        <span class="n">connections_kwargs</span><span class="p">[</span><span class="s2">&quot;channel_group_size&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_size</span>  <span class="c1"># from the paper, we use grouped connections with channel group size 2 for conv layers</span>
+        <span class="n">connections_kwargs</span><span class="p">[</span><span class="s2">"channel_group_size"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_size</span>  <span class="c1"># from the paper, we use grouped connections with channel group size 2 for conv layers</span>
 
         <span class="n">group_size_input</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_size_input</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_size_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">group_size</span>
         
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;connctions_kwargs for </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">connections_kwargs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
         <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">binarization_module</span><span class="p">]</span>
         <span class="n">layers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
             <span class="n">LogicConv2d</span><span class="p">(</span>
@@ -286,7 +286,7 @@
                 <span class="n">tree_depth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">receptive_field_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
                 <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-                <span class="n">connections_kwargs</span><span class="o">=</span><span class="n">connections_kwargs</span> <span class="o">|</span> <span class="p">{</span><span class="s2">&quot;channel_group_size&quot;</span><span class="p">:</span> <span class="n">group_size_input</span><span class="p">},</span>
+                <span class="n">connections_kwargs</span><span class="o">=</span><span class="n">connections_kwargs</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"channel_group_size"</span><span class="p">:</span> <span class="n">group_size_input</span><span class="p">},</span>
                 <span class="o">**</span><span class="n">llkw</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>

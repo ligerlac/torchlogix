@@ -49,6 +49,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -99,7 +101,7 @@
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_LogicConvNd</span><span class="p">(</span><span class="n">LogicBase</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Abstract baseclass for convolutional logic layers.</span>
+<span class="w">    </span><span class="sd">"""Abstract baseclass for convolutional logic layers.</span>
 <span class="sd">    This module provides common functionality for 2D and 3D logic convolutional</span>
 <span class="sd">    layers with differentiable learning.</span>
 <span class="sd">    </span>
@@ -115,13 +117,13 @@
 <span class="sd">        padding: Zero-padding applied symmetrically to depth, height and width</span>
 <span class="sd">            before selecting receptive fields.</span>
 <span class="sd">        conv_dimension: Dimension of the convolution (2 or 3).</span>
-<span class="sd">        device (str): Device to run the layer on (&#39;cpu&#39; or &#39;cuda&#39;).</span>
+<span class="sd">        device (str): Device to run the layer on ('cpu' or 'cuda').</span>
 <span class="sd">        grad_factor (float): Gradient scaling factor.</span>
 <span class="sd">        lut_rank (int): Rank of the LUTs used in the layer.</span>
-<span class="sd">        parametrization (str): Type of parametrization to use (&#39;raw&#39;, &#39;warp&#39;, &#39;light&#39;).</span>
+<span class="sd">        parametrization (str): Type of parametrization to use ('raw', 'warp', 'light').</span>
 <span class="sd">        parametrization_kwargs (dict): Additional keyword arguments for parametrization.</span>
-<span class="sd">        connections (str): Type of connections to use (&#39;fixed&#39;, &#39;learnable&#39;, etc.).</span>
-<span class="sd">        connections_kwargs (dict): Additional keyword arguments for connections.&quot;&quot;&quot;</span>
+<span class="sd">        connections (str): Type of connections to use ('fixed', 'learnable', etc.).</span>
+<span class="sd">        connections_kwargs (dict): Additional keyword arguments for connections."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -133,12 +135,12 @@
         <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
         <span class="n">conv_dimension</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"cpu"</span><span class="p">,</span>
         <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"raw"</span><span class="p">,</span>
         <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"fixed"</span><span class="p">,</span>
         <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
@@ -154,7 +156,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span> <span class="o">=</span> <span class="n">tree_depth</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">channels</span> <span class="o">=</span> <span class="n">channels</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conv_dimension</span> <span class="o">=</span> <span class="n">conv_dimension</span>
-        <span class="k">assert</span> <span class="n">conv_dimension</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s2">&quot;conv_dimension must be 2 or 3&quot;</span>
+        <span class="k">assert</span> <span class="n">conv_dimension</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="s2">"conv_dimension must be 2 or 3"</span>
         <span class="k">if</span> <span class="n">conv_dimension</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">receptive_field_size</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span> <span class="o">=</span> <span class="n">_pair</span><span class="p">(</span><span class="n">in_dim</span><span class="p">)</span>
@@ -164,8 +166,8 @@
         <span class="k">assert</span> <span class="p">(</span>
             <span class="nb">all</span><span class="p">(</span><span class="n">stride</span> <span class="o">&lt;=</span> <span class="n">dim</span> <span class="k">for</span> <span class="n">dim</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">receptive_field_size</span><span class="p">)</span>
         <span class="p">),</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Stride (</span><span class="si">{</span><span class="n">stride</span><span class="si">}</span><span class="s2">) cannot be larger than &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;receptive field size (</span><span class="si">{</span><span class="n">receptive_field_size</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="sa">f</span><span class="s2">"Stride (</span><span class="si">{</span><span class="n">stride</span><span class="si">}</span><span class="s2">) cannot be larger than "</span>
+            <span class="sa">f</span><span class="s2">"receptive field size (</span><span class="si">{</span><span class="n">receptive_field_size</span><span class="si">}</span><span class="s2">)"</span>
         <span class="p">)</span>        
         <span class="bp">self</span><span class="o">.</span><span class="n">stride</span> <span class="o">=</span> <span class="n">stride</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">padding</span> <span class="o">=</span> <span class="n">padding</span>
@@ -195,7 +197,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_init_connections</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
          <span class="c1"># Setup connections</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">setup_connections</span><span class="p">(</span>
-            <span class="n">structure</span><span class="o">=</span><span class="s2">&quot;conv&quot;</span><span class="p">,</span>
+            <span class="n">structure</span><span class="o">=</span><span class="s2">"conv"</span><span class="p">,</span>
             <span class="n">connections</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">,</span>
             <span class="n">lut_rank</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lut_rank</span><span class="p">,</span>
             <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
@@ -212,7 +214,7 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Applies the logic convolution to the input.</span>
+<span class="w">        </span><span class="sd">"""Applies the logic convolution to the input.</span>
 
 <span class="sd">        The forward pass proceeds as follows:</span>
 
@@ -236,7 +238,7 @@
 
 <span class="sd">            * ``out_height = (in_height + 2 * padding - receptive_field_size) // stride + 1``</span>
 <span class="sd">            * ``out_width  = (in_width  + 2 * padding - receptive_field_size) // stride + 1``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward_export_mode</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
         
@@ -244,7 +246,7 @@
             <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
                 <span class="n">x</span><span class="p">,</span>
                 <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
-                <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;constant&quot;</span><span class="p">,</span>
+                <span class="n">mode</span><span class="o">=</span><span class="s2">"constant"</span><span class="p">,</span>
                 <span class="n">value</span><span class="o">=</span><span class="mi">0</span>
             <span class="p">)</span>
         <span class="c1"># First level tree indices</span>
@@ -253,7 +255,7 @@
         <span class="c1"># b=batch, c=channels, s=spatial, f=features, k=num_basis/16</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
             <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
-            <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;fc,bcsf-&gt;bcsf&#39;</span>
+            <span class="n">contraction</span><span class="o">=</span><span class="s1">'fc,bcsf-&gt;bcsf'</span>
         <span class="p">)</span>
         <span class="c1"># Process remaining levels</span>
         <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
@@ -261,7 +263,7 @@
             <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">movedim</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
             <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
                 <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">[</span><span class="n">level</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
-                <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;fc,bcsf-&gt;bcsf&#39;</span>
+                <span class="n">contraction</span><span class="o">=</span><span class="s1">'fc,bcsf-&gt;bcsf'</span>
             <span class="p">)</span>
         <span class="c1"># Reshape flattened output</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_positions</span><span class="p">)</span>
@@ -276,7 +278,7 @@
             <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span>
                 <span class="n">x</span><span class="p">,</span>
                 <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
-                <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;constant&quot;</span><span class="p">,</span>
+                <span class="n">mode</span><span class="o">=</span><span class="s2">"constant"</span><span class="p">,</span>
                 <span class="n">value</span><span class="o">=</span><span class="mi">0</span>
             <span class="p">)</span>
 
@@ -284,7 +286,7 @@
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
         <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
 
-        <span class="n">lut_ids_bc</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;_export_lut_ids_L0&#39;</span><span class="p">)</span>
+        <span class="n">lut_ids_bc</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s1">'_export_lut_ids_L0'</span><span class="p">)</span>
 
         <span class="n">x</span> <span class="o">=</span> <span class="n">apply_luts_export_mode</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">lut_ids_bc</span><span class="p">)</span>
 
@@ -292,7 +294,7 @@
         <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
             <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">level</span><span class="p">)</span>
             <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:],</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
-            <span class="n">lut_ids_bc</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;_export_lut_ids_L</span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="n">lut_ids_bc</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s1">'_export_lut_ids_L</span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
 
             <span class="n">x</span> <span class="o">=</span> <span class="n">apply_luts_export_mode</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">lut_ids_bc</span><span class="p">)</span>
 
@@ -302,13 +304,13 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_luts_and_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT and its ID for each neuron.</span>
+<span class="w">        </span><span class="sd">"""Computes the most probable LUT and its ID for each neuron.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Tuple[List[List[torch.Tensor]], List[List[torch.Tensor]]]:</span>
 <span class="sd">                - ``tree_luts``: Nested list of Boolean tensors (truth tables)</span>
 <span class="sd">                - ``tree_ids``: Nested list of integer tensors (LUT IDs)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">tree_ids</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">tree_luts</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
@@ -323,11 +325,11 @@
         <span class="k">return</span> <span class="n">tree_luts</span><span class="p">,</span> <span class="n">tree_ids</span>
     
     <span class="k">def</span><span class="w"> </span><span class="nf">get_luts</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT for each neuron.</span>
+<span class="w">        </span><span class="sd">"""Computes the most probable LUT for each neuron.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">           List[List[torch.Tensor]]: Nested list of Boolean tensors (LUTs)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">tree_luts</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree_depth</span><span class="p">):</span>
             <span class="n">level_luts</span> <span class="o">=</span> <span class="p">[]</span>
@@ -359,29 +361,29 @@
                 <span class="c1"># shape: (num_kernels, spatial, n_nodes) — broadcasts over any batch dim</span>
                 <span class="n">stacked</span> <span class="o">=</span> <span class="n">stacked</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">)</span>
                 <span class="n">stacked</span> <span class="o">=</span> <span class="n">stacked</span><span class="o">.</span><span class="n">expand</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_kernel_positions</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;_export_lut_ids_L</span><span class="si">{</span><span class="n">level_idx</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="sa">f</span><span class="s1">'_export_lut_ids_L</span><span class="si">{</span><span class="n">level_idx</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
                                     <span class="n">stacked</span><span class="p">,</span> <span class="n">persistent</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">buffers_to_delete</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_buffers</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
-                                <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;_export_lut&#39;</span><span class="p">)]</span>
+                                <span class="k">if</span> <span class="n">name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">'_export_lut'</span><span class="p">)]</span>
             <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">buffers_to_delete</span><span class="p">:</span>
                 <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_export_lut_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">level</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;_export_lut_ids_L</span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s1">'_export_lut_ids_L</span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="LogicConv2d">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">LogicConv2d</span><span class="p">(</span><span class="n">_LogicConvNd</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;2D convolutional layer with differentiable logic operations.</span>
+<span class="w">    </span><span class="sd">"""2D convolutional layer with differentiable logic operations.</span>
 
 <span class="sd">    This layer implements a 2D convolution where each output location is</span>
 <span class="sd">    computed by evaluating a learned logic tree over a receptive field.</span>
 <span class="sd">    Instead of linear filters, it uses a binary tree of differentiable</span>
 <span class="sd">    logic operations (LUTs) applied to selected positions in the receptive</span>
 <span class="sd">    field, per kernel and per spatial location.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 <div class="viewcode-block" id="LogicConv2d.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv2d.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -393,12 +395,12 @@
         <span class="n">receptive_field_size</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_2_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
         <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"cpu"</span><span class="p">,</span>
         <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"raw"</span><span class="p">,</span>
         <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"fixed"</span><span class="p">,</span>
         <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
@@ -425,14 +427,14 @@
 <div class="viewcode-block" id="LogicConv3d">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">LogicConv3d</span><span class="p">(</span><span class="n">_LogicConvNd</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;3D convolutional layer with differentiable logic operations.</span>
+<span class="w">    </span><span class="sd">"""3D convolutional layer with differentiable logic operations.</span>
 
 <span class="sd">    This layer implements a 3D convolution where each output location is</span>
 <span class="sd">    computed by evaluating a learned logic tree over a receptive field.</span>
 <span class="sd">    Instead of linear filters, it uses a binary tree of differentiable</span>
 <span class="sd">    logic operations (LUTs) applied to selected positions in the receptive</span>
 <span class="sd">    field, per kernel and per spatial location.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 <div class="viewcode-block" id="LogicConv3d.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicConv3d.__init__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
@@ -444,12 +446,12 @@
         <span class="n">receptive_field_size</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_size_3_t</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
         <span class="n">stride</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">padding</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"cpu"</span><span class="p">,</span>
         <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"raw"</span><span class="p">,</span>
         <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"fixed"</span><span class="p">,</span>
         <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>

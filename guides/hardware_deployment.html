@@ -51,11 +51,18 @@
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="concepts.html">Core Concepts</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Hardware Deployment Guide</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#verilog-interface">Verilog interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#simulation-with-verilator">Simulation with Verilator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fpga-synthesis-with-vivado">FPGA synthesis with Vivado</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#design-considerations">Design considerations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#install">Install</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-the-plugin-works">How the plugin works</a></li>
 </ul>
 </li>
 </ul>
@@ -94,8 +101,23 @@
              
   <section id="hardware-deployment-guide">
 <h1>Hardware Deployment Guide<a class="headerlink" href="#hardware-deployment-guide" title="Link to this heading"></a></h1>
+<p>TorchLogix supports two paths from a trained model to hardware:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">Circuit</span></code></strong> (native, this guide) - a minimal, logic-only IR: always
+fully unrolled (no control flow, no registers), entirely generated and
+controlled by <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> itself. Good default for straightforward
+combinational export to C or Verilog.</p></li>
+<li><p><strong><a class="reference internal" href="#compiling-with-alkaid"><span class="std std-ref">alkaid</span></a></strong> (optional integration) - a
+general-purpose compiler for low-latency static-dataflow FPGA kernels
+(RTL, HLS, XLS targets). More advanced and more configurable, at the cost
+of an extra dependency and a less direct code path.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="circuit-native">
+<h1><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)<a class="headerlink" href="#circuit-native" title="Link to this heading"></a></h1>
 <p>TorchLogix can generate synthesizable Verilog RTL directly from any trained
-model via <code class="docutils literal notranslate"><span class="pre">circuit.get_verilog_code()</span></code>. This guide explains the generated
+model via <code class="docutils literal notranslate"><span class="pre">circuit.get_verilog_code()</span></code>. This section explains the generated
 interface and how to take it to simulation or an FPGA.</p>
 <hr class="docutils" />
 <section id="verilog-interface">
@@ -138,7 +160,7 @@ python<span class="w"> </span>examples/verify_with_verilator.py
 <section id="fpga-synthesis-with-vivado">
 <h2>FPGA synthesis with Vivado<a class="headerlink" href="#fpga-synthesis-with-vivado" title="Link to this heading"></a></h2>
 <p>Write the Verilog to a file and run the TCL script in <code class="docutils literal notranslate"><span class="pre">examples/synthesis/</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_verilog_code</span><span class="p">(</span><span class="s2">&quot;circuit.v&quot;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_verilog_code</span><span class="p">(</span><span class="s2">"circuit.v"</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vivado<span class="w"> </span>-mode<span class="w"> </span>batch<span class="w"> </span>-source<span class="w"> </span>examples/synthesis/synthesize.tcl<span class="w"> </span><span class="se">\</span>
@@ -173,6 +195,49 @@ synthesis reports.</p>
 </tr>
 </tbody>
 </table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="compiling-with-alkaid">
+<h1>Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code><a class="headerlink" href="#compiling-with-alkaid" title="Link to this heading"></a></h1>
+<p><a class="reference external" href="https://github.com/calad0i/alkaid"><code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a> is a 3rd party compiler for
+generating low-latency static-dataflow kernels for FPGAs (RTL, HLS, XLS
+targets). Unlike <code class="docutils literal notranslate"><span class="pre">Circuit</span></code>, it’s a general-purpose tool not specific to
+<code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> or even to boolean logic - <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> integrates with it as
+an optional extra for more advanced FPGA compilation flows.</p>
+<section id="install">
+<h2>Install<a class="headerlink" href="#install" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>torchlogix<span class="o">[</span>alkaid<span class="o">]</span>
+</pre></div>
+</div>
+</section>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">alkaid.converter</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace_model</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">alkaid.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">FVArrayInput</span><span class="p">,</span> <span class="n">trace</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_export_mode</span>
+
+<span class="n">set_export_mode</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c1"># model is any torchlogix nn.Module, in eval mode</span>
+
+<span class="n">inp</span> <span class="o">=</span> <span class="n">FVArrayInput</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="n">model</span><span class="o">.</span><span class="n">input_shape</span><span class="p">))</span><span class="o">.</span><span class="n">quantize</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="n">inp2</span><span class="p">,</span> <span class="n">out</span> <span class="o">=</span> <span class="n">trace_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="n">inp</span><span class="p">,</span> <span class="n">framework</span><span class="o">=</span><span class="s2">"logic"</span><span class="p">)</span>
+<span class="n">comb</span> <span class="o">=</span> <span class="n">trace</span><span class="p">(</span><span class="n">inp2</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
+
+<span class="n">comb</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span>  <span class="c1"># x: a torch.bool tensor matching model.input_shape</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">framework=&quot;logic&quot;</span></code> selects <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code>’s tracer, registered with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code>
+via its <code class="docutils literal notranslate"><span class="pre">alir_tracer.plugins</span></code> entry point.</p>
+</section>
+<section id="how-the-plugin-works">
+<h2>How the plugin works<a class="headerlink" href="#how-the-plugin-works" title="Link to this heading"></a></h2>
+<p>The tracer itself (<code class="docutils literal notranslate"><span class="pre">torchlogix._alkaid_plugin</span></code>) has no dependency on
+<code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> beyond that entry-point registration. It traces the model’s
+export-mode <code class="docutils literal notranslate"><span class="pre">forward()</span></code> with <code class="docutils literal notranslate"><span class="pre">torch.fx</span></code>’s <code class="docutils literal notranslate"><span class="pre">make_fx</span></code> at the aten-op level, then
+replays the resulting graph on <code class="docutils literal notranslate"><span class="pre">alkaid</span></code>’s <code class="docutils literal notranslate"><span class="pre">FVArray</span></code>. Since it only ever sees
+generic aten ops (not torchlogix layers), it works for any PyTorch model built
+from pure boolean/integer operations - not just <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> models.</p>
 </section>
 </section>
 

@@ -58,6 +58,8 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -94,8 +96,8 @@
              
   <section id="quick-start">
 <h1>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h1>
-<p>For a complete end-to-end walkthrough — training, evaluating, compiling, and
-exporting to C/Verilog — see the
+<p>For a complete end-to-end walkthrough - training, evaluating, compiling, and
+exporting to C/Verilog - see the
 <span class="xref myst">MNIST example notebook</span>.</p>
 <p>This page shows the minimal API surface for building and exporting a model.</p>
 <hr class="docutils" />
@@ -117,7 +119,7 @@ exporting to C/Verilog — see the
 </section>
 <section id="train">
 <h2>Train<a class="headerlink" href="#train" title="Link to this heading"></a></h2>
-<p>Logic layers are standard <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> objects — use any PyTorch training loop:</p>
+<p>Logic layers are standard <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> objects - use any PyTorch training loop:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
 <span class="n">criterion</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
@@ -133,7 +135,7 @@ exporting to C/Verilog — see the
 <section id="convert-to-circuit-and-compile">
 <h2>Convert to Circuit and compile<a class="headerlink" href="#convert-to-circuit-and-compile" title="Link to this heading"></a></h2>
 <blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> requires <strong>binary inputs</strong> — binarize at the dataset level before
+<div><p><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> requires <strong>binary inputs</strong> - binarize at the dataset level before
 passing data to the model. Binarization layers are not exported.</p>
 </div></blockquote>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Circuit</span>
@@ -153,8 +155,8 @@ passing data to the model. Binarization layers are not exported.</p>
 </section>
 <section id="export-to-c-or-verilog">
 <h2>Export to C or Verilog<a class="headerlink" href="#export-to-c-or-verilog" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_c_code</span><span class="p">(</span><span class="s2">&quot;circuit.c&quot;</span><span class="p">)</span>          <span class="c1"># self-contained C99, no dependencies</span>
-<span class="n">circuit</span><span class="o">.</span><span class="n">write_verilog_code</span><span class="p">(</span><span class="s2">&quot;circuit.v&quot;</span><span class="p">)</span>    <span class="c1"># combinational RTL module</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_c_code</span><span class="p">(</span><span class="s2">"circuit.c"</span><span class="p">)</span>          <span class="c1"># self-contained C99, no dependencies</span>
+<span class="n">circuit</span><span class="o">.</span><span class="n">write_verilog_code</span><span class="p">(</span><span class="s2">"circuit.v"</span><span class="p">)</span>    <span class="c1"># combinational RTL module</span>
 </pre></div>
 </div>
 </section>

@@ -49,6 +49,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/quickstart.html">Quick Start</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -97,7 +99,7 @@
 <div class="viewcode-block" id="LogicDense">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">LogicDense</span><span class="p">(</span><span class="n">LogicBase</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fully-connected logic gate layer with differentiable learning.</span>
+<span class="w">    </span><span class="sd">"""Fully-connected logic gate layer with differentiable learning.</span>
 
 <span class="sd">    This module provides the core implementation of Differentiable Deep Logic</span>
 <span class="sd">    Gate Networks. Each neuron learns a Boolean logic function (LUT) that</span>
@@ -106,14 +108,14 @@
 <span class="sd">    Args:</span>
 <span class="sd">        in_dim (int): Number of input features.</span>
 <span class="sd">        out_dim (int): Number of neurons (output features).</span>
-<span class="sd">        device (str): Device to run the layer on (&#39;cpu&#39; or &#39;cuda&#39;).</span>
+<span class="sd">        device (str): Device to run the layer on ('cpu' or 'cuda').</span>
 <span class="sd">        grad_factor (float): Gradient scaling factor.</span>
 <span class="sd">        lut_rank (int): Rank of the LUTs used in the layer.</span>
-<span class="sd">        parametrization (str): Type of parametrization to use (&#39;raw&#39;, &#39;warp&#39;, &#39;light&#39;).</span>
+<span class="sd">        parametrization (str): Type of parametrization to use ('raw', 'warp', 'light').</span>
 <span class="sd">        parametrization_kwargs (dict): Additional keyword arguments for parametrization.</span>
-<span class="sd">        connections (str): Type of connections to use (&#39;fixed&#39;, &#39;learnable&#39;, etc.).</span>
+<span class="sd">        connections (str): Type of connections to use ('fixed', 'learnable', etc.).</span>
 <span class="sd">        connections_kwargs (dict): Additional keyword arguments for connections.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="LogicDense.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.__init__">[docs]</a>
@@ -121,12 +123,12 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">in_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">out_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"cpu"</span><span class="p">,</span>
         <span class="n">grad_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
         <span class="n">lut_rank</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;raw&quot;</span><span class="p">,</span>
+        <span class="n">parametrization</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"raw"</span><span class="p">,</span>
         <span class="n">parametrization_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;fixed&quot;</span><span class="p">,</span>
+        <span class="n">connections</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"fixed"</span><span class="p">,</span>
         <span class="n">connections_kwargs</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
@@ -157,7 +159,7 @@
 <div class="viewcode-block" id="LogicDense.forward">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.forward">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Applies the LogicDense transformation to the input.</span>
+<span class="w">        </span><span class="sd">"""Applies the LogicDense transformation to the input.</span>
 
 <span class="sd">        For each neuron, the layer:</span>
 <span class="sd">        1. Selects ``lut_rank`` input features according to the connection</span>
@@ -172,7 +174,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A tensor of shape ``(..., out_dim)`` containing the neuron outputs.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">ndim</span>
         <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">,</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="p">)</span>
 
@@ -187,10 +189,10 @@
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Shape: (batch_flat, lut_rank, out_dim)</span>
 
         <span class="c1"># Split into train/eval and export path (optimized for efficiency and exportability, respectively)</span>
-        <span class="c1"># Export path only needs to know which LUT, not how it&#39;s parameterized</span>
+        <span class="c1"># Export path only needs to know which LUT, not how it's parameterized</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">lut_rank</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Export mode currently only supports lut_rank=2.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">"Export mode currently only supports lut_rank=2."</span><span class="p">)</span>
             <span class="c1"># TODO: apply_luts function w/ bit shifts that works on higher lut_ranks</span>
             <span class="n">a</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
             <span class="n">b</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span>
@@ -201,7 +203,7 @@
             <span class="c1"># b=batch, n=neurons, k=num_basis</span>
             <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span>
                 <span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">,</span>
-                <span class="n">contraction</span><span class="o">=</span><span class="s1">&#39;n,bn-&gt;bn&#39;</span>
+                <span class="n">contraction</span><span class="o">=</span><span class="s1">'n,bn-&gt;bn'</span>
             <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">*</span><span class="n">leading_shape</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="p">)</span></div>
@@ -210,17 +212,17 @@
 <div class="viewcode-block" id="LogicDense.extra_repr">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.extra_repr">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">extra_repr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">weight_repr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Parameter containing: [</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> of size </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">weight_repr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Parameter containing: [</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> of size </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">is_cuda</span><span class="p">:</span>
-            <span class="n">weight_repr</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="n">weight_repr</span> <span class="o">+=</span> <span class="s2">&quot;]&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="si">}</span><span class="se">\n</span><span class="s2">weight: </span><span class="si">{</span><span class="n">weight_repr</span><span class="si">}</span><span class="se">\n</span><span class="s2">parametrization: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="se">\n</span><span class="s2">connections: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="si">}</span><span class="s2">&quot;</span></div>
+            <span class="n">weight_repr</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">" (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">)"</span>
+        <span class="n">weight_repr</span> <span class="o">+=</span> <span class="s2">"]"</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">in_dim</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">out_dim</span><span class="si">}</span><span class="se">\n</span><span class="s2">weight: </span><span class="si">{</span><span class="n">weight_repr</span><span class="si">}</span><span class="se">\n</span><span class="s2">parametrization: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="se">\n</span><span class="s2">connections: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="si">}</span><span class="s2">"</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_init_connections</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs input–neuron connection indices.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Constructs input–neuron connection indices."""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">connections</span> <span class="o">=</span> <span class="n">setup_connections</span><span class="p">(</span>
-            <span class="n">structure</span><span class="o">=</span><span class="s2">&quot;dense&quot;</span><span class="p">,</span>
+            <span class="n">structure</span><span class="o">=</span><span class="s2">"dense"</span><span class="p">,</span>
             <span class="n">connections</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">connections</span><span class="p">,</span>
             <span class="n">lut_rank</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lut_rank</span><span class="p">,</span>
             <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
@@ -233,7 +235,7 @@
 <div class="viewcode-block" id="LogicDense.get_luts_and_ids">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_luts_and_ids">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_luts_and_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT and its ID for each neuron.</span>
+<span class="w">        </span><span class="sd">"""Computes the most probable LUT and its ID for each neuron.</span>
 
 <span class="sd">        Method is dependent on the chosen parametrization.</span>
 
@@ -246,14 +248,14 @@
 <span class="sd">                  entry is the integer ID of the corresponding LUT, obtained by</span>
 <span class="sd">                  interpreting its truth table as a binary number (or None if</span>
 <span class="sd">                  not applicable for high lut_rank).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
     
 <div class="viewcode-block" id="LogicDense.get_luts">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.get_luts">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_luts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Computes the most probable LUT for each neuron.</span>
+<span class="w">        </span><span class="sd">"""Computes the most probable LUT for each neuron.</span>
 
 <span class="sd">        Method is dependent on the chosen parametrization.</span>
 
@@ -261,7 +263,7 @@
 <span class="sd">            torch.Tensor: Boolean tensor of shape ``(out_dim, 2 ** lut_rank)``,</span>
 <span class="sd">                  where each row is the most probable LUT truth table for a</span>
 <span class="sd">                  neuron (entry is True for output 1, False for 0).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametrization</span><span class="o">.</span><span class="n">get_luts</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 
@@ -280,20 +282,20 @@
 <div class="viewcode-block" id="LogicDense.set_export_mode">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.set_export_mode">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">set_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable or disable export mode for circuit/ONNX tracing.</span>
+<span class="w">        </span><span class="sd">"""Enable or disable export mode for circuit/ONNX tracing.</span>
 
 <span class="sd">        When enabled, pre-computes and caches LUT IDs as a buffer to avoid</span>
 <span class="sd">        recomputing argmax in the exported model.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span> <span class="o">=</span> <span class="n">enabled</span>
 
         <span class="k">if</span> <span class="n">enabled</span><span class="p">:</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">()</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s1">&#39;_export_lut_ids&#39;</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">persistent</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s1">'_export_lut_ids'</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">persistent</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_export_lut_ids&#39;</span><span class="p">):</span>
-                <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_export_lut_ids&#39;</span><span class="p">)</span></div>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_export_lut_ids'</span><span class="p">):</span>
+                <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_export_lut_ids'</span><span class="p">)</span></div>
 </div>
 
 </pre></div>
