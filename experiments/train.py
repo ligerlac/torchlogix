@@ -338,8 +338,10 @@ def run_training(args, callbacks=None):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        n += y.size(0)
-        running_train_loss += loss
+
+        bsz = y.size(0)
+        n += bsz
+        running_train_loss += loss.detach() * bsz
 
         if i % 100 == 0:
             pbar.set_postfix(loss=f"{loss:.4f}")
@@ -360,7 +362,7 @@ def run_training(args, callbacks=None):
             metrics = \
                 {f"val_{k}_discrete": v for k, v in discrete_metrics.items()} | \
                 {f"val_{k}_relaxed": v for k, v in relaxed_metrics.items()} | \
-                {"train_loss": running_train_loss.cpu().detach().item() / n * len(validation_loader)}
+                {"train_loss": running_train_loss.cpu().item() / n}
         
             print(f"Iteration {i + 1:6d} | " +
                   " | ".join([f"{k}: {v:.4f}" for k, v in metrics.items()]))
