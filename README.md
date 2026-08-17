@@ -73,12 +73,15 @@ circuit.get_verilog_code()
 
 The full training- and evaluation of the model above is demonstrated in the example notebook [examples/mnist_example.ipynb](examples/mnist_example.ipynb).
 
+`torchlogix` is integrated with the 3rd party tool `alkaid` for more advanced FPGA compiling. For more details, see [docs/guides/hardware_deployment.md](docs/guides/hardware_deployment.md).
+
 
 ## Documentation
 
 **More thorough documentation is available [here](https://ligerlac.github.io/torchlogix/)**, including an **API Reference**. Some quick links:
 - **[Installation Guide](docs/guides/installation.md)** - Detailed installation instructions
-- **[Quick Start](docs/guides/quickstart.md)** - Get started with TorchLogix in minutes
+- **[Quick Start](docs/guides/quickstart.md)** - Get started with `torchlogix` in minutes
+- **[Hardware Deployment](docs/guides/hardware_deployment.md)** - Compile `torchlogix` models to hardware, via `Circuit` or `alkaid`
 - **[Concepts](docs/guides/concepts.md)** - Understand some of the design choices behind `torchlogix`
 
 ## Experiments
@@ -95,7 +98,7 @@ The training converges within roughly 30 minutes on an `A100`. The accuracy can 
 
 ## Citation
 
-If you use torchlogix in your research, please cite:
+If you use `torchlogix` in your research, please cite:
 
 ```bibtex
 @software{torchlogix2026,
