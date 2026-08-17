@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchlogix"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Logic Neural Networks in PyTorch"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -59,6 +59,10 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+# Version comes from the latest git tag (e.g. v0.2.0 -> 0.2.0), with a
+# .devN+gHASH suffix for commits after a tag - no version to bump by hand.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
