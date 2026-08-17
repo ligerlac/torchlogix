@@ -27,6 +27,7 @@ import numpy as np
 
 import torch
 import torch.fx
+from torch.fx.experimental.const_fold import split_const_subgraphs
 
 
 # ---------------------------------------------------------------------------
@@ -285,9 +286,12 @@ class Circuit:
         while i < len(nodes):
             node = nodes[i]
 
-            # ---- get_attr: fold constant bool tensors into CONST gates; skip others ----
-            if node.op == 'get_attr':
-                val = _get_attr_val(gm, node)
+            # ---- get_attr (or getitem unpacking a folded-const container): ----
+            # ---- fold constant bool tensors into CONST gates; skip others ----
+            if node.op == 'get_attr' or (
+                    node.op == 'call_function' and node.target is operator.getitem
+                    and _is_const_node(node.args[0])):
+                val = _resolve_const(gm, node)
                 if isinstance(val, torch.Tensor) and val.dtype == torch.bool:
                     # Skip boolean tensors used exclusively as index masks -
                     # they are routing metadata, not circuit data. The index.Tensor
@@ -383,8 +387,8 @@ class Circuit:
                         if idx_node is None:
                             index_args.append(slice(None))
                         elif isinstance(idx_node, torch.fx.Node):
-                            if idx_node.op == 'get_attr':
-                                index_args.append(_get_attr_val(gm, idx_node))
+                            if _is_const_node(idx_node):
+                                index_args.append(_resolve_const(gm, idx_node))
                             elif idx_node.name in wire_map:
                                 index_args.append(torch.tensor(
                                     resolve(idx_node), dtype=torch.long))
@@ -746,8 +750,7 @@ class Circuit:
                             continue
                         if not isinstance(idx_node, torch.fx.Node):
                             continue
-                        mask_t = (_get_attr_val(gm, idx_node) if idx_node.op == 'get_attr'
-                                  else None)
+                        mask_t = _resolve_const(gm, idx_node)
                         if mask_t is None or mask_t.dtype != torch.bool:
                             continue
                         # Flatten multi-dim mask to get 1-D positions within the
@@ -1957,141 +1960,99 @@ def _get_attr_val(gm: torch.fx.GraphModule, node: torch.fx.Node):
     return obj
 
 
+def _is_const_node(node) -> bool:
+    """True if `node` is a get_attr, or a getitem unpacking one - see
+    _resolve_const for why getitem needs to be considered too."""
+    if not isinstance(node, torch.fx.Node):
+        return False
+    if node.op == 'get_attr':
+        return True
+    return (node.op == 'call_function' and node.target is operator.getitem
+            and _is_const_node(node.args[0]))
+
+
+def _resolve_const(gm: torch.fx.GraphModule, node) -> object | None:
+    """Return the concrete constant value a node resolves to, or None if it
+    isn't a constant node.
+
+    Handles both a direct `get_attr` node, and a `getitem` node that unpacks
+    one element out of a `get_attr`-backed container - e.g. the bundled
+    ParameterList that torch.fx.experimental.const_fold's split_const_subgraphs
+    produces when folding multiple constants into one attribute at once,
+    rather than one get_attr node per constant.
+    """
+    if not isinstance(node, torch.fx.Node):
+        return None
+    if node.op == 'get_attr':
+        return _get_attr_val(gm, node)
+    if node.op == 'call_function' and node.target is operator.getitem:
+        container_node, idx = node.args
+        container = _resolve_const(gm, container_node)
+        if container is not None:
+            return container[idx]
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Constant-fold view ops on weight tensors
 # ---------------------------------------------------------------------------
 
+def _reject_orphaned_impure_ops(gm: torch.fx.GraphModule) -> None:
+    """Raise if the folded graph contains an impure op with no readers.
+
+    A constant tensor that's mutated in place after creation (e.g.
+    `mask = torch.ones(...); mask[4:, :] = 0`, lowering to aten.fill_.Tensor
+    on a slice-view of `ones`) produces exactly this shape: split_const_subgraphs
+    can't fold the mutation (in-place ops are unconditionally flagged impure by
+    torch.fx.Node.is_impure(), with no override hook), and eliminate_dead_code()
+    won't remove it either (torch.fx keeps impure nodes regardless of whether
+    anything reads their result). Meanwhile everything downstream reads the
+    *original* tensor via aliasing, not the mutation's return value - so the
+    mutation's effect is invisible to both folding and DCE, and would be
+    silently dropped if we let it through. Reject clearly instead of building
+    a wrong circuit. This is a real limitation (not just aten.fill_.Tensor -
+    any in-place op with this shape, e.g. copy_/index_put_/masked_fill_/
+    scatter_, hits it the same way); rewrite the model to avoid mutating a
+    constant tensor in place after creation (e.g. build it in one expression,
+    such as torch.cat/torch.where, instead of `t = create(...); t[idx] = value`).
+    """
+    for node in gm.graph.nodes:
+        if node.op == 'call_function' and node.is_impure() and not list(node.users):
+            raise NotImplementedError(
+                f'constant_fold_views: unsupported constant-tensor mutation. '
+                f'{node.target} ({node.name}) is an in-place op with no readers '
+                f'in the folded graph - this means a constant tensor was mutated '
+                f'in place after creation (e.g. `t = torch.ones(...); t[4:, :] = 0`), '
+                f'which torch.fx cannot constant-fold or safely trace through. '
+                f'Rewrite the model to build the tensor in one expression instead '
+                f'of mutating it in place (e.g. torch.cat/torch.where).'
+            )
+
+
 def constant_fold_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
     """
-    Pre-evaluate shape/index ops (movedim, reshape, select, slice, unbind,
-    lift_fresh_copy) that operate on constant weight tensors.
+    Pre-evaluate the parts of the graph that depend only on constant weight/
+    connection tensors (not on the placeholder input), replacing them with
+    folded attributes.
 
     This is *required* (not optional) before build_circuit because the wiring
     step (aten.index.Tensor) needs concrete integer index tensors.  Without
     folding, those tensors remain as unevaluated call_function nodes whose
     result is not available at graph-build time; the fallback in build_circuit
     would use gate IDs instead of actual index values and produce wrong wiring.
+
+    Delegates to torch's own generic constant-folding pass: a dependency-
+    closure walk ("foldable if it's a get_attr, or all its inputs are already
+    foldable") that covers any foldable op automatically. It bundles multiple
+    folded constants into one container attribute, unpacked per-constant via
+    `operator.getitem`; from_fx_graph accounts for this by resolving constants
+    through `_resolve_const`/`_is_const_node`, which recognize both a direct
+    get_attr and a getitem unpacking one.
     """
-    env: dict = {}
-
-    def get_attr_value(gm, target: str):
-        obj = gm
-        for attr in target.split('.'):
-            obj = getattr(obj, attr)
-        return obj
-
-    VIEW_OPS = {
-        torch.ops.aten.movedim.int,
-        torch.ops.aten.reshape.default,
-        torch.ops.aten.permute.default,   # needed for conv wiring (permute → unbind chain)
-        torch.ops.aten.select.int,
-        torch.ops.aten.slice.Tensor,
-        torch.ops.aten.moveaxis.int,
-        torch.ops.aten.unbind.int,
-        torch.ops.aten.lift_fresh_copy.default,
-        torch.ops.aten.eq.Scalar,         # folds lut_ids == k → concrete bool mask
-    }
-
-    for node in gm.graph.nodes:
-        if node.op == 'placeholder':
-            continue
-        if node.op == 'get_attr':
-            env[node] = get_attr_value(gm, node.target)
-            continue
-        if node.op == 'call_function' and node.target in VIEW_OPS:
-            args_resolved = []
-            all_const = True
-            for a in node.args:
-                if isinstance(a, torch.fx.Node):
-                    if a in env:
-                        args_resolved.append(env[a])
-                    else:
-                        all_const = False
-                        break
-                else:
-                    args_resolved.append(a)
-            if all_const:
-                result = node.target(*args_resolved, **node.kwargs)
-                env[node] = result
-        # aten.ones.default / aten.zeros.default: constant tensor creation
-        elif node.op == 'call_function' and node.target in (
-                torch.ops.aten.ones.default, torch.ops.aten.zeros.default):
-            size = node.args[0]
-            if all(isinstance(s, int) for s in size):
-                dtype  = node.kwargs.get('dtype', None)
-                device = node.kwargs.get('device', torch.device('cpu'))
-                if node.target == torch.ops.aten.ones.default:
-                    env[node] = torch.ones(size, dtype=dtype, device=device)
-                else:
-                    env[node] = torch.zeros(size, dtype=dtype, device=device)
-        # aten.fill_.Tensor: in-place fill through a (possibly sliced) view
-        elif node.op == 'call_function' and node.target == torch.ops.aten.fill_.Tensor:
-            target_arg, fill_val_arg = node.args[0], node.args[1]
-            if isinstance(target_arg, torch.fx.Node) and target_arg in env:
-                if isinstance(fill_val_arg, torch.fx.Node) and fill_val_arg in env:
-                    fill_val = env[fill_val_arg]
-                else:
-                    fill_val = fill_val_arg
-                env[target_arg].fill_(fill_val)
-                env[node] = env[target_arg]
-        # aten.triu.default: upper-triangular mask of a constant tensor
-        elif node.op == 'call_function' and node.target == torch.ops.aten.triu.default:
-            input_node = node.args[0]
-            if isinstance(input_node, torch.fx.Node) and input_node in env:
-                diag = node.args[1] if len(node.args) > 1 else 0
-                env[node] = torch.triu(env[input_node], diagonal=diag)
-        # aten.index.Tensor has a list-of-(None|Node) as second arg;
-        # fold it when every element is also a constant.
-        elif node.op == 'call_function' and node.target == torch.ops.aten.index.Tensor:
-            tensor_arg = node.args[0]
-            indices    = node.args[1]
-            if isinstance(tensor_arg, torch.fx.Node) and tensor_arg in env:
-                idx_vals   = []
-                all_idx_const = True
-                for idx in indices:
-                    if idx is None:
-                        idx_vals.append(None)
-                    elif isinstance(idx, torch.fx.Node):
-                        if idx in env:
-                            idx_vals.append(env[idx])
-                        else:
-                            all_idx_const = False
-                            break
-                    else:
-                        idx_vals.append(idx)
-                if all_idx_const:
-                    src = env[tensor_arg]
-                    env[node] = src[tuple(
-                        slice(None) if v is None else v for v in idx_vals
-                    )]
-
-    for node, value in env.items():
-        if node.op in ('placeholder', 'get_attr'):
-            continue
-
-        const_name = f"_folded_{node.name}"
-
-        if isinstance(value, torch.Tensor):
-            gm.register_buffer(const_name, value)
-            with gm.graph.inserting_before(node):
-                new_node = gm.graph.get_attr(const_name)
-            node.replace_all_uses_with(new_node)
-
-        elif isinstance(value, (tuple, list)):
-            for user in list(node.users):
-                if user.op == 'call_function' and user.target is operator.getitem:
-                    idx = user.args[1]
-                    item = value[idx]
-                    item_name = f"_folded_{node.name}_{idx}"
-                    if isinstance(item, torch.Tensor):
-                        gm.register_buffer(item_name, item)
-                        with gm.graph.inserting_before(user):
-                            new_node = gm.graph.get_attr(item_name)
-                        user.replace_all_uses_with(new_node)
-
-    gm.graph.eliminate_dead_code()
-    gm.recompile()
-    return gm
+    folded = split_const_subgraphs(gm)
+    folded.run_folding()
+    _reject_orphaned_impure_ops(folded)
+    return folded
 
 
 # ---------------------------------------------------------------------------

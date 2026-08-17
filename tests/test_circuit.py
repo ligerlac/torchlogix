@@ -64,58 +64,24 @@ class BranchModel(nn.Module):
         return x
 
 
-class AnyLogicModel(nn.Module):
-    """
-    Some random non-torchlogix logic and reshaping operations
-    to test the flexibility of from_model
+class InPlaceConstMutationModel(nn.Module):
+    """Mutates a constant tensor in place after creation
+    (`mask = torch.ones(8, 8); mask[4:, :] = 0`) - torch.fx's constant
+    folding can't fold this (see constant_fold_views/_reject_orphaned_impure_ops
+    in circuit.py), so from_model must reject it clearly rather than
+    silently building a wrong circuit.
     """
     def __init__(self):
         super().__init__()
-        self.input_shape = (4, 8, 8)
-
+        self.input_shape = (8, 8)
 
     def forward(self, x):
-        # x: (B, 4, 8, 8) — batch of 4-channel 8×8 bool/int tensors
-
-        # Split along channel dim
-        x1, x2, x3, x4 = x[:, 0], x[:, 1], x[:, 2], x[:, 3]  # each (B, 8, 8)
-
-        # Spatial flip on x1 (replaces the buggy ::-1 step)
-        x1 = torch.flip(x1, dims=[1])                           # flip rows → (B, 8, 8)
-
-        # Permute x2: swap H and W
-        x2 = x2.permute(0, 2, 1)                                # (B, 8, 8) transposed
-
-        # Broadcast a mask over x3 — zero out the bottom half
-        mask = torch.ones(8, 8, dtype=x3.dtype, device=x3.device)
-        mask[4:, :] = 0                                         # (8, 8), broadcasts over batch
-        x3 = x3 & mask
-
-        # Diagonal mask on x4 — keep only upper triangle
-        tri = torch.triu(torch.ones(8, 8, dtype=x4.dtype, device=x4.device))
-        x4 = x4 & tri
-
-        # Logic ops: operator precedence is & > ^ > |  (same as Python/C)
-        # So this reads as:  x1 | (x2 & x3) ^ x4
-        # Use parens to make intent explicit:
-        out = x1 | ((x2 & x3) ^ x4)                            # (B, 8, 8)
-
-        # Add a channel dim back, then roll it to position 1
-        out = out.unsqueeze(1)                                   # (B, 1, 8, 8)
-
-        # Flatten spatial dims only
-        out = out.flatten(2)                                     # (B, 1, 64)
-
-        out = out.squeeze(1)                                     # (B, 64)
-
-        out1 = out[:, :8].sum(dim=1, keepdim=True)               # (B, 1)
-        out2 = out[:, 8:16].sum(dim=1, keepdim=True)             # (B, 1)
-        out3 = out[:, 16:]                                       # (B, 16)
-
-        return torch.cat([out1, out2, out3], dim=1)                      # (B, 18)
+        mask = torch.ones(8, 8, dtype=x.dtype, device=x.device)
+        mask[4:, :] = 0
+        return x & mask
 
 
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
+@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
 def test_functional_equivalence(model_cls):
     model = model_cls()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
@@ -129,7 +95,7 @@ def test_functional_equivalence(model_cls):
         "Circuit predictions differ from Eval-mode model predictions"
 
 
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel, AnyLogicModel])
+@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
 @pytest.mark.parametrize("relative_batch_size", [1, 10])
 def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
@@ -153,7 +119,7 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
         "Compiled circuit predictions differ from Eval-mode predictions"
 
 
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel, AnyLogicModel])
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
 @pytest.mark.parametrize("simplification", [
     Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup, Circuit.fuse_not_inputs
 ])
@@ -167,6 +133,12 @@ def test_circuit_simplifications(model_cls, simplification):
     simplification(circuit)
     preds_after = circuit(x)
     assert torch.equal(preds_before, preds_after), f"Predictions differ after {simplification.__name__}!"
+
+
+def test_rejects_inplace_constant_mutation():
+    model = InPlaceConstMutationModel()
+    with pytest.raises(NotImplementedError, match="unsupported constant-tensor mutation"):
+        Circuit.from_model(model, input_shape=model.input_shape)
 
 
 @pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])

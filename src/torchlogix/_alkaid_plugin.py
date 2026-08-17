@@ -43,13 +43,6 @@ from alkaid.converter.plugin import ALIRTracerPluginBase
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _as_np(t):
-    """Convert a torch.Tensor to a numpy array, or pass through otherwise."""
-    if isinstance(t, torch.Tensor):
-        return t.detach().cpu().numpy()
-    return t
-
-
 def _resolve(obj, env: dict):
     """Replace torch.fx.Node references with values from env, recursively."""
     if isinstance(obj, Node):
@@ -71,14 +64,44 @@ def _resolve(obj, env: dict):
 # ---------------------------------------------------------------------------
 # Constant folding
 #
-# Delegates to torch's own generic constant-folding pass rather than
-# hand-rolling a per-op-type whitelist: split_const_subgraphs does a proper
-# dependency-closure walk ("foldable if it's a get_attr, or all its inputs
-# are already foldable") and partitions the graph accordingly, so it covers
-# any foldable op automatically - including ones this file doesn't otherwise
-# know about - rather than only the handful of aten ops a hand-rolled pass
-# happened to special-case.
+# Delegates to torch's own generic constant-folding: split_const_subgraphs
+# does a dependency-closure walk ("foldable if it's a get_attr, or all its
+# inputs are already foldable") and partitions the graph accordingly, so any
+# foldable op is covered automatically, including ones this file doesn't
+# otherwise know how to replay.
 # ---------------------------------------------------------------------------
+
+def _reject_orphaned_impure_ops(gm: torch.fx.GraphModule) -> None:
+    """Raise if the folded graph contains an impure op with no readers.
+
+    A constant tensor that's mutated in place after creation (e.g.
+    `mask = torch.ones(...); mask[4:, :] = 0`, lowering to aten.fill_.Tensor
+    on a slice-view of `ones`) produces exactly this shape: split_const_subgraphs
+    can't fold the mutation (in-place ops are unconditionally flagged impure by
+    torch.fx.Node.is_impure(), with no override hook), and eliminate_dead_code()
+    won't remove it either (torch.fx keeps impure nodes regardless of whether
+    anything reads their result). Meanwhile everything downstream reads the
+    *original* tensor via aliasing, not the mutation's return value - so the
+    mutation's effect is invisible to both folding and DCE, and would be
+    silently dropped if we let it through. Reject clearly instead of tracing
+    a wrong circuit. This is a real limitation (not just aten.fill_.Tensor -
+    any in-place op with this shape, e.g. copy_/index_put_/masked_fill_/
+    scatter_, hits it the same way); rewrite the model to avoid mutating a
+    constant tensor in place after creation (e.g. build it in one expression,
+    such as torch.cat/torch.where, instead of `t = create(...); t[idx] = value`).
+    """
+    for node in gm.graph.nodes:
+        if node.op == 'call_function' and node.is_impure() and not list(node.users):
+            raise NotImplementedError(
+                f'LogicALIRTracer: unsupported constant-tensor mutation. '
+                f'{node.target} ({node.name}) is an in-place op with no readers '
+                f'in the folded graph - this means a constant tensor was mutated '
+                f'in place after creation (e.g. `t = torch.ones(...); t[4:, :] = 0`), '
+                f'which torch.fx cannot constant-fold or safely trace through. '
+                f'Rewrite the model to build the tensor in one expression instead '
+                f'of mutating it in place (e.g. torch.cat/torch.where).'
+            )
+
 
 def _fold_constant_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
     """
@@ -93,6 +116,7 @@ def _fold_constant_views(gm: torch.fx.GraphModule) -> torch.fx.GraphModule:
     """
     folded = split_const_subgraphs(gm)
     folded.run_folding()
+    _reject_orphaned_impure_ops(folded)
     return folded
 
 
@@ -123,12 +147,9 @@ def _getitem(seq, idx):
 
 @_register(aten.index.Tensor)
 def _index(src, indices):
-    idx_tuple = tuple(
-        slice(None) if idx is None
-        else _as_np(idx) if isinstance(idx, torch.Tensor)
-        else idx
-        for idx in indices
-    )
+    # Index elements may be raw torch.Tensor (from folded constant index
+    # buffers); numpy's fancy indexing accepts them directly via __array__.
+    idx_tuple = tuple(slice(None) if idx is None else idx for idx in indices)
     return src[idx_tuple]
 
 
@@ -212,10 +233,10 @@ def _pad(src, pad_list, mode='constant', value=None):
 
 @_register(aten.unfold.default)
 def _unfold(src, dim, size, step):
-    # Used by OrPooling2d/OrPooling3d's export-mode forward (pool.py), which
-    # calls x.unfold(...) to extract the pooling kernel's receptive-field
-    # windows before OR-reducing them (F.max_pool2d only supports floats,
-    # so boolean pooling needs its own window extraction).
+    # Used by OrPooling, which calls x.unfold(...) to extract the pooling
+    # kernel's receptive-field windows before OR-reducing them
+    # (F.max_pool2d only supports floats, so boolean pooling needs its own
+    # window extraction).
     n = src.shape[dim]
     n_windows = (n - size) // step + 1
 
@@ -235,8 +256,7 @@ def _unfold(src, dim, size, step):
     perm = list(range(size_ax)) + list(range(size_ax + 1, ndim)) + [size_ax]
     result = np.transpose(windowed, perm)
 
-    # Reconstruct FVArray (as_strided / np.transpose lose the subclass).
-    # Matches the pattern used in _gather_patches.
+    # Reconstruct FVArray: as_strided / np.transpose lose the subclass.
     if isinstance(src, FVArray):
         result = FVArray(np.asarray(result), src.solver_options)
     return result
@@ -262,42 +282,59 @@ def _bxor(a, b): return a ^ b
 def _bnot(a): return ~a
 
 
+def _const_like(ref, value: bool):
+    """Build a constant-valued boolean array shaped like `ref`, preserving
+    FVArray-ness (hwconf/solver_options) when `ref` is itself an FVArray.
+
+    alkaid's np.ones_like/zeros_like/full_like return a plain np.ndarray for
+    FVArray inputs, even when dtype= is passed - a known constant value
+    collapses the symbolic-interval information FVArray carries - so the
+    result has to be re-wrapped explicitly here.
+    """
+    raw = np.full(ref.shape, value, dtype=bool)
+    if isinstance(ref, FVArray):
+        return FVArray(raw, ref.solver_options, hwconf=ref.hwconf)
+    return raw
+
+
 @_register(aten.bitwise_and.Scalar)
 def _band_scalar(a, s):
-    return np.zeros_like(a) if not bool(s) else a
+    return _const_like(a, False) if not bool(s) else a
 
 @_register(aten.bitwise_or.Scalar)
 def _bor_scalar(a, s):
-    return np.ones_like(a) if bool(s) else a
+    return _const_like(a, True) if bool(s) else a
 
 
 # ---- Tensor creation ------------------------------------------------------
 
 @_register(aten.zeros_like.default)
 def _zeros_like(ref, *args, **kwargs):
-    return np.zeros_like(ref, dtype=bool)
+    return _const_like(ref, False)
 
 @_register(aten.ones_like.default)
 def _ones_like(ref, *args, **kwargs):
-    return np.ones_like(ref, dtype=bool)
+    return _const_like(ref, True)
 
 @_register(aten.empty_like.default)
 def _empty_like(ref, *args, **kwargs):
-    return np.zeros_like(ref, dtype=bool)  # initialise buffer to CONST_FALSE
+    return _const_like(ref, False)  # initialise buffer to CONST_FALSE
 
 
 # ---- Comparison / conditional ---------------------------------------------
 
 @_register(aten.eq.Scalar)
 def _eq_scalar(a, scalar):
-    a_np = _as_np(a) if isinstance(a, torch.Tensor) else a
-    return a_np == scalar
+    # Unlike numpy's ==, torch.Tensor.__eq__ returns a torch.Tensor (not
+    # numpy/FVArray) even against a plain scalar: need to convert to np array
+    if isinstance(a, torch.Tensor):
+        a = a.detach().cpu().numpy()
+    return a == scalar
 
 
 @_register(aten.where.self)
 def _where(condition, x, y):
-    cond = _as_np(condition) if isinstance(condition, torch.Tensor) else condition
-    return np.where(cond, x, y)
+    return np.where(condition, x, y)
 
 
 # ---- Reductions -----------------------------------------------------------
@@ -325,20 +362,14 @@ def _div(a, b): return a / b
 def _sub(a, b): return a - b
 
 
-# ---- In-place scatter (for-loop LUT dispatch path) -----------------------
-# When apply_luts_export_mode is written as a for-loop (rather than the
-# torch.where cascade), make_fx emits index_put_ nodes. We implement this
-# by writing into a mutable copy of result.
+# ---- In-place scatter (e.g. for-loop LUT dispatch path) -----------------------
+# Emitted by for-loop-based LUT dispatch; replayed by writing
+# into a mutable copy of result.
 
 @_register(aten.index_put_.default)
 def _index_put_(result, indices, value, accumulate=False):
     result_out = result if isinstance(result, np.ndarray) else np.array(result)
-    idx_tuple = tuple(
-        slice(None) if idx is None
-        else _as_np(idx) if isinstance(idx, torch.Tensor)
-        else idx
-        for idx in indices
-    )
+    idx_tuple = tuple(slice(None) if idx is None else idx for idx in indices)
     result_out[idx_tuple] = value
     return result_out
 

@@ -1,3 +1,14 @@
+import os
+
+# torch and scikit-learn (a required torchlogix dependency) each bundle their
+# own separate copy of the OpenMP runtime (libomp.dylib on macOS). Loading
+# both into one process trips OpenMP's duplicate-runtime safety check and
+# aborts the interpreter. This is the standard, low-risk workaround for that
+# specific benign double-load (not a general-purpose crash suppressant) -
+# must be set before torch/sklearn are actually imported. setdefault() so an
+# explicit value set by the caller isn't clobbered.
+os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
+
 import pytest
 import torch
 import torch.nn as nn
@@ -15,7 +26,6 @@ from torchlogix.layers import (
 # ---------------------------------------------------------------------------
 # Model fixtures (shared across test_export_mode.py and test_alkaid_plugin.py)
 # ---------------------------------------------------------------------------
-
 @pytest.fixture
 def logic_dense_model():
     model = nn.Sequential(

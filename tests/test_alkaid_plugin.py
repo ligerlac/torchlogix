@@ -8,6 +8,7 @@ shared with test_export_mode.py.
 """
 import numpy as np
 import pytest
+import torch
 
 alkaid = pytest.importorskip("alkaid")
 
@@ -32,8 +33,8 @@ def test_plugin_matches_eval_mode(model_fixture, input_fixture, request):
     model = request.getfixturevalue(model_fixture)
     x = request.getfixturevalue(input_fixture)
 
-    expected = model(x.float()).detach().numpy().reshape(x.shape[0], -1)
     set_export_mode(model)
+    expected = model(x).detach().numpy().reshape(x.shape[0], -1)
 
     input_shape = tuple(x.shape[1:])
     inp = FVArrayInput((1, *input_shape)).quantize(0, 1, 0)
@@ -45,3 +46,24 @@ def test_plugin_matches_eval_mode(model_fixture, input_fixture, request):
     assert np.array_equal(expected, actual), (
         "alkaid comb.predict() diverges from eval-mode output"
     )
+
+
+class InPlaceConstMutationModel(torch.nn.Module):
+    """Mutates a constant tensor in place after creation
+    (`mask = torch.ones(8, 8); mask[4:, :] = 0`) - torch.fx's constant
+    folding can't fold this (see _fold_constant_views/_reject_orphaned_impure_ops
+    in _alkaid_plugin.py), so trace_model must reject it clearly rather than
+    silently building a wrong circuit.
+    """
+    def forward(self, x):
+        mask = torch.ones(8, 8, dtype=x.dtype, device=x.device)
+        mask[4:, :] = 0
+        return x & mask
+
+
+def test_rejects_inplace_constant_mutation():
+    model = InPlaceConstMutationModel()
+    x = torch.randint(0, 2, (4, 8, 8)).bool()
+    inp = FVArrayInput((1, *x.shape[1:])).quantize(0, 1, 0)
+    with pytest.raises(NotImplementedError, match="unsupported constant-tensor mutation"):
+        trace_model(model, inputs=inp, framework="logic")
