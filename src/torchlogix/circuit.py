@@ -191,13 +191,33 @@ def _c_output_dtype(reductions: list[SumReduction]) -> str:
 
 
 @dataclass
-class AIGGraph: 
-    n_inputs: int 
-    and_gates: list 
-    outputs: list 
+class AIGOutputSpec:
+    """Describes one logical Circuit output within AIGGraph.outputs.
+
+    start_bit/width index into the flat AIGGraph.outputs list: the bits for
+    this output are outputs[start_bit : start_bit + width]. This is the
+    metadata a downstream consumer needs to reconstruct a torchlogix output
+    (a single bool, or an unsigned integer score) from the AIG's anonymous
+    output wires -- see docs/guides/aig_export.md.
+    """
+    start_bit: int
+    width:     int
+    kind:      str            # "bool" or "uint"
+    bit_order: str = "lsb_first"
+    tau:       float = 1.0
+    beta:      float = 0.0
+
+
+@dataclass
+class AIGGraph:
+    n_inputs: int
+    and_gates: list
+    outputs: list
+    output_specs: list = field(default_factory=list)
+    output_shape: list = field(default_factory=list)
 
     def write_to_aiger_file(self, path="circuit.aig"):
-        
+
         i = self.n_inputs 
         l = 0
         o = len(self.outputs)
@@ -369,40 +389,29 @@ class Circuit:
 
 
         outputs = []
-      
+        output_specs = []
+
         for out_id in self.outputs:
-           
+
             if out_id in self._sum_by_id:
                 sr = self._sum_by_id[out_id]
-                if sr.beta != round(sr.beta):
-                    
-                    raise ValueError("beta must be a whole number to export to AIG")
-                
+                if sr.tau != 1.0 or sr.beta != 0.0:
+                    raise ValueError(
+                        "AIG export requires tau == 1 and beta == 0 "
+                        f"(got tau={sr.tau}, beta={sr.beta}); non-default tau/beta "
+                        "are not representable in an AND-inverter graph"
+                    )
 
-                max_value = len(sr.input_ids) + int(round(sr.beta))
-                
+                max_value = len(sr.input_ids)
 
                 n_bits = max(1, max_value.bit_length())
 
-                beta_int = int(round(sr.beta))
-               
-
-                accumulator = []
-                
-                for i in range(n_bits):
-               
-                    bit = (beta_int // (2**i)) % 2
-                    
-                    if bit == 1:
-                        accumulator.append(1)
-                    else:
-                        accumulator.append(0)
-                
+                accumulator = [0] * n_bits
 
                 for gid in sr.input_ids:
                     wire_lit = lit_of[gid]
                     carry = wire_lit
-                    
+
                     for i in range(n_bits):
                         var = next_var
                         next_var = next_var + 1
@@ -419,21 +428,27 @@ class Circuit:
 
                         var = next_var
                         next_var = next_var + 1
-                        and_gates.append( (2 * var, accumulator[i], carry) )   
+                        and_gates.append( (2 * var, accumulator[i], carry) )
                         carry_lit = (var * 2)
-                        
+
 
                         accumulator[i] = sum_lit
                         carry = carry_lit
-                        
+
+                output_specs.append(AIGOutputSpec(
+                    start_bit=len(outputs), width=n_bits, kind="uint",
+                    bit_order="lsb_first", tau=sr.tau, beta=sr.beta,
+                ))
                 outputs.extend(accumulator)
             else:
-                
+                output_specs.append(AIGOutputSpec(
+                    start_bit=len(outputs), width=1, kind="bool",
+                    bit_order="lsb_first", tau=1.0, beta=0.0,
+                ))
                 outputs.append(lit_of[out_id])
-        return AIGGraph(n_inputs = self.n_inputs, and_gates = and_gates, outputs = outputs)
-        
-    
-    
+        return AIGGraph(n_inputs=self.n_inputs, and_gates=and_gates, outputs=outputs,
+                         output_specs=output_specs, output_shape=list(self.output_shape))
+
   
     def write_to_aiger_file(self, path="circuit.aig"):
         

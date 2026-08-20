@@ -189,6 +189,23 @@ def _decode_aig_outputs(circuit: Circuit, aig_bits: list) -> list:
     return decoded
 
 
+def _decode_via_output_specs(aig: AIGGraph, aig_bits: list) -> list:
+    """Same decoding as _decode_aig_outputs, but using only AIGGraph's own
+    output_specs -- no access to the source Circuit. This is the point of
+    the output ABI: a consumer holding just the AIGGraph can reconstruct
+    torchlogix's outputs.
+    """
+    decoded = []
+    for spec in aig.output_specs:
+        assert spec.bit_order == "lsb_first"
+        bits = aig_bits[spec.start_bit:spec.start_bit + spec.width]
+        if spec.kind == "bool":
+            decoded.append(int(bits[0]))
+        else:
+            decoded.append(sum((1 << k) for k, bit in enumerate(bits) if bit))
+    return decoded
+
+
 def _parse_aiger_file(path: str) -> AIGGraph:
     """Parse a binary AIGER (.aig) file back into an AIGGraph. Only supports
     what Circuit.write_to_aiger_file emits: no latches, an ASCII header line,
@@ -575,20 +592,40 @@ def test_sum_reduction_truth_table():
         assert _decode_aig_outputs(circuit, aig_bits) == [expected]
 
 
-def test_sum_reduction_with_beta_truth_table():
-    circuit = Circuit(n_inputs=2, input_shape=[2])
-    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=3.0)]
-    circuit.outputs = [2]
-    circuit.output_shape = [1]
+def test_aig_output_specs_describe_bit_layout():
+    """AIGGraph.output_specs is the output ABI requested in review: for each
+    logical Circuit output it must retain which AIG bits belong to it, its
+    width, whether it's boolean or numeric, its bit order, and its tau/beta
+    -- so a consumer holding only the AIGGraph (not the source Circuit) can
+    reconstruct torchlogix's outputs. See docs/guides/aig_export.md.
+    """
+    circuit = Circuit(n_inputs=3, input_shape=[3])
+    circuit.gates = [Gate(gate_id=3, op=GateOp.AND, in0=0, in1=1)]
+    circuit.sum_nodes = [SumReduction(node_id=4, input_ids=[0, 1, 2])]
+    circuit.outputs = [3, 4]
+    circuit.output_shape = [2]
     aig = circuit.to_and_inverter_graph()
 
-    for bits in itertools.product([False, True], repeat=2):
-        x = torch.tensor([list(bits)], dtype=torch.bool)
-        expected = sum(bits) + 3
-        assert int(circuit(x)[0, 0]) == expected
+    assert aig.output_shape == [2]
+    assert len(aig.output_specs) == 2
 
-        aig_bits = _eval_aig(aig, list(bits))
-        assert _decode_aig_outputs(circuit, aig_bits) == [expected]
+    bool_spec = aig.output_specs[0]
+    assert (bool_spec.start_bit, bool_spec.width, bool_spec.kind) == (0, 1, "bool")
+    assert bool_spec.bit_order == "lsb_first"
+    assert (bool_spec.tau, bool_spec.beta) == (1.0, 0.0)
+
+    sum_spec = aig.output_specs[1]
+    # 3 inputs, all boolean -> max value 3 -> 2 bits, immediately after the
+    # 1-bit boolean output above.
+    assert (sum_spec.start_bit, sum_spec.width, sum_spec.kind) == (1, 2, "uint")
+    assert (sum_spec.tau, sum_spec.beta) == (1.0, 0.0)
+
+    for a, b, c in itertools.product([False, True], repeat=3):
+        x = torch.tensor([[a, b, c]], dtype=torch.bool)
+        expected = circuit(x)[0].tolist()
+
+        aig_bits = _eval_aig(aig, [a, b, c])
+        assert _decode_via_output_specs(aig, aig_bits) == expected
 
 
 def test_mixed_boolean_and_reduction_outputs():
@@ -642,54 +679,47 @@ def test_random_small_circuit_aig_equivalence(seed):
         assert _decode_aig_outputs(circuit, aig_bits) == expected
 
 
-def test_aig_export_rejects_fractional_beta():
-    """Unsupported case: to_and_inverter_graph() requires a whole-number beta,
-    since it encodes beta as an integer added into the adder tree.
+@pytest.mark.parametrize("beta", [0.5, 1.0, -1.0])
+def test_aig_export_rejects_nonzero_beta(beta):
+    """Unsupported case: to_and_inverter_graph() requires beta == 0 exactly,
+    not merely a whole number -- AIG export does not represent any offset,
+    whole or fractional. See docs/guides/aig_export.md.
     """
     circuit = Circuit(n_inputs=2, input_shape=[2])
-    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=0.5)]
+    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=beta)]
     circuit.outputs = [2]
     circuit.output_shape = [1]
 
-    with pytest.raises(ValueError, match="beta must be a whole number"):
+    with pytest.raises(ValueError, match="tau == 1 and beta == 0"):
         circuit.to_and_inverter_graph()
 
 
-def test_aig_export_accepts_whole_beta():
-    """Supported case: a whole-number beta (even as a float, e.g. 2.0) is
-    folded into the adder tree's initial value.
-    """
-    circuit = Circuit(n_inputs=2, input_shape=[2])
-    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], beta=2.0)]
-    circuit.outputs = [2]
-    circuit.output_shape = [1]
-
-    aig = circuit.to_and_inverter_graph()
-    for bits in itertools.product([False, True], repeat=2):
-        aig_bits = _eval_aig(aig, list(bits))
-        assert _decode_aig_outputs(circuit, aig_bits) == [sum(bits) + 2]
-
-
-def test_aig_export_silently_ignores_tau():
-    """Known limitation (see docs/guides/aig_export.md): unlike circuit()/
-    get_c_code()/get_verilog_code(), to_and_inverter_graph() never divides by
-    tau -- it only ever encodes the raw integer sum(inputs) + beta. This test
-    pins down that current behavior so a future fix to support tau doesn't
-    silently regress without the docs also being updated.
+def test_aig_export_rejects_nonzero_tau():
+    """Unsupported case: to_and_inverter_graph() requires tau == 1 exactly.
+    An AND-inverter graph cannot represent the division by tau, so export
+    must fail loudly rather than silently return an unscaled integer sum
+    that doesn't match circuit()'s real output.
     """
     circuit = Circuit(n_inputs=2, input_shape=[2])
     circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1], tau=2.0)]
     circuit.outputs = [2]
     circuit.output_shape = [1]
 
-    aig = circuit.to_and_inverter_graph()  # does not raise, despite tau != 1
+    with pytest.raises(ValueError, match="tau == 1 and beta == 0"):
+        circuit.to_and_inverter_graph()
 
-    bits = [True, True]
-    x = torch.tensor([bits], dtype=torch.bool)
-    true_output = circuit(x)[0, 0].item()          # (2 + 0) / 2 == 1.0
-    assert true_output == pytest.approx(1.0)
 
-    aig_bits = _eval_aig(aig, bits)
-    raw_decoded = _decode_aig_outputs(circuit, aig_bits)[0]
-    assert raw_decoded == 2                        # raw sum -- tau not applied
-    assert raw_decoded != true_output
+def test_aig_export_accepts_default_tau_beta():
+    """Supported case: the only tau/beta AIG export handles is the default
+    tau == 1, beta == 0, in which case the AIG encodes the raw integer sum
+    of the reduction's inputs.
+    """
+    circuit = Circuit(n_inputs=2, input_shape=[2])
+    circuit.sum_nodes = [SumReduction(node_id=2, input_ids=[0, 1])]
+    circuit.outputs = [2]
+    circuit.output_shape = [1]
+
+    aig = circuit.to_and_inverter_graph()  # must not raise
+    for bits in itertools.product([False, True], repeat=2):
+        aig_bits = _eval_aig(aig, list(bits))
+        assert _decode_aig_outputs(circuit, aig_bits) == [sum(bits)]

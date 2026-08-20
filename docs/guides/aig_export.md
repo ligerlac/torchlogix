@@ -38,20 +38,29 @@ circuit.simplify()
 ## 3. Convert to an `AIGGraph`
 
 `circuit.to_and_inverter_graph()` lowers every gate to AND/inverter form and
-returns an `AIGGraph` — a plain container with the three fields the AIGER
-format needs:
+returns an `AIGGraph`:
 
 ```python
 aig = circuit.to_and_inverter_graph()
 
-aig.n_inputs   # number of primary inputs
-aig.and_gates  # list of (lhs, rhs0, rhs1) literal triples
-aig.outputs    # list of output literals, see "Output bit ordering" below
+aig.n_inputs      # number of primary inputs
+aig.and_gates     # list of (lhs, rhs0, rhs1) literal triples
+aig.outputs       # flat list of output literals — the AIGER-format payload
+aig.output_specs  # list[AIGOutputSpec] — how to regroup aig.outputs into
+                   # circuit.outputs, see "Output bit ordering" below
+aig.output_shape  # copy of circuit.output_shape
 ```
 
 Every non-AND gate in the original circuit (`OR`, `XOR`, `NAND`, `WIRE`, …)
 is rewritten as one or more two-input ANDs plus literal negation — `XOR`/
 `XNOR`, for example, expand to three AND gates each.
+
+`aig.outputs`, `aig.and_gates`, and the header counts (`M I L O A`) are what
+gets written to the `.aig` file — that's the whole AIGER format, and it's
+what ABC/mockturtle read. `aig.output_specs` and `aig.output_shape` are
+**not** written to the file; they only exist on the Python `AIGGraph` object.
+See "Output bit ordering" below for what that means for a consumer that only
+has the `.aig` file.
 
 ## 4. Write the `.aig` file
 
@@ -95,42 +104,71 @@ variable `0` is reserved so literal `0` means constant `False` and literal
 
 ## 6. Output bit ordering and decoding
 
-`aig.outputs` is a flat list of literals, one group per entry in
-`circuit.outputs`, in the same order:
-
-- **Plain boolean output** (no `GroupSum`): contributes exactly **one**
-  literal — the value of that output bit directly.
-- **`GroupSum` score** (a `SumReduction`): contributes **`n_bits`** literals,
-  ordered **least-significant bit first**, encoding the integer
-  `sum(inputs) + beta` in unsigned binary. `n_bits` is
-  `max(1, (len(inputs) + int(beta)).bit_length())`.
-
-For a model with `GroupSum(k=10)`, decode score `j` from its `n_bits`
-literals `b[0..n_bits-1]` (LSB first) as:
+`aig.outputs` is a flat list of literals with no embedded structure — a
+10-class `GroupSum` model turns into 70+ anonymous output wires in there.
+`aig.output_specs` is the **output ABI**: one `AIGOutputSpec` per entry in
+`circuit.outputs`, in the same order, telling you exactly how to regroup
+`aig.outputs` back into the original values:
 
 ```python
-score_j = sum(bit_value(b[k]) << k for k in range(n_bits))
+@dataclass
+class AIGOutputSpec:
+    start_bit: int    # aig.outputs[start_bit : start_bit + width] is this output
+    width:     int    # 1 for a boolean output
+    kind:      str    # "bool" or "uint"
+    bit_order: str = "lsb_first"
+    tau:       float = 1.0   # always 1.0 -- see Limitations
+    beta:      float = 0.0   # always 0.0 -- see Limitations
 ```
 
-where `bit_value(lit)` looks up the AND-gate/input truth value for
-`lit >> 1` and flips it if `lit` is odd (negated), per the AIGER convention
-above.
+- **`kind="bool"`** (plain boolean output, no `GroupSum`): `width` is always
+  `1` — the value of that output bit directly.
+- **`kind="uint"`** (a `GroupSum` score / `SumReduction`): `width` is
+  `max(1, len(inputs).bit_length())` bits, ordered **least-significant bit
+  first**, encoding the unsigned integer `sum(inputs)`.
 
-Since every score in a given `GroupSum` layer sums over the same number of
-inputs with the same `beta`, they share the same `n_bits` and can be decoded
-as consecutive fixed-width fields.
+Decoding with `output_specs` in Python:
+
+```python
+def decode(aig, aig_output_bits):
+    values = []
+    for spec in aig.output_specs:
+        bits = aig_output_bits[spec.start_bit : spec.start_bit + spec.width]
+        if spec.kind == "bool":
+            values.append(bits[0])
+        else:  # "uint", lsb_first
+            values.append(sum(b << k for k, b in enumerate(bits)))
+    return values
+```
+
+where `aig_output_bits[k]` is the resolved boolean value of `aig.outputs[k]`
+(look up the AND-gate/input truth value for `lit >> 1` and flip it if `lit`
+is odd — per the AIGER literal convention above).
+
+**Important:** `output_specs`/`output_shape` live only on the in-memory
+`AIGGraph` — they are *not* written into the `.aig` file (which is plain
+AIGER, readable by any AIGER-compliant tool, with no room for this
+metadata). A consumer that reads the `.aig` file directly (e.g. from ABC or
+mockturtle, without going through TorchLogix) does not get this layout for
+free; it must be told out of band, e.g. by keeping the `AIGGraph`/`Circuit`
+Python object around, or agreeing on the layout ahead of time from
+`circuit.output_shape` and the `GroupSum` sizes in the model. Persisting
+`output_specs` into the file itself (e.g. via AIGER output symbols, or a
+JSON sidecar) is a natural extension but is not implemented yet.
 
 ## Limitations
 
-- **`beta` must be a whole number.** `to_and_inverter_graph()` raises
-  `ValueError` if any `GroupSum`'s `beta` is fractional — the AIG encoder
-  represents `beta` as an integer added into the adder tree.
-- **`tau` is not applied.** AND-inverter graphs have no arithmetic for
-  non-integer scaling, so the exported bits are the raw
-  `sum(inputs) + beta` — they are **not** divided by `tau`. If your model
-  uses `GroupSum(tau=...)` with `tau != 1`, apply the division downstream
-  after decoding the integer score (e.g. in the code that reads the
-  synthesis tool's simulation output).
+- **AIG export requires `tau == 1` and `beta == 0` exactly.**
+  `to_and_inverter_graph()` raises `ValueError` for any `GroupSum` output
+  where that doesn't hold. Earlier versions tolerated any whole-number
+  `beta` and silently ignored `tau != 1` (encoding a raw sum that didn't
+  match the model's real output) — that was a trap, not a feature, so it's
+  now a hard error instead. This is a deliberate scope limit, not a bug: an
+  And-Inverter Graph has no arithmetic for scaling or offsetting a value, so
+  there is no way for AIG export to represent `(sum + beta) / tau` inside
+  the graph itself, unlike `write_c_code()` / `write_verilog_code()`, whose
+  output formats *can* express that arithmetic. If your model needs
+  non-default `tau`/`beta`, use the C or Verilog export path instead of AIG.
 - **All outputs are unsigned integers or single bits** — there is no
   floating-point output path in the AIG export, unlike `write_c_code()` /
   `write_verilog_code()`, which fall back to a `float` score type when
