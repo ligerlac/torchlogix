@@ -52,7 +52,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../guides/aig_export.html">AIG Export Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
@@ -65,6 +65,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.outputs"><code class="docutils literal notranslate"><span class="pre">Circuit.outputs</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.output_shape"><code class="docutils literal notranslate"><span class="pre">Circuit.output_shape</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.sum_nodes"><code class="docutils literal notranslate"><span class="pre">Circuit.sum_nodes</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.to_and_inverter_graph"><code class="docutils literal notranslate"><span class="pre">Circuit.to_and_inverter_graph()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.write_to_aiger_file"><code class="docutils literal notranslate"><span class="pre">Circuit.write_to_aiger_file()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.from_model"><code class="docutils literal notranslate"><span class="pre">Circuit.from_model()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.from_fx_graph"><code class="docutils literal notranslate"><span class="pre">Circuit.from_fx_graph()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#torchlogix.Circuit.simplify"><code class="docutils literal notranslate"><span class="pre">Circuit.simplify()</span></code></a></li>
@@ -152,6 +154,16 @@
 <dl class="py attribute">
 <dt class="sig sig-object py" id="torchlogix.Circuit.sum_nodes">
 <span class="sig-name descname"><span class="pre">sum_nodes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><span class="pre">SumReduction</span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#torchlogix.Circuit.sum_nodes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.to_and_inverter_graph">
+<span class="sig-name descname"><span class="pre">to_and_inverter_graph</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/circuit.html#Circuit.to_and_inverter_graph"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.to_and_inverter_graph" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="torchlogix.Circuit.write_to_aiger_file">
+<span class="sig-name descname"><span class="pre">write_to_aiger_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'circuit.aig'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/torchlogix/circuit.html#Circuit.write_to_aiger_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchlogix.Circuit.write_to_aiger_file" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">

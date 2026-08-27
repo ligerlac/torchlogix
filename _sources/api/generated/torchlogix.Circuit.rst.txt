@@ -28,9 +28,11 @@
       ~Circuit.get_c_code
       ~Circuit.get_verilog_code
       ~Circuit.simplify
+      ~Circuit.to_and_inverter_graph
       ~Circuit.to_dict
       ~Circuit.write_c_code
       ~Circuit.write_json
+      ~Circuit.write_to_aiger_file
       ~Circuit.write_verilog_code
    
    

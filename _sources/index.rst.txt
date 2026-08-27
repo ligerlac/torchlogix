@@ -24,6 +24,7 @@ Documentation Contents
    guides/quickstart
    guides/concepts
    guides/hardware_deployment
+   guides/aig_export
 
 .. toctree::
    :maxdepth: 2

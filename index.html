@@ -52,7 +52,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/aig_export.html">AIG Export Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -139,12 +139,17 @@ It also implements convolutions as described in “Convolutional Differentiable 
 <li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#simulation-with-verilator">Simulation with Verilator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#fpga-synthesis-with-vivado">FPGA synthesis with Vivado</a></li>
 <li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#design-considerations">Design considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a><ul>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#install">Install</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#usage">Usage</a></li>
-<li class="toctree-l2"><a class="reference internal" href="guides/hardware_deployment.html#how-the-plugin-works">How the plugin works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/aig_export.html">AIG Export Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#build-a-circuit">1. Build a <code class="docutils literal notranslate"><span class="pre">Circuit</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#simplify-optional">2. Simplify (optional)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#convert-to-an-aiggraph">3. Convert to an <code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#write-the-aig-file">4. Write the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#read-the-file-with-abc-or-mockturtle">5. Read the file with ABC or mockturtle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#output-bit-ordering-and-decoding">6. Output bit ordering and decoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guides/aig_export.html#limitations">Limitations</a></li>
 </ul>
 </li>
 </ul>

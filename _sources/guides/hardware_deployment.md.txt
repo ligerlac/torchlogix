@@ -96,7 +96,10 @@ synthesis reports.
 
 ---
 
-# Compiling with `alkaid`
+For synthesis/verification flows built around And-Inverter Graphs instead of
+RTL (e.g. ABC, mockturtle), see the [AIG Export Guide](aig_export.md).
+
+## Compiling with `alkaid`
 
 [`alkaid`](https://github.com/calad0i/alkaid) is a 3rd party compiler for
 generating low-latency static-dataflow kernels for FPGAs (RTL, HLS, XLS
@@ -104,13 +107,13 @@ targets). Unlike `Circuit`, it's a general-purpose tool not specific to
 `torchlogix` or even to boolean logic - `torchlogix` integrates with it as
 an optional extra for more advanced FPGA compilation flows.
 
-## Install
+### Install
 
 ```bash
 pip install torchlogix[alkaid]
 ```
 
-## Usage
+### Usage
 
 ```python
 from alkaid.converter import trace_model
@@ -130,7 +133,7 @@ comb.predict(x.numpy())  # x: a torch.bool tensor matching model.input_shape
 `framework="logic"` selects `torchlogix`'s tracer, registered with `alkaid`
 via its `alir_tracer.plugins` entry point.
 
-## How the plugin works
+### How the plugin works
 
 The tracer itself (`torchlogix._alkaid_plugin`) has no dependency on
 `torchlogix` beyond that entry-point registration. It traces the model's

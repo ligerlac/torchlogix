@@ -23,7 +23,7 @@
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="TorchLogix Package" href="../api/torchlogix.html" />
+    <link rel="next" title="AIG Export Guide" href="aig_export.html" />
     <link rel="prev" title="Core Concepts" href="concepts.html" /> 
 </head>
 
@@ -57,14 +57,15 @@
 <li class="toctree-l2"><a class="reference internal" href="#simulation-with-verilator">Simulation with Verilator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#fpga-synthesis-with-vivado">FPGA synthesis with Vivado</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#design-considerations">Design considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#install">Install</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#usage">Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#how-the-plugin-works">How the plugin works</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#install">Install</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#how-the-plugin-works">How the plugin works</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="aig_export.html">AIG Export Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -195,24 +196,25 @@ synthesis reports.</p>
 </tr>
 </tbody>
 </table>
-</section>
-</section>
 <hr class="docutils" />
+<p>For synthesis/verification flows built around And-Inverter Graphs instead of
+RTL (e.g. ABC, mockturtle), see the <a class="reference internal" href="aig_export.html"><span class="std std-doc">AIG Export Guide</span></a>.</p>
+</section>
 <section id="compiling-with-alkaid">
-<h1>Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code><a class="headerlink" href="#compiling-with-alkaid" title="Link to this heading"></a></h1>
+<h2>Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code><a class="headerlink" href="#compiling-with-alkaid" title="Link to this heading"></a></h2>
 <p><a class="reference external" href="https://github.com/calad0i/alkaid"><code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a> is a 3rd party compiler for
 generating low-latency static-dataflow kernels for FPGAs (RTL, HLS, XLS
 targets). Unlike <code class="docutils literal notranslate"><span class="pre">Circuit</span></code>, it’s a general-purpose tool not specific to
 <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> or even to boolean logic - <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> integrates with it as
 an optional extra for more advanced FPGA compilation flows.</p>
 <section id="install">
-<h2>Install<a class="headerlink" href="#install" title="Link to this heading"></a></h2>
+<h3>Install<a class="headerlink" href="#install" title="Link to this heading"></a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>torchlogix<span class="o">[</span>alkaid<span class="o">]</span>
 </pre></div>
 </div>
 </section>
 <section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h2>
+<h3>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">alkaid.converter</span><span class="w"> </span><span class="kn">import</span> <span class="n">trace_model</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">alkaid.trace</span><span class="w"> </span><span class="kn">import</span> <span class="n">FVArrayInput</span><span class="p">,</span> <span class="n">trace</span>
 
@@ -231,7 +233,7 @@ an optional extra for more advanced FPGA compilation flows.</p>
 via its <code class="docutils literal notranslate"><span class="pre">alir_tracer.plugins</span></code> entry point.</p>
 </section>
 <section id="how-the-plugin-works">
-<h2>How the plugin works<a class="headerlink" href="#how-the-plugin-works" title="Link to this heading"></a></h2>
+<h3>How the plugin works<a class="headerlink" href="#how-the-plugin-works" title="Link to this heading"></a></h3>
 <p>The tracer itself (<code class="docutils literal notranslate"><span class="pre">torchlogix._alkaid_plugin</span></code>) has no dependency on
 <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> beyond that entry-point registration. It traces the model’s
 export-mode <code class="docutils literal notranslate"><span class="pre">forward()</span></code> with <code class="docutils literal notranslate"><span class="pre">torch.fx</span></code>’s <code class="docutils literal notranslate"><span class="pre">make_fx</span></code> at the aten-op level, then
@@ -240,13 +242,14 @@ generic aten ops (not torchlogix layers), it works for any PyTorch model built
 from pure boolean/integer operations - not just <code class="docutils literal notranslate"><span class="pre">torchlogix</span></code> models.</p>
 </section>
 </section>
+</section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="concepts.html" class="btn btn-neutral float-left" title="Core Concepts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="../api/torchlogix.html" class="btn btn-neutral float-right" title="TorchLogix Package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="aig_export.html" class="btn btn-neutral float-right" title="AIG Export Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

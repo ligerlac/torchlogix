@@ -50,7 +50,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../guides/aig_export.html">AIG Export Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -258,6 +258,8 @@
     <span class="n">tau</span><span class="p">:</span>       <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
     <span class="n">beta</span><span class="p">:</span>      <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
 
+
+
     <span class="k">def</span><span class="w"> </span><span class="nf">get_max_value</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Return the max possible integer output, or None if the output is float (tau≠1 or fractional beta)."""</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau</span> <span class="o">!=</span> <span class="mf">1.0</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">!=</span> <span class="nb">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">):</span>
@@ -277,6 +279,77 @@
     <span class="k">return</span> <span class="s2">"uint64_t"</span>
 
 
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AIGOutputSpec</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Describes one logical Circuit output within AIGGraph.outputs.</span>
+
+<span class="sd">    start_bit/width index into the flat AIGGraph.outputs list: the bits for</span>
+<span class="sd">    this output are outputs[start_bit : start_bit + width]. This is the</span>
+<span class="sd">    metadata a downstream consumer needs to reconstruct a torchlogix output</span>
+<span class="sd">    (a single bool, or an unsigned integer score) from the AIG's anonymous</span>
+<span class="sd">    output wires -- see docs/guides/aig_export.md.</span>
+<span class="sd">    """</span>
+    <span class="n">start_bit</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">width</span><span class="p">:</span>     <span class="nb">int</span>
+    <span class="n">kind</span><span class="p">:</span>      <span class="nb">str</span>            <span class="c1"># "bool" or "uint"</span>
+    <span class="n">bit_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"lsb_first"</span>
+    <span class="n">tau</span><span class="p">:</span>       <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="n">beta</span><span class="p">:</span>      <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AIGGraph</span><span class="p">:</span>
+    <span class="n">n_inputs</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">and_gates</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">outputs</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">output_specs</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">output_shape</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_to_aiger_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">"circuit.aig"</span><span class="p">):</span>
+
+        <span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_inputs</span> 
+        <span class="n">l</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">o</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">outputs</span><span class="p">)</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">and_gates</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="n">l</span> <span class="o">+</span> <span class="n">a</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"aig </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">l</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">o</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">a</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span>
+            <span class="k">for</span> <span class="n">lit</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span><span class="p">:</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">lit</span><span class="si">}</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span>
+            <span class="k">for</span> <span class="n">lhs</span><span class="p">,</span> <span class="n">rhs0</span><span class="p">,</span> <span class="n">rhs1</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">and_gates</span><span class="p">:</span>
+
+                <span class="k">if</span> <span class="n">rhs0</span> <span class="o">&lt;</span> <span class="n">rhs1</span><span class="p">:</span>
+                    <span class="n">rhs0</span><span class="p">,</span> <span class="n">rhs1</span> <span class="o">=</span> <span class="n">rhs1</span><span class="p">,</span> <span class="n">rhs0</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">lhs</span> <span class="o">&gt;</span> <span class="n">rhs0</span> <span class="o">&gt;=</span> <span class="n">rhs1</span><span class="p">):</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">"invalid AND gate: AIGER requires lhs &gt; rhs0 &gt;= rhs1, "</span>
+                        <span class="sa">f</span><span class="s2">"got lhs=</span><span class="si">{</span><span class="n">lhs</span><span class="si">}</span><span class="s2">, rhs0=</span><span class="si">{</span><span class="n">rhs0</span><span class="si">}</span><span class="s2">, rhs1=</span><span class="si">{</span><span class="n">rhs1</span><span class="si">}</span><span class="s2">"</span>
+                    <span class="p">)</span>
+
+                <span class="n">delta0</span> <span class="o">=</span> <span class="n">lhs</span> <span class="o">-</span> <span class="n">rhs0</span>
+                <span class="n">delta1</span> <span class="o">=</span> <span class="n">rhs0</span> <span class="o">-</span> <span class="n">rhs1</span>
+
+                <span class="n">n</span> <span class="o">=</span> <span class="n">delta0</span>
+                <span class="n">delta0_bytes</span> <span class="o">=</span> <span class="p">[]</span>
+
+                
+                <span class="k">while</span> <span class="n">n</span><span class="o">&gt;=</span> <span class="mi">128</span><span class="p">:</span>
+                    <span class="n">remain</span> <span class="o">=</span> <span class="n">n</span> <span class="o">%</span> <span class="mi">128</span>
+                    <span class="n">delta0_bytes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">remain</span> <span class="o">+</span> <span class="mi">128</span><span class="p">)</span>
+                    <span class="n">n</span> <span class="o">=</span> <span class="n">n</span> <span class="o">//</span> <span class="mi">128</span>
+                <span class="n">delta0_bytes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="n">delta0_bytes</span><span class="p">))</span>
+                <span class="n">n1</span> <span class="o">=</span> <span class="n">delta1</span>
+                <span class="n">delta1_bytes</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">while</span> <span class="n">n1</span><span class="o">&gt;=</span> <span class="mi">128</span><span class="p">:</span>
+                    <span class="n">remain</span> <span class="o">=</span> <span class="n">n1</span> <span class="o">%</span> <span class="mi">128</span>
+                    <span class="n">delta1_bytes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">remain</span> <span class="o">+</span> <span class="mi">128</span><span class="p">)</span>
+                    <span class="n">n1</span> <span class="o">=</span> <span class="n">n1</span> <span class="o">//</span> <span class="mi">128</span>
+                <span class="n">delta1_bytes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n1</span><span class="p">)</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="n">delta1_bytes</span><span class="p">))</span>
+
+
 <div class="viewcode-block" id="Circuit">
 <a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.Circuit">[docs]</a>
 <span class="nd">@dataclass</span>
@@ -292,6 +365,186 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_sum_by_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">SumReduction</span><span class="p">]:</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">sr</span><span class="o">.</span><span class="n">node_id</span><span class="p">:</span> <span class="n">sr</span> <span class="k">for</span> <span class="n">sr</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sum_nodes</span><span class="p">}</span>
     
+<div class="viewcode-block" id="Circuit.to_and_inverter_graph">
+<a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.Circuit.to_and_inverter_graph">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_and_inverter_graph</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+     
+        <span class="n">lit_of</span> <span class="o">=</span> <span class="p">{}</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_inputs</span><span class="p">):</span>
+            <span class="n">lit_of</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+       
+        <span class="n">and_gates</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="n">next_var</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_inputs</span> <span class="o">+</span> <span class="mi">1</span>
+        
+        <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">gates</span><span class="p">:</span>
+            
+            <span class="n">a_lit</span> <span class="o">=</span> <span class="n">lit_of</span><span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">in0</span><span class="p">]</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">in0</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+            
+            <span class="n">b_lit</span> <span class="o">=</span> <span class="n">lit_of</span><span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">in1</span><span class="p">]</span> <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">in1</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+           
+            <span class="k">if</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">CONST_FALSE</span><span class="p">:</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">CONST_TRUE</span><span class="p">:</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">WIRE</span><span class="p">:</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">a_lit</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="ow">in</span> <span class="p">(</span><span class="n">GateOp</span><span class="o">.</span><span class="n">NOT</span><span class="p">,</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">NOT_A</span><span class="p">):</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">NOT_B</span><span class="p">:</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">AND</span><span class="p">:</span>
+                
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+               
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span><span class="p">,</span> <span class="n">b_lit</span><span class="p">)</span> <span class="p">)</span>
+                
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">var</span> <span class="o">*</span> <span class="mi">2</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">NAND</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span><span class="p">,</span> <span class="n">b_lit</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">OR</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span> <span class="p">)</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">NOR</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="c1"># !A AND !B</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">))</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">var</span> <span class="o">*</span> <span class="mi">2</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">AND_NOT_B</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="c1"># A AND NOT B (A AND !B)</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span><span class="p">,</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">var</span> <span class="o">*</span> <span class="mi">2</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">AND_NOT_A</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b_lit</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="n">var</span> <span class="o">*</span> <span class="mi">2</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">OR_NOT_B</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+              
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b_lit</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">OR_NOT_A</span><span class="p">:</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span><span class="p">,</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">XOR</span><span class="p">:</span>
+                
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span><span class="p">,</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b_lit</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">t2</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">t1</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">t2</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span> <span class="o">^</span> <span class="mi">1</span>
+            <span class="k">elif</span> <span class="n">g</span><span class="o">.</span><span class="n">op</span> <span class="o">==</span> <span class="n">GateOp</span><span class="o">.</span><span class="n">XNOR</span><span class="p">:</span>
+                
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span><span class="p">,</span> <span class="n">b_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">t1</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">a_lit</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">b_lit</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">t2</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">t1</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">t2</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                <span class="n">lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+
+            <span class="n">lit_of</span><span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">gate_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">lit</span>
+
+
+
+        <span class="n">outputs</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">output_specs</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">out_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">outputs</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="n">out_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sum_by_id</span><span class="p">:</span>
+                <span class="n">sr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sum_by_id</span><span class="p">[</span><span class="n">out_id</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">sr</span><span class="o">.</span><span class="n">tau</span> <span class="o">!=</span> <span class="mf">1.0</span> <span class="ow">or</span> <span class="n">sr</span><span class="o">.</span><span class="n">beta</span> <span class="o">!=</span> <span class="mf">0.0</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">"AIG export requires tau == 1 and beta == 0 "</span>
+                        <span class="sa">f</span><span class="s2">"(got tau=</span><span class="si">{</span><span class="n">sr</span><span class="o">.</span><span class="n">tau</span><span class="si">}</span><span class="s2">, beta=</span><span class="si">{</span><span class="n">sr</span><span class="o">.</span><span class="n">beta</span><span class="si">}</span><span class="s2">); non-default tau/beta "</span>
+                        <span class="s2">"are not representable in an AND-inverter graph"</span>
+                    <span class="p">)</span>
+
+                <span class="n">max_value</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sr</span><span class="o">.</span><span class="n">input_ids</span><span class="p">)</span>
+
+                <span class="n">n_bits</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_value</span><span class="o">.</span><span class="n">bit_length</span><span class="p">())</span>
+
+                <span class="n">accumulator</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">n_bits</span>
+
+                <span class="k">for</span> <span class="n">gid</span> <span class="ow">in</span> <span class="n">sr</span><span class="o">.</span><span class="n">input_ids</span><span class="p">:</span>
+                    <span class="n">wire_lit</span> <span class="o">=</span> <span class="n">lit_of</span><span class="p">[</span><span class="n">gid</span><span class="p">]</span>
+                    <span class="n">carry</span> <span class="o">=</span> <span class="n">wire_lit</span>
+
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_bits</span><span class="p">):</span>
+                        <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                        <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                        <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">accumulator</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">carry</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                        <span class="n">t1</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+                        <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                        <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                        <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">accumulator</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">carry</span><span class="p">)</span> <span class="p">)</span>
+                        <span class="n">t2</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+                        <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                        <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                        <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">t1</span> <span class="o">^</span> <span class="mi">1</span><span class="p">,</span> <span class="n">t2</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+                        <span class="n">sum_lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span> <span class="o">^</span> <span class="mi">1</span>
+
+                        <span class="n">var</span> <span class="o">=</span> <span class="n">next_var</span>
+                        <span class="n">next_var</span> <span class="o">=</span> <span class="n">next_var</span> <span class="o">+</span> <span class="mi">1</span>
+                        <span class="n">and_gates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">var</span><span class="p">,</span> <span class="n">accumulator</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">carry</span><span class="p">)</span> <span class="p">)</span>
+                        <span class="n">carry_lit</span> <span class="o">=</span> <span class="p">(</span><span class="n">var</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+
+
+                        <span class="n">accumulator</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">sum_lit</span>
+                        <span class="n">carry</span> <span class="o">=</span> <span class="n">carry_lit</span>
+
+                <span class="n">output_specs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">AIGOutputSpec</span><span class="p">(</span>
+                    <span class="n">start_bit</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">outputs</span><span class="p">),</span> <span class="n">width</span><span class="o">=</span><span class="n">n_bits</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"uint"</span><span class="p">,</span>
+                    <span class="n">bit_order</span><span class="o">=</span><span class="s2">"lsb_first"</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="n">sr</span><span class="o">.</span><span class="n">tau</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="n">sr</span><span class="o">.</span><span class="n">beta</span><span class="p">,</span>
+                <span class="p">))</span>
+                <span class="n">outputs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">accumulator</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">output_specs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">AIGOutputSpec</span><span class="p">(</span>
+                    <span class="n">start_bit</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">outputs</span><span class="p">),</span> <span class="n">width</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">"bool"</span><span class="p">,</span>
+                    <span class="n">bit_order</span><span class="o">=</span><span class="s2">"lsb_first"</span><span class="p">,</span> <span class="n">tau</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                <span class="p">))</span>
+                <span class="n">outputs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">lit_of</span><span class="p">[</span><span class="n">out_id</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">AIGGraph</span><span class="p">(</span><span class="n">n_inputs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">n_inputs</span><span class="p">,</span> <span class="n">and_gates</span><span class="o">=</span><span class="n">and_gates</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">,</span>
+                         <span class="n">output_specs</span><span class="o">=</span><span class="n">output_specs</span><span class="p">,</span> <span class="n">output_shape</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_shape</span><span class="p">))</span></div>
+
+
+  
+<div class="viewcode-block" id="Circuit.write_to_aiger_file">
+<a class="viewcode-back" href="../../api/torchlogix.html#torchlogix.Circuit.write_to_aiger_file">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_to_aiger_file</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="o">=</span><span class="s2">"circuit.aig"</span><span class="p">):</span>        
+        <span class="n">deliverable</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">to_and_inverter_graph</span><span class="p">()</span>
+        <span class="n">deliverable</span><span class="o">.</span><span class="n">write_to_aiger_file</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></div>
+
+
+
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">return</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">"Circuit(</span><span class="se">\n</span><span class="s2">"</span>

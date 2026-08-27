@@ -50,7 +50,7 @@
 <li class="toctree-l1"><a class="reference internal" href="guides/concepts.html">Core Concepts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html">Hardware Deployment Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="guides/hardware_deployment.html#compiling-with-alkaid">Compiling with <code class="docutils literal notranslate"><span class="pre">alkaid</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="guides/aig_export.html">AIG Export Guide</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -380,6 +380,8 @@
 <h2 id="T">T</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/circuit.html#torchlogix.Circuit.to_and_inverter_graph">to_and_inverter_graph() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.to_and_inverter_graph">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.to_and_inverter_graph">[2]</a>
+</li>
       <li><a href="api/circuit.html#torchlogix.Circuit.to_dict">to_dict() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.to_dict">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.to_dict">[2]</a>
 </li>
   </ul></td>
@@ -399,9 +401,11 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/circuit.html#torchlogix.Circuit.write_c_code">write_c_code() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_c_code">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_c_code">[2]</a>
 </li>
+      <li><a href="api/circuit.html#torchlogix.Circuit.write_json">write_json() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_json">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_json">[2]</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/circuit.html#torchlogix.Circuit.write_json">write_json() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_json">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_json">[2]</a>
+      <li><a href="api/circuit.html#torchlogix.Circuit.write_to_aiger_file">write_to_aiger_file() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_to_aiger_file">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_to_aiger_file">[2]</a>
 </li>
       <li><a href="api/circuit.html#torchlogix.Circuit.write_verilog_code">write_verilog_code() (torchlogix.Circuit method)</a>, <a href="api/generated/torchlogix.Circuit.html#torchlogix.Circuit.write_verilog_code">[1]</a>, <a href="api/torchlogix.html#torchlogix.Circuit.write_verilog_code">[2]</a>
 </li>

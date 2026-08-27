@@ -1,0 +1,292 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIG Export Guide &mdash; TorchLogix 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+      <script src="../_static/copybutton.js?v=30646c52"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="TorchLogix Package" href="../api/torchlogix.html" />
+    <link rel="prev" title="Hardware Deployment Guide" href="hardware_deployment.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            TorchLogix
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Core Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html">Hardware Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_deployment.html#circuit-native"><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> (native)</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">AIG Export Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#build-a-circuit">1. Build a <code class="docutils literal notranslate"><span class="pre">Circuit</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simplify-optional">2. Simplify (optional)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#convert-to-an-aiggraph">3. Convert to an <code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#write-the-aig-file">4. Write the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#read-the-file-with-abc-or-mockturtle">5. Read the file with ABC or mockturtle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#output-bit-ordering-and-decoding">6. Output bit ordering and decoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#limitations">Limitations</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/torchlogix.html">TorchLogix Package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/circuit.html">Circuit</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/layers.html">Layers Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/models.html">Models Module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/functional.html">Functional Module</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">TorchLogix</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">AIG Export Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/guides/aig_export.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="aig-export-guide">
+<h1>AIG Export Guide<a class="headerlink" href="#aig-export-guide" title="Link to this heading"></a></h1>
+<p>TorchLogix can export a trained model as a binary <strong>AIGER</strong> file (<code class="docutils literal notranslate"><span class="pre">.aig</span></code>), the
+standard And-Inverter Graph format read by logic-synthesis and verification
+tools such as <a class="reference external" href="https://github.com/berkeley-abc/abc">ABC</a> and
+<a class="reference external" href="https://github.com/lsils/mockturtle">mockturtle</a>. This guide walks through
+the export pipeline end to end, without modifying any TorchLogix source code.</p>
+<hr class="docutils" />
+<section id="build-a-circuit">
+<h2>1. Build a <code class="docutils literal notranslate"><span class="pre">Circuit</span></code><a class="headerlink" href="#build-a-circuit" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">Circuit.from_model</span></code> traces a model that has been put into export mode and
+unrolls it into a flat gate list:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix</span><span class="w"> </span><span class="kn">import</span> <span class="n">Circuit</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torchlogix.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_export_mode</span>
+
+<span class="n">set_export_mode</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>                                    <span class="c1"># required before tracing</span>
+<span class="n">circuit</span> <span class="o">=</span> <span class="n">Circuit</span><span class="o">.</span><span class="n">from_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">28</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Circuit</span></code> requires <strong>binary inputs</strong>; binarize at the dataset level before
+tracing, since binarization layers are not exported.</p>
+</section>
+<section id="simplify-optional">
+<h2>2. Simplify (optional)<a class="headerlink" href="#simplify-optional" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">circuit.simplify()</span></code> constant-folds, dedups, and removes dead gates. It has
+no effect on the circuit’s function, only its size, so it’s safe (and
+recommended) to run before export — fewer gates means a smaller <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file
+and less work for downstream synthesis tools:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">simplify</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="convert-to-an-aiggraph">
+<h2>3. Convert to an <code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code><a class="headerlink" href="#convert-to-an-aiggraph" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">circuit.to_and_inverter_graph()</span></code> lowers every gate to AND/inverter form and
+returns an <code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">aig</span> <span class="o">=</span> <span class="n">circuit</span><span class="o">.</span><span class="n">to_and_inverter_graph</span><span class="p">()</span>
+
+<span class="n">aig</span><span class="o">.</span><span class="n">n_inputs</span>      <span class="c1"># number of primary inputs</span>
+<span class="n">aig</span><span class="o">.</span><span class="n">and_gates</span>     <span class="c1"># list of (lhs, rhs0, rhs1) literal triples</span>
+<span class="n">aig</span><span class="o">.</span><span class="n">outputs</span>       <span class="c1"># flat list of output literals — the AIGER-format payload</span>
+<span class="n">aig</span><span class="o">.</span><span class="n">output_specs</span>  <span class="c1"># list[AIGOutputSpec] — how to regroup aig.outputs into</span>
+                   <span class="c1"># circuit.outputs, see "Output bit ordering" below</span>
+<span class="n">aig</span><span class="o">.</span><span class="n">output_shape</span>  <span class="c1"># copy of circuit.output_shape</span>
+</pre></div>
+</div>
+<p>Every non-AND gate in the original circuit (<code class="docutils literal notranslate"><span class="pre">OR</span></code>, <code class="docutils literal notranslate"><span class="pre">XOR</span></code>, <code class="docutils literal notranslate"><span class="pre">NAND</span></code>, <code class="docutils literal notranslate"><span class="pre">WIRE</span></code>, …)
+is rewritten as one or more two-input ANDs plus literal negation — <code class="docutils literal notranslate"><span class="pre">XOR</span></code>/
+<code class="docutils literal notranslate"><span class="pre">XNOR</span></code>, for example, expand to three AND gates each.</p>
+<p><code class="docutils literal notranslate"><span class="pre">aig.outputs</span></code>, <code class="docutils literal notranslate"><span class="pre">aig.and_gates</span></code>, and the header counts (<code class="docutils literal notranslate"><span class="pre">M</span> <span class="pre">I</span> <span class="pre">L</span> <span class="pre">O</span> <span class="pre">A</span></code>) are what
+gets written to the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file — that’s the whole AIGER format, and it’s
+what ABC/mockturtle read. <code class="docutils literal notranslate"><span class="pre">aig.output_specs</span></code> and <code class="docutils literal notranslate"><span class="pre">aig.output_shape</span></code> are
+<strong>not</strong> written to the file; they only exist on the Python <code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code> object.
+See “Output bit ordering” below for what that means for a consumer that only
+has the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file.</p>
+</section>
+<section id="write-the-aig-file">
+<h2>4. Write the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file<a class="headerlink" href="#write-the-aig-file" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">aig</span><span class="o">.</span><span class="n">write_to_aiger_file</span><span class="p">(</span><span class="s2">"circuit.aig"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Or skip step 3 and call the shortcut on <code class="docutils literal notranslate"><span class="pre">Circuit</span></code> directly, which does both
+steps for you:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">circuit</span><span class="o">.</span><span class="n">write_to_aiger_file</span><span class="p">(</span><span class="s2">"circuit.aig"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The file is written in the binary AIGER format (header line <code class="docutils literal notranslate"><span class="pre">aig</span> <span class="pre">M</span> <span class="pre">I</span> <span class="pre">L</span> <span class="pre">O</span> <span class="pre">A</span></code>
+followed by delta-encoded AND gates). TorchLogix circuits are purely
+combinational, so the latch count <code class="docutils literal notranslate"><span class="pre">L</span></code> is always <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
+</section>
+<section id="read-the-file-with-abc-or-mockturtle">
+<h2>5. Read the file with ABC or mockturtle<a class="headerlink" href="#read-the-file-with-abc-or-mockturtle" title="Link to this heading"></a></h2>
+<p><strong>ABC:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>abc<span class="w"> </span>-q<span class="w"> </span><span class="s2">"read_aiger circuit.aig; print_stats"</span>
+</pre></div>
+</div>
+<p><strong>mockturtle</strong> (C++):</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;mockturtle/mockturtle.hpp&gt;</span>
+
+<span class="n">mockturtle</span><span class="o">::</span><span class="n">aig_network</span><span class="w"> </span><span class="n">aig</span><span class="p">;</span>
+<span class="n">lorina</span><span class="o">::</span><span class="n">read_aiger</span><span class="p">(</span><span class="s">"circuit.aig"</span><span class="p">,</span><span class="w"> </span><span class="n">mockturtle</span><span class="o">::</span><span class="n">aiger_reader</span><span class="p">(</span><span class="n">aig</span><span class="p">));</span>
+</pre></div>
+</div>
+<p>Both tools follow the AIGER literal convention: variable <code class="docutils literal notranslate"><span class="pre">v</span></code>’s <strong>positive</strong>
+literal is <code class="docutils literal notranslate"><span class="pre">2*v</span></code> and its <strong>negative</strong> (inverted) literal is <code class="docutils literal notranslate"><span class="pre">2*v</span> <span class="pre">+</span> <span class="pre">1</span></code>;
+variable <code class="docutils literal notranslate"><span class="pre">0</span></code> is reserved so literal <code class="docutils literal notranslate"><span class="pre">0</span></code> means constant <code class="docutils literal notranslate"><span class="pre">False</span></code> and literal
+<code class="docutils literal notranslate"><span class="pre">1</span></code> means constant <code class="docutils literal notranslate"><span class="pre">True</span></code>. Primary input <code class="docutils literal notranslate"><span class="pre">i</span></code> (0-indexed, as passed to
+<code class="docutils literal notranslate"><span class="pre">Circuit.from_model</span></code>) is AIGER variable <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">+</span> <span class="pre">1</span></code>.</p>
+</section>
+<section id="output-bit-ordering-and-decoding">
+<h2>6. Output bit ordering and decoding<a class="headerlink" href="#output-bit-ordering-and-decoding" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">aig.outputs</span></code> is a flat list of literals with no embedded structure — a
+10-class <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> model turns into 70+ anonymous output wires in there.
+<code class="docutils literal notranslate"><span class="pre">aig.output_specs</span></code> is the <strong>output ABI</strong>: one <code class="docutils literal notranslate"><span class="pre">AIGOutputSpec</span></code> per entry in
+<code class="docutils literal notranslate"><span class="pre">circuit.outputs</span></code>, in the same order, telling you exactly how to regroup
+<code class="docutils literal notranslate"><span class="pre">aig.outputs</span></code> back into the original values:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AIGOutputSpec</span><span class="p">:</span>
+    <span class="n">start_bit</span><span class="p">:</span> <span class="nb">int</span>    <span class="c1"># aig.outputs[start_bit : start_bit + width] is this output</span>
+    <span class="n">width</span><span class="p">:</span>     <span class="nb">int</span>    <span class="c1"># 1 for a boolean output</span>
+    <span class="n">kind</span><span class="p">:</span>      <span class="nb">str</span>    <span class="c1"># "bool" or "uint"</span>
+    <span class="n">bit_order</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"lsb_first"</span>
+    <span class="n">tau</span><span class="p">:</span>       <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>   <span class="c1"># always 1.0 -- see Limitations</span>
+    <span class="n">beta</span><span class="p">:</span>      <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>   <span class="c1"># always 0.0 -- see Limitations</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">kind=&quot;bool&quot;</span></code></strong> (plain boolean output, no <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code>): <code class="docutils literal notranslate"><span class="pre">width</span></code> is always
+<code class="docutils literal notranslate"><span class="pre">1</span></code> — the value of that output bit directly.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">kind=&quot;uint&quot;</span></code></strong> (a <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> score / <code class="docutils literal notranslate"><span class="pre">SumReduction</span></code>): <code class="docutils literal notranslate"><span class="pre">width</span></code> is
+<code class="docutils literal notranslate"><span class="pre">max(1,</span> <span class="pre">len(inputs).bit_length())</span></code> bits, ordered <strong>least-significant bit
+first</strong>, encoding the unsigned integer <code class="docutils literal notranslate"><span class="pre">sum(inputs)</span></code>.</p></li>
+</ul>
+<p>Decoding with <code class="docutils literal notranslate"><span class="pre">output_specs</span></code> in Python:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="n">aig</span><span class="p">,</span> <span class="n">aig_output_bits</span><span class="p">):</span>
+    <span class="n">values</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="n">aig</span><span class="o">.</span><span class="n">output_specs</span><span class="p">:</span>
+        <span class="n">bits</span> <span class="o">=</span> <span class="n">aig_output_bits</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">start_bit</span> <span class="p">:</span> <span class="n">spec</span><span class="o">.</span><span class="n">start_bit</span> <span class="o">+</span> <span class="n">spec</span><span class="o">.</span><span class="n">width</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">spec</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"bool"</span><span class="p">:</span>
+            <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bits</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>  <span class="c1"># "uint", lsb_first</span>
+            <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">b</span> <span class="o">&lt;&lt;</span> <span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bits</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">values</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">aig_output_bits[k]</span></code> is the resolved boolean value of <code class="docutils literal notranslate"><span class="pre">aig.outputs[k]</span></code>
+(look up the AND-gate/input truth value for <code class="docutils literal notranslate"><span class="pre">lit</span> <span class="pre">&gt;&gt;</span> <span class="pre">1</span></code> and flip it if <code class="docutils literal notranslate"><span class="pre">lit</span></code>
+is odd — per the AIGER literal convention above).</p>
+<p><strong>Important:</strong> <code class="docutils literal notranslate"><span class="pre">output_specs</span></code>/<code class="docutils literal notranslate"><span class="pre">output_shape</span></code> live only on the in-memory
+<code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code> — they are <em>not</em> written into the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file (which is plain
+AIGER, readable by any AIGER-compliant tool, with no room for this
+metadata). A consumer that reads the <code class="docutils literal notranslate"><span class="pre">.aig</span></code> file directly (e.g. from ABC or
+mockturtle, without going through TorchLogix) does not get this layout for
+free; it must be told out of band, e.g. by keeping the <code class="docutils literal notranslate"><span class="pre">AIGGraph</span></code>/<code class="docutils literal notranslate"><span class="pre">Circuit</span></code>
+Python object around, or agreeing on the layout ahead of time from
+<code class="docutils literal notranslate"><span class="pre">circuit.output_shape</span></code> and the <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> sizes in the model. Persisting
+<code class="docutils literal notranslate"><span class="pre">output_specs</span></code> into the file itself (e.g. via AIGER output symbols, or a
+JSON sidecar) is a natural extension but is not implemented yet.</p>
+</section>
+<section id="limitations">
+<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>AIG export requires <code class="docutils literal notranslate"><span class="pre">tau</span> <span class="pre">==</span> <span class="pre">1</span></code> and <code class="docutils literal notranslate"><span class="pre">beta</span> <span class="pre">==</span> <span class="pre">0</span></code> exactly.</strong>
+<code class="docutils literal notranslate"><span class="pre">to_and_inverter_graph()</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> for any <code class="docutils literal notranslate"><span class="pre">GroupSum</span></code> output
+where that doesn’t hold. Earlier versions tolerated any whole-number
+<code class="docutils literal notranslate"><span class="pre">beta</span></code> and silently ignored <code class="docutils literal notranslate"><span class="pre">tau</span> <span class="pre">!=</span> <span class="pre">1</span></code> (encoding a raw sum that didn’t
+match the model’s real output) — that was a trap, not a feature, so it’s
+now a hard error instead. This is a deliberate scope limit, not a bug: an
+And-Inverter Graph has no arithmetic for scaling or offsetting a value, so
+there is no way for AIG export to represent <code class="docutils literal notranslate"><span class="pre">(sum</span> <span class="pre">+</span> <span class="pre">beta)</span> <span class="pre">/</span> <span class="pre">tau</span></code> inside
+the graph itself, unlike <code class="docutils literal notranslate"><span class="pre">write_c_code()</span></code> / <code class="docutils literal notranslate"><span class="pre">write_verilog_code()</span></code>, whose
+output formats <em>can</em> express that arithmetic. If your model needs
+non-default <code class="docutils literal notranslate"><span class="pre">tau</span></code>/<code class="docutils literal notranslate"><span class="pre">beta</span></code>, use the C or Verilog export path instead of AIG.</p></li>
+<li><p><strong>All outputs are unsigned integers or single bits</strong> — there is no
+floating-point output path in the AIG export, unlike <code class="docutils literal notranslate"><span class="pre">write_c_code()</span></code> /
+<code class="docutils literal notranslate"><span class="pre">write_verilog_code()</span></code>, which fall back to a <code class="docutils literal notranslate"><span class="pre">float</span></code> score type when
+<code class="docutils literal notranslate"><span class="pre">tau</span> <span class="pre">!=</span> <span class="pre">1</span></code> or <code class="docutils literal notranslate"><span class="pre">beta</span></code> is fractional.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="hardware_deployment.html" class="btn btn-neutral float-left" title="Hardware Deployment Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../api/torchlogix.html" class="btn btn-neutral float-right" title="TorchLogix Package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023-2024 Felix Petersen (original DiffLogic), Lino Gerlach (TorchLogix extensions).</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
