@@ -45,7 +45,7 @@ def test_plugin_matches_eval_mode(model_cls):
     )
 
 
-def test_rejects_inplace_constant_mutation():
+def test_alkaid_rejects_inplace_constant_mutation():
     model = InPlaceConstMutationModel()
     x = random_bool_input(model, batch_size=4, seed=0)
     inp = FVArrayInput((1, *x.shape[1:])).quantize(0, 1, 0)

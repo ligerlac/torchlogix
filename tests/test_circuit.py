@@ -287,7 +287,7 @@ def test_circuit_simplifications(model_cls, simplification):
     assert torch.equal(preds_before, preds_after), f"Predictions differ after {simplification.__name__}!"
 
 
-def test_rejects_inplace_constant_mutation():
+def test_circuit_rejects_inplace_constant_mutation():
     model = InPlaceConstMutationModel()
     with pytest.raises(NotImplementedError, match="unsupported constant-tensor mutation"):
         Circuit.from_model(model, input_shape=model.input_shape)

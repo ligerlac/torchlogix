@@ -345,3 +345,22 @@ def test_rejects_unique_pairs_when_kernel_volume_too_small():
         make_conv_connections(2, dict(in_dim=4, rfs=2, stride=1, padding=0,
                                       tree_depth=5, channels=1, num_kernels=1),
                               init_method="random-unique")
+
+@pytest.mark.parametrize("lut_rank", [2, 4, 6])
+def test_dense_unique_connections_cover_all_inputs_evenly(lut_rank):
+    """random-unique dense wiring must use every input, and use them evenly.
+
+    Each output column draws lut_rank distinct inputs, every input is used at
+    least once, and the usage counts stay within one of each other.
+    """
+    layer = LogicDense(in_dim=400, out_dim=400, lut_rank=lut_rank,
+                       connections="fixed", device="cpu", parametrization="warp",
+                       connections_kwargs={"init_method": "random-unique"})
+    indices = layer.connections.indices
+
+    for col in range(indices.shape[1]):
+        assert len(torch.unique(indices[..., col])) == lut_rank
+
+    unique, counts = torch.unique(indices, return_counts=True)
+    assert counts.float().std().item() < 1, "input usage is not balanced"
+    assert len(unique) == layer.in_dim, "not every input is used"
