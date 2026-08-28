@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 
+from torchlogix.utils import set_export_mode
 from torchlogix.layers import (
     GroupSum,
     LogicConv2d,
@@ -20,6 +21,11 @@ from torchlogix.layers import (
     LogicConvTranspose2d,
     LogicConvTranspose3d,
     LogicDense,
+)
+
+from helpers import (
+    assert_compiled_gradients_match_eager,
+    assert_finite_difference_matches_autograd,
 )
 
 CONNECTIONS_KWARGS = {"init_method": "random-unique"}
@@ -346,3 +352,88 @@ def test_conv_ae_is_deterministic_in_eval(ndim):
     in_dim, _ = AE_SIZES[ndim]
     x = (torch.rand(2, 2, *([in_dim] * ndim)) > 0.5).float()
     assert torch.equal(model(x), model(x))
+
+
+# ---------------------------------------------------------------------------
+# Gradient correctness
+#
+# The tests above only check that a gradient is non-zero. These check that it
+# is the *right* gradient, by comparing against central finite differences,
+# and that torch.compile does not change it.
+# ---------------------------------------------------------------------------
+
+def _grad_check_layer(kind, parametrization, seed=0):
+    """A small layer of each family, sized so finite differences stay cheap.
+
+    Seeded explicitly: layer construction draws from the global RNG, so without
+    this the weights - and therefore the gradient magnitudes these tests
+    compare - depend on how many tests happened to run first.
+    """
+    torch.manual_seed(seed)
+    kwargs = dict(device="cpu", parametrization=parametrization,
+                  parametrization_kwargs={"weight_init": "random"})
+    if kind == "dense":
+        return LogicDense(in_dim=8, out_dim=4, connections="fixed", **kwargs)
+    conv_cls = {"conv2d": LogicConv2d, "conv3d": LogicConv3d,
+                "transpose2d": LogicConvTranspose2d, "transpose3d": LogicConvTranspose3d}[kind]
+    ndim = 2 if kind.endswith("2d") else 3
+    extra = {"output_padding": 0} if kind.startswith("transpose") else {}
+    return conv_cls(in_dim=tuple([5] * ndim), channels=2, num_kernels=3,
+                    receptive_field_size=2, tree_depth=2, stride=1, padding=0,
+                    **extra, **kwargs)
+
+
+GRAD_CHECK_KINDS = ["dense", "conv2d", "conv3d", "transpose2d", "transpose3d"]
+
+
+def _layer_input(layer, kind, batch=2, seed=0):
+    torch.manual_seed(seed)
+    if kind == "dense":
+        return (torch.rand(batch, layer.in_dim) > 0.5).float()
+    return (torch.rand(batch, layer.channels, *layer.in_dim) > 0.5).float()
+
+
+@pytest.mark.parametrize("kind", GRAD_CHECK_KINDS)
+@pytest.mark.parametrize("parametrization", ["raw", "warp", "light"])
+def test_layer_gradients_match_finite_differences(kind, parametrization):
+    layer = _grad_check_layer(kind, parametrization)
+    layer.train()
+    x = _layer_input(layer, kind)
+    torch.manual_seed(1)
+    weights = torch.rand_like(layer(x))
+    assert_finite_difference_matches_autograd(layer, x, weights)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kind", GRAD_CHECK_KINDS)
+def test_layer_gradients_survive_torch_compile(kind):
+    """Compiling a layer must not change its gradients.
+
+    Marked slow: each case pays a one-off torch.compile cost of a few seconds.
+    Deselect with -m "not slow".
+    """
+    layer = _grad_check_layer(kind, "raw")
+    layer.train()
+    x = _layer_input(layer, kind)
+    torch.manual_seed(1)
+    weights = torch.rand_like(layer(x))
+    assert_compiled_gradients_match_eager(layer, x, weights)
+
+
+# ---------------------------------------------------------------------------
+# Eval mode vs export mode, at layer granularity
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("kind", GRAD_CHECK_KINDS)
+def test_layer_eval_and_export_agree(kind):
+    """Export mode must reproduce the thresholded eval-mode output exactly."""
+    layer = _grad_check_layer(kind, "raw")
+    layer.eval()
+    x = _layer_input(layer, kind)
+
+    soft = layer(x)
+    set_export_mode(layer)
+    hard = layer(x.bool())
+
+    assert hard.dtype == torch.bool, f"export mode should return bool, got {hard.dtype}"
+    assert torch.equal(hard, soft > 0.5), "export output differs from thresholded eval output"

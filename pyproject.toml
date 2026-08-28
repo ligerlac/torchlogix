@@ -67,6 +67,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: pays a one-off torch.compile cost; deselect with -m 'not slow'",
+]
 
 [tool.black]
 line-length = 88
