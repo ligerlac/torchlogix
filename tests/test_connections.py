@@ -3,7 +3,6 @@ import pytest
 import torch
 from torchlogix.layers import LogicDense
 from torchlogix.connections import LearnableDenseConnections, FixedConvConnections, FixedConvTransposeConnections
-from torchlogix.functional import softmax
 from torch.nn.functional import softmax as softmax_torch
 
 
