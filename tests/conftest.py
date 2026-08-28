@@ -10,131 +10,64 @@ import os
 os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
 
 import pytest
-import torch
-import torch.nn as nn
 
-from torchlogix.layers import (
-    GroupSum,
-    LogicConv2d,
-    LogicConv3d,
-    LogicConvTranspose3d,
-    LogicDense,
-    OrPooling2d,
-    OrPooling3d,
+from models import (
+    AnyLogicModel,
+    BranchModel,
+    ConvModel,
+    ConvTransposeAE3dModel,
+    DenseModel,
 )
 
-
 # ---------------------------------------------------------------------------
-# Model fixtures (shared across test_export_mode.py and test_alkaid_plugin.py)
+# Model fixtures
+#
+# The model definitions themselves live in tests/models.py, which is also
+# where MODELS lists the canonical set. Tests that sweep every model should
+# parametrize over MODELS directly; these fixtures are for tests that just
+# want one ready-made instance.
+#
+# Every model exposes `input_shape`; build an input with
+# models.random_bool_input(model) rather than a matching input fixture.
 # ---------------------------------------------------------------------------
+
 @pytest.fixture
-def logic_dense_model():
-    model = nn.Sequential(
-        LogicDense(16, 32, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-        LogicDense(32, 16, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-    )
+def dense_model():
+    model = DenseModel()
     model.eval()
     return model
 
 
 @pytest.fixture
-def conv2d_model_wo_group_sum():
-    model = nn.Sequential(
-        LogicConv2d(in_dim=8, channels=3, num_kernels=7, receptive_field_size=3, tree_depth=2),
-        OrPooling2d(kernel_size=2, stride=2),
-        nn.Flatten(),          # 3 × 3 × 8 = 72
-        LogicDense(63, 64, parametrization="raw"),
-        LogicDense(64, 50, parametrization="raw"),
-    )
-    model.eval()
-    return model
-
-
-@pytest.fixture
-def conv3d_model_wo_group_sum():
-    model = nn.Sequential(
-        LogicConv3d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
-        OrPooling3d(kernel_size=2, stride=2),
-        nn.Flatten(),          # 3 × 3 × 3 × 8 = 216
-        LogicDense(216, 128, parametrization="raw"),
-        LogicDense(128, 64, parametrization="raw"),
-    )
-    model.eval()
-    return model
-
-
-@pytest.fixture
-def conv2d_model():
-    model = nn.Sequential(
-        LogicConv2d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
-        OrPooling2d(kernel_size=2, stride=2),
-        nn.Flatten(),          # 3 × 3 × 8 = 72
-        LogicDense(72, 64, parametrization="raw"),
-        LogicDense(64, 50, parametrization="raw"),
-        GroupSum(10),
-    )
+def conv_model():
+    model = ConvModel()
     model.eval()
     return model
 
 
 @pytest.fixture
 def conv3d_model():
-    model = nn.Sequential(
-        LogicConv3d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
-        OrPooling3d(kernel_size=2, stride=2),
-        nn.Flatten(),          # 3 × 3 × 3 × 8 = 216
-        LogicDense(216, 128, parametrization="raw"),
-        LogicDense(128, 64, parametrization="raw"),
-        GroupSum(8),
-    )
+    model = ConvModel(ndim=3)
     model.eval()
     return model
 
 
 @pytest.fixture
-def single_3d_conv_model():
-    model = nn.Sequential(
-        LogicConv3d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
-    )
+def branch_model():
+    model = BranchModel()
     model.eval()
     return model
 
 
 @pytest.fixture
-def conv_transpose3d_ae_model():
-    """3D autoencoder: LogicConv3d halves 8^3, LogicConvTranspose3d restores it.
-
-    Both layers pad, and the decoder also uses output_padding, so the
-    transposed-conv export path (functional dilation, padding applied inside
-    the connections, enlarged kernel_positions) is covered by this one model.
-    """
-    model = nn.Sequential(
-        LogicConv3d(in_dim=8, channels=3, num_kernels=4, receptive_field_size=3,
-                    tree_depth=2, stride=2, padding=1),
-        LogicConvTranspose3d(in_dim=4, channels=4, num_kernels=3, receptive_field_size=3,
-                             tree_depth=2, stride=2, padding=1, output_padding=1),
-    )
+def conv_transpose_ae_model():
+    model = ConvTransposeAE3dModel()
     model.eval()
     return model
 
 
-# ---------------------------------------------------------------------------
-# Input fixtures
-# ---------------------------------------------------------------------------
-
 @pytest.fixture
-def sample_input_1d():
-    torch.manual_seed(0)
-    return torch.randint(0, 2, (8, 16)).bool()
-
-
-@pytest.fixture
-def sample_input_2d():
-    torch.manual_seed(0)
-    return torch.randint(0, 2, (8, 3, 8, 8)).bool()
-
-
-@pytest.fixture
-def sample_input_3d():
-    torch.manual_seed(0)
-    return torch.randint(0, 2, (4, 3, 8, 8, 8)).bool()
+def any_logic_model():
+    model = AnyLogicModel()
+    model.eval()
+    return model

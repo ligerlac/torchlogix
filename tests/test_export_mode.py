@@ -5,43 +5,26 @@ import torch
 
 from torchlogix.utils import set_export_mode
 
-# Model/input fixtures (logic_dense_model, conv2d_model, sample_input_2d, etc.)
-# live in conftest.py, shared with test_alkaid_plugin.py.
+from torchlogix.layers import GroupSum
+
+from models import MODELS, EXPORT_VARIANTS, TORCHLOGIX_MODELS, random_bool_input
 
 
-# ---------------------------------------------------------------------------
-# Parametrize over both 2-D and 3-D fixtures
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("model_cls", MODELS + EXPORT_VARIANTS)
+def test_eval_and_export_agree(model_cls):
+    """Eval mode and export mode must agree on binary inputs."""
+    model = model_cls()
+    model.eval()
+    x = random_bool_input(model, batch_size=8, seed=0)
 
-@pytest.mark.parametrize(
-    "model_fixture, input_fixture",
-    [
-        ("logic_dense_model", "sample_input_1d"),
-        ("conv2d_model_wo_group_sum", "sample_input_2d"),
-        ("conv3d_model_wo_group_sum", "sample_input_3d"),
-        ("conv2d_model", "sample_input_2d"),
-        ("conv3d_model", "sample_input_3d"),
-        ("conv_transpose3d_ae_model", "sample_input_3d"),
-    ],
-)
-class TestExportModeEquivalence:
-    """Eval-mode and export-mode must agree on binary inputs."""
+    # Baseline: plain eval-mode forward, in whatever dtype the model wants.
+    result_eval = model(x if model.input_dtype == torch.bool else x.float())
 
-    def test_eval_export_equivalence(self, model_fixture, input_fixture, request):
-        model = request.getfixturevalue(model_fixture)
-        x = request.getfixturevalue(input_fixture)
+    set_export_mode(model)
+    result_export = model(x)
 
-        # Baseline: plain eval-mode forward (accepts float bool-valued tensors)
-        x_float = x.float()
-        result_eval = model(x_float)
-
-        # Export mode
-        set_export_mode(model)
-        result_export = model(x)
-
-        assert torch.allclose(result_eval, result_export.float(), atol=1e-6), (
-            f"[{model_fixture}] eval and export results diverge"
-        )
+    assert torch.allclose(result_eval.float(), result_export.float(), atol=1e-6), \
+        f"[{model_cls.__name__}] eval and export results diverge"
 
 
 ALLOWED_FX_TARGETS = {
@@ -126,19 +109,17 @@ ALLOWED_FX_TARGETS_GROUP_SUM = {
 
 class TestFXGraphPurity:
 
-    @pytest.mark.parametrize("model_fixture, input_fixture, allowed_targets", [
-        ("logic_dense_model", "sample_input_1d", ALLOWED_FX_TARGETS),
-        ("conv2d_model_wo_group_sum", "sample_input_2d", ALLOWED_FX_TARGETS),
-        ("conv3d_model_wo_group_sum", "sample_input_3d", ALLOWED_FX_TARGETS),
-        ("conv2d_model", "sample_input_2d", ALLOWED_FX_TARGETS | ALLOWED_FX_TARGETS_GROUP_SUM),
-        ("conv3d_model", "sample_input_3d", ALLOWED_FX_TARGETS | ALLOWED_FX_TARGETS_GROUP_SUM),
-        # Transposed conv dilates its input; the graph must stay pure logic +
-        # view ops (pad/reshape/slice), with no zeros-and-write-into-it.
-        ("conv_transpose3d_ae_model", "sample_input_3d", ALLOWED_FX_TARGETS),
-    ])
-    def test_fx_graph_is_pure_logic(self, model_fixture, input_fixture, allowed_targets, request):
-        model = request.getfixturevalue(model_fixture)
-        x = request.getfixturevalue(input_fixture)
+    @pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS + EXPORT_VARIANTS)
+    def test_fx_graph_is_pure_logic(self, model_cls):
+        model = model_cls()
+        model.eval()
+
+        # Allow the reduction ops only for models that actually reduce, so the
+        # check stays tight for the ones whose output is raw logic.
+        allowed_targets = ALLOWED_FX_TARGETS
+        if any(isinstance(m, GroupSum) for m in model.modules()):
+            allowed_targets = allowed_targets | ALLOWED_FX_TARGETS_GROUP_SUM
+        x = random_bool_input(model, batch_size=8, seed=0)
         set_export_mode(model)
 
         exported = torch.export.export(model, (x,), strict=False)
@@ -150,7 +131,7 @@ class TestFXGraphPurity:
                 disallowed.append(f"{node.name}: {node.target}")
 
         assert not disallowed, (
-            f"[{model_fixture}] FX graph contains non-logic ops:\n"
+            f"[{model_cls.__name__}] FX graph contains non-logic ops:\n"
             + "\n".join(disallowed)
         )
 
