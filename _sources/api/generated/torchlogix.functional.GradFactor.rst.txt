@@ -28,6 +28,7 @@
       ~GradFactor.save_for_backward
       ~GradFactor.save_for_forward
       ~GradFactor.set_materialize_grads
+      ~GradFactor.set_output_grad_dtype
       ~GradFactor.setup_context
       ~GradFactor.vjp
       ~GradFactor.vmap
@@ -49,6 +50,7 @@
       ~GradFactor.needs_input_grad
       ~GradFactor.next_functions
       ~GradFactor.non_differentiable
+      ~GradFactor.output_grad_dtypes
       ~GradFactor.requires_grad
       ~GradFactor.saved_for_forward
       ~GradFactor.saved_tensors

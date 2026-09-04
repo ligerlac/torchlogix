@@ -351,29 +351,28 @@
         <span class="k">if</span> <span class="n">norm</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_max_grad_norm</span><span class="p">:</span>
             <span class="n">grad</span> <span class="o">=</span> <span class="n">grad</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_max_grad_norm</span> <span class="o">/</span> <span class="p">(</span><span class="n">norm</span> <span class="o">+</span> <span class="mf">1e-6</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">grad</span>
-            
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_ordered_diffs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># The first diff is an unconstrained global shift; all following diffs</span>
+        <span class="c1"># must stay positive so thermometer thresholds remain ordered.</span>
+        <span class="n">first_diff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">first_diff</span>
+
+        <span class="n">softplus_scale</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature_softplus</span> <span class="o">+</span> <span class="mf">1e-6</span>
+        <span class="n">rest_diffs</span> <span class="o">=</span> <span class="n">softplus_scale</span> <span class="o">*</span> <span class="n">F</span><span class="o">.</span><span class="n">softplus</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span> <span class="o">/</span> <span class="n">softplus_scale</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">first_diff</span><span class="p">,</span> <span class="n">rest_diffs</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
 <div class="viewcode-block" id="LearnableBinarization.get_thresholds">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LearnableBinarization.get_thresholds">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_thresholds</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-            <span class="c1"># first diff can be negative: global shift</span>
-            <span class="n">first_diff</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># unconstrained</span>
+        <span class="n">diffs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_ordered_diffs</span><span class="p">()</span>
+        <span class="n">thresholds</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">diffs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 
-            <span class="c1"># remaining diffs are positive</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="n">rest_diffs</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_softplus</span> <span class="o">+</span> <span class="mf">1e-6</span><span class="p">)</span> <span class="o">*</span> <span class="n">F</span><span class="o">.</span><span class="n">softplus</span><span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:]</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">temperature_softplus</span> <span class="o">+</span> <span class="mf">1e-6</span><span class="p">)</span>
-                <span class="p">)</span>
-                <span class="n">diffs_pos</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">first_diff</span><span class="p">,</span> <span class="n">rest_diffs</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">diffs_pos</span> <span class="o">=</span> <span class="n">first_diff</span>
-
-            <span class="n">thresholds</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">diffs_pos</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">thresholds</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">raw_diffs</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="n">thresholds</span>        </div>
+        <span class="k">return</span> <span class="n">thresholds</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_sample_train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">thresholds</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
