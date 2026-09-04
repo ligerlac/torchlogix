@@ -89,6 +89,28 @@ def test_learnable_binarization():
     assert torch.allclose(output, expected), f"Expected {expected}, got {output}"
 
 
+def test_learnable_binarization_eval_keeps_thresholds_ordered():
+    thresholds = torch.tensor([[0.10, 0.20, 0.30]])
+    binarizer = LearnableBinarization(
+        thresholds,
+        temperature_sampling=0.1,
+        temperature_softplus=0.1,
+    )
+
+    with torch.no_grad():
+        binarizer.raw_diffs.copy_(torch.tensor([[0.10, -0.20, -0.30]]))
+
+    binarizer.train()
+    train_thresholds = binarizer.get_thresholds()
+
+    binarizer.eval()
+    eval_thresholds = binarizer.get_thresholds()
+
+    assert torch.allclose(eval_thresholds, train_thresholds)
+    assert torch.all(torch.diff(eval_thresholds, dim=-1) > 0)
+    assert eval_thresholds.requires_grad
+
+
 @pytest.mark.parametrize("num_bits", [4, 6, 8])
 def test_learnable_binarization_image(num_bits):
     channels, width, height = 3, 5, 5

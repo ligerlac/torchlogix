@@ -219,27 +219,26 @@ class LearnableBinarization(Binarization):
         if norm > self._max_grad_norm:
             grad = grad * (self._max_grad_norm / (norm + 1e-6))
         return grad
-            
+
+    def _get_ordered_diffs(self):
+        # The first diff is an unconstrained global shift; all following diffs
+        # must stay positive so thermometer thresholds remain ordered.
+        first_diff = self.raw_diffs[..., :1]
+
+        if self.raw_diffs.shape[-1] == 1:
+            return first_diff
+
+        softplus_scale = self.temperature_softplus + 1e-6
+        rest_diffs = softplus_scale * F.softplus(
+            self.raw_diffs[..., 1:] / softplus_scale
+        )
+        return torch.cat([first_diff, rest_diffs], dim=-1)
+
     def get_thresholds(self):
-        if self.training:
-            # first diff can be negative: global shift
-            first_diff = self.raw_diffs[..., :1]  # unconstrained
+        diffs = self._get_ordered_diffs()
+        thresholds = torch.cumsum(diffs, dim=-1)
 
-            # remaining diffs are positive
-            if self.raw_diffs.shape[-1] > 1:
-                rest_diffs = (self.temperature_softplus + 1e-6) * F.softplus(
-                    self.raw_diffs[..., 1:] / (self.temperature_softplus + 1e-6)
-                )
-                diffs_pos = torch.cat([first_diff, rest_diffs], dim=-1)
-            else:
-                diffs_pos = first_diff
-
-            thresholds = torch.cumsum(diffs_pos, dim=-1)
-
-        else:
-            thresholds = torch.cumsum(self.raw_diffs, dim=-1)
-
-        return thresholds        
+        return thresholds
 
     def _sample_train(self, x: torch.Tensor, thresholds: torch.Tensor) -> torch.Tensor:
         """Apply sigmoid/gumbel_sigmoid based on forward_sampling mode."""
