@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch.nn.modules.utils import _triple
 
-from torchlogix.layers import LogicConv3d, OrPooling3d, GroupSum
+from torchlogix.layers import LogicConv3d, LogicConvTranspose3d, OrPooling3d, GroupSum
 
 
 @pytest.fixture
@@ -517,3 +517,183 @@ def test_pooling_layer():
         expected = y.unsqueeze(0).unsqueeze(0)  # [1, 1, H_out, W_out, D_out]
 
         assert torch.allclose(output, expected)
+
+
+# ---------------------------------------------------------------------------
+# Transposed convolution (LogicConvTranspose3d)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("stride,output_padding,padding", [
+    (1, 0, 0), (2, 0, 0), (2, 1, 0), (3, 0, 0), (3, 2, 0),
+    (1, 0, 1), (2, 0, 1), (2, 1, 1), (3, 0, 1), (3, 2, 1),
+])
+def test_conv_transpose3d_output_shape(stride, output_padding, padding):
+    """LogicConvTranspose3d must produce the correct spatial output shape."""
+    in_d, in_h, in_w = 4, 4, 4
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    layer = LogicConvTranspose3d(
+        in_dim=(in_d, in_h, in_w),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_d, in_h, in_w)
+    out = layer(x)
+
+    expected = (in_d - 1) * stride - 2 * padding + kH + output_padding
+    assert out.shape == (batch, num_kernels, expected, expected, expected), (
+        f"Expected shape {(batch, num_kernels, expected, expected, expected)}, "
+        f"got {tuple(out.shape)}"
+    )
+
+
+def test_conv_transpose3d_gradients():
+    """Gradients must flow through LogicConvTranspose3d to all tree-weight parameters."""
+    layer = LogicConvTranspose3d(
+        in_dim=(4, 4, 4),
+        channels=2,
+        num_kernels=4,
+        tree_depth=2,
+        receptive_field_size=3,
+        stride=2,
+        padding=0,
+        output_padding=0,
+        parametrization="warp",
+        device="cpu",
+    )
+    layer.train()
+
+    x = torch.rand(2, 2, 4, 4, 4)
+    out = layer(x)
+    out.sum().backward()
+
+    for i, w in enumerate(layer.tree_weights):
+        assert w.grad is not None, f"tree_weights[{i}] has no gradient"
+        assert w.grad.abs().sum() > 0, f"tree_weights[{i}] gradient is all zero"
+
+
+@pytest.mark.parametrize("stride,in_d", [(1, 6), (2, 5), (3, 4)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose3d_shape_inverse_of_conv3d(stride, in_d, padding):
+    """LogicConvTranspose3d must invert the spatial dimensions of LogicConv3d."""
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    conv = LogicConv3d(
+        in_dim=(in_d, in_d, in_d),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_d, in_d, in_d)
+    conv_out = conv(x)
+    out_d = conv_out.shape[2]
+
+    output_padding = (in_d + 2 * padding - kH) % stride
+
+    transpose_conv = LogicConvTranspose3d(
+        in_dim=(out_d, out_d, out_d),
+        channels=num_kernels,
+        num_kernels=channels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    reconstructed = transpose_conv(conv_out)
+    assert reconstructed.shape == (batch, channels, in_d, in_d, in_d), (
+        f"Expected shape {(batch, channels, in_d, in_d, in_d)}, "
+        f"got {tuple(reconstructed.shape)}"
+    )
+
+
+def test_conv_transpose3d_dilation_pads_all_three_axes():
+    """Every spatial axis must be dilated - a 2D-shaped pad would leave depth alone."""
+    layer = LogicConvTranspose3d(
+        in_dim=(4, 4, 4), channels=1, num_kernels=1, tree_depth=1,
+        receptive_field_size=2, stride=2, padding=1, output_padding=0,
+        device="cpu",
+    )
+    x = torch.rand(1, 1, 4, 4, 4)
+    dilated = layer.connections._make_dilated_input(x)
+    assert tuple(dilated.shape) == (1, 1, 7, 7, 7), tuple(dilated.shape)
+    # original samples land on even indices, interleaved positions are zero
+    assert torch.equal(dilated[:, :, ::2, ::2, ::2], x)
+    assert dilated[:, :, 1, 1, 1].abs().sum() == 0
+
+
+# ---------------------------------------------------------------------------
+# Autoencoder: LogicConv3d downsamples, LogicConvTranspose3d reconstructs
+# ---------------------------------------------------------------------------
+
+def _make_conv_ae_3d(parametrization="raw"):
+    """Small 3D logic autoencoder: 6^3 -> 2^3 (encoder) -> 6^3 (decoder)."""
+    encoder = LogicConv3d(
+        in_dim=6, channels=2, num_kernels=3, receptive_field_size=3,
+        tree_depth=2, stride=2, padding=0, device="cpu",
+        parametrization=parametrization,
+        parametrization_kwargs={"weight_init": "random"},
+    )
+    decoder = LogicConvTranspose3d(
+        in_dim=2, channels=3, num_kernels=2, receptive_field_size=3,
+        tree_depth=2, stride=2, padding=0, output_padding=1, device="cpu",
+        parametrization=parametrization,
+        parametrization_kwargs={"weight_init": "random"},
+    )
+    return torch.nn.Sequential(encoder, decoder)
+
+
+def test_conv_ae_3d_roundtrips_input_shape():
+    """The 3D decoder must restore the encoder's input resolution."""
+    model = _make_conv_ae_3d()
+    x = torch.rand(2, 2, 6, 6, 6)
+
+    encoded = model[0](x)
+    assert tuple(encoded.shape) == (2, 3, 2, 2, 2), tuple(encoded.shape)
+
+    decoded = model(x)
+    assert tuple(decoded.shape) == (2, 2, 6, 6, 6), (
+        f"AE must return to the input resolution, got {tuple(decoded.shape)}"
+    )
+
+
+def test_conv_ae_3d_trains_end_to_end():
+    """A reconstruction loss must produce gradients in encoder and decoder alike."""
+    torch.manual_seed(0)
+    model = _make_conv_ae_3d(parametrization="warp")
+    model.train()
+
+    x = (torch.rand(2, 2, 6, 6, 6) > 0.5).float()
+    loss = torch.nn.functional.mse_loss(model(x), x)
+    loss.backward()
+
+    for name, layer in (("encoder", model[0]), ("decoder", model[1])):
+        for i, w in enumerate(layer.tree_weights):
+            assert w.grad is not None, f"{name}.tree_weights[{i}] has no gradient"
+            assert w.grad.abs().sum() > 0, f"{name}.tree_weights[{i}] gradient is all zero"

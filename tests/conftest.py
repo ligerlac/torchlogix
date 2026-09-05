@@ -17,6 +17,7 @@ from torchlogix.layers import (
     GroupSum,
     LogicConv2d,
     LogicConv3d,
+    LogicConvTranspose3d,
     LogicDense,
     OrPooling2d,
     OrPooling3d,
@@ -94,6 +95,24 @@ def conv3d_model():
 def single_3d_conv_model():
     model = nn.Sequential(
         LogicConv3d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2),
+    )
+    model.eval()
+    return model
+
+
+@pytest.fixture
+def conv_transpose3d_ae_model():
+    """3D autoencoder: LogicConv3d halves 8^3, LogicConvTranspose3d restores it.
+
+    Both layers pad, and the decoder also uses output_padding, so the
+    transposed-conv export path (functional dilation, padding applied inside
+    the connections, enlarged kernel_positions) is covered by this one model.
+    """
+    model = nn.Sequential(
+        LogicConv3d(in_dim=8, channels=3, num_kernels=4, receptive_field_size=3,
+                    tree_depth=2, stride=2, padding=1),
+        LogicConvTranspose3d(in_dim=4, channels=4, num_kernels=3, receptive_field_size=3,
+                             tree_depth=2, stride=2, padding=1, output_padding=1),
     )
     model.eval()
     return model

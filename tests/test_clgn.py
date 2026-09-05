@@ -7,7 +7,14 @@ import pytest
 import numpy as np
 import torch
 
-from torchlogix.layers import LogicConv2d, OrPooling2d, GroupSum, FixedBinarization, LearnableBinarization
+from torchlogix.layers import (
+    LogicConv2d,
+    LogicConvTranspose2d,
+    OrPooling2d,
+    GroupSum,
+    FixedBinarization,
+    LearnableBinarization,
+)
 
 
 @pytest.fixture
@@ -707,3 +714,196 @@ def test_pooling_layer():
             output, 
             expected
         )    
+
+
+# ---------------------------------------------------------------------------
+# Transposed convolution (LogicConvTranspose2d)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("stride,output_padding", [(1, 0), (2, 0), (2, 1), (3, 0), (3, 2)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose2d_output_shape(stride, output_padding, padding):
+    """LogicConvTranspose2d must produce the correct spatial output shape."""
+    in_h, in_w = 6, 6
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if output_padding >= stride:
+        pytest.skip("output_padding must be < stride")
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    layer = LogicConvTranspose2d(
+        in_dim=(in_h, in_w),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_h, in_w)
+    out = layer(x)
+
+    expected_h = (in_h - 1) * stride - 2 * padding + kH + output_padding
+    expected_w = (in_w - 1) * stride - 2 * padding + kH + output_padding
+    assert out.shape == (batch, num_kernels, expected_h, expected_w), (
+        f"Expected shape {(batch, num_kernels, expected_h, expected_w)}, got {tuple(out.shape)}"
+    )
+
+
+def test_conv_transpose2d_gradients():
+    """Gradients must flow through LogicConvTranspose2d to all tree-weight parameters."""
+    layer = LogicConvTranspose2d(
+        in_dim=(4, 4),
+        channels=2,
+        num_kernels=4,
+        tree_depth=2,
+        receptive_field_size=3,
+        stride=2,
+        padding=0,
+        output_padding=0,
+        parametrization="warp",
+        device="cpu",
+    )
+    layer.train()
+
+    x = torch.rand(2, 2, 4, 4)
+    out = layer(x)
+    out.sum().backward()
+
+    for i, w in enumerate(layer.tree_weights):
+        assert w.grad is not None, f"tree_weights[{i}] has no gradient"
+        assert w.grad.abs().sum() > 0, f"tree_weights[{i}] gradient is all zero"
+
+
+@pytest.mark.parametrize("stride,in_h", [(1, 8), (2, 6), (3, 5)])
+@pytest.mark.parametrize("padding", [0, 1])
+def test_conv_transpose2d_shape_inverse_of_conv2d(stride, in_h, padding):
+    """LogicConvTranspose2d must invert the spatial dimensions of LogicConv2d.
+
+    Given a conv that maps (B, C, H, W) -> (B, K, H', W'), a transpose conv
+    with the same stride/padding/receptive_field_size should map
+    (B, K, H', W') back to (B, C', H, W).
+    """
+    kH = 3
+    channels = 2
+    num_kernels = 4
+    batch = 2
+
+    if padding > kH - 1:
+        pytest.skip("padding must be <= receptive_field_size - 1")
+
+    conv = LogicConv2d(
+        in_dim=(in_h, in_h),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        device="cpu",
+    )
+
+    x = torch.rand(batch, channels, in_h, in_h)
+    conv_out = conv(x)
+    out_h = conv_out.shape[2]
+
+    output_padding = (in_h + 2 * padding - kH) % stride
+
+    transpose_conv = LogicConvTranspose2d(
+        in_dim=(out_h, out_h),
+        channels=num_kernels,
+        num_kernels=channels,
+        tree_depth=2,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        device="cpu",
+    )
+
+    reconstructed = transpose_conv(conv_out)
+    assert reconstructed.shape == (batch, channels, in_h, in_h), (
+        f"Expected shape {(batch, channels, in_h, in_h)}, got {tuple(reconstructed.shape)}"
+    )
+
+
+def test_conv_transpose2d_kernel_positions_match_output():
+    """kernel_positions must describe the transposed (larger) output, not the conv one.
+
+    The base class computes it with the forward-conv formula; if the override
+    is lost the export-mode LUT buffers are sized wrong.
+    """
+    layer = LogicConvTranspose2d(
+        in_dim=(6, 6), channels=2, num_kernels=4, tree_depth=2,
+        receptive_field_size=3, stride=2, padding=0, output_padding=0,
+        device="cpu",
+    )
+    out = layer(torch.rand(1, 2, 6, 6))
+    assert layer.kernel_positions == list(out.shape[2:]) == [13, 13]
+    assert layer.n_kernel_positions == 13 * 13
+
+
+# ---------------------------------------------------------------------------
+# Autoencoder: LogicConv2d downsamples, LogicConvTranspose2d reconstructs
+# ---------------------------------------------------------------------------
+
+def _make_conv_ae_2d(parametrization="raw"):
+    """Small logic autoencoder: 8x8 -> 3x3 (encoder) -> 8x8 (decoder)."""
+    encoder = LogicConv2d(
+        in_dim=8, channels=2, num_kernels=4, receptive_field_size=3,
+        tree_depth=2, stride=2, padding=0, device="cpu",
+        parametrization=parametrization,
+        parametrization_kwargs={"weight_init": "random"},
+    )
+    decoder = LogicConvTranspose2d(
+        in_dim=3, channels=4, num_kernels=2, receptive_field_size=3,
+        tree_depth=2, stride=2, padding=0, output_padding=1, device="cpu",
+        parametrization=parametrization,
+        parametrization_kwargs={"weight_init": "random"},
+    )
+    return torch.nn.Sequential(encoder, decoder)
+
+
+def test_conv_ae_2d_roundtrips_input_shape():
+    """The decoder must restore the encoder's input resolution."""
+    model = _make_conv_ae_2d()
+    x = torch.rand(3, 2, 8, 8)
+
+    encoded = model[0](x)
+    assert tuple(encoded.shape) == (3, 4, 3, 3), tuple(encoded.shape)
+
+    decoded = model(x)
+    assert tuple(decoded.shape) == (3, 2, 8, 8), (
+        f"AE must return to the input resolution, got {tuple(decoded.shape)}"
+    )
+
+
+def test_conv_ae_2d_trains_end_to_end():
+    """A reconstruction loss must produce gradients in encoder and decoder alike."""
+    torch.manual_seed(0)
+    model = _make_conv_ae_2d(parametrization="warp")
+    model.train()
+
+    x = (torch.rand(4, 2, 8, 8) > 0.5).float()
+    loss = torch.nn.functional.mse_loss(model(x), x)
+    loss.backward()
+
+    for name, layer in (("encoder", model[0]), ("decoder", model[1])):
+        for i, w in enumerate(layer.tree_weights):
+            assert w.grad is not None, f"{name}.tree_weights[{i}] has no gradient"
+            assert w.grad.abs().sum() > 0, f"{name}.tree_weights[{i}] gradient is all zero"
+
+
+def test_conv_ae_2d_is_deterministic_in_eval():
+    """Eval mode must be free of sampling noise: repeated calls agree exactly."""
+    model = _make_conv_ae_2d()
+    model.eval()
+    x = (torch.rand(2, 2, 8, 8) > 0.5).float()
+    assert torch.equal(model(x), model(x))

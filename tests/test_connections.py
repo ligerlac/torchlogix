@@ -1,7 +1,7 @@
 import pytest
 import torch
 from torchlogix.layers import LogicDense
-from torchlogix.connections import LearnableDenseConnections, FixedConvConnections
+from torchlogix.connections import LearnableDenseConnections, FixedConvConnections, FixedConvTransposeConnections
 from torchlogix.functional import softmax
 from torch.nn.functional import softmax as softmax_torch
 
@@ -98,3 +98,40 @@ def test_fixed_conv_connections(channel_group_size):
             assert len(considered_channels) <= channel_group_size, (
                 "channel_group_size must be smaller than the number of channels"
             )
+
+@pytest.mark.parametrize("stride,output_padding", [(1, 0), (2, 0), (2, 1), (3, 0), (3, 2)])
+def test_fixed_conv_transpose_connections_output_shape(stride, output_padding):
+    """Index tensors must produce the correct transposed-conv output spatial size."""
+    in_h, in_w = 6, 6
+    kH = 3
+    padding = 0
+    channels = 2
+    num_kernels = 4
+    tree_depth = 2
+    batch = 2
+
+    conn = FixedConvTransposeConnections(
+        in_dim=(in_h, in_w),
+        channels=channels,
+        num_kernels=num_kernels,
+        tree_depth=tree_depth,
+        receptive_field_size=kH,
+        stride=stride,
+        padding=padding,
+        output_padding=output_padding,
+        conv_dimension=2,
+    )
+
+    expected_out = (in_h - 1) * stride - 2 * padding + kH + output_padding
+
+    # Level-0 indices encode spatial positions
+    fov = conn.indices[0]           # (lut_rank, num_kernels, num_positions, sample_size, 3)
+    num_positions = fov.shape[2]
+    assert num_positions == expected_out ** 2, (
+        f"Expected {expected_out**2} output positions, got {num_positions}"
+    )
+
+    # Verify forward produces the right gathered shape at level 0.
+    x = torch.rand(batch, channels, in_h, in_w)
+    out = conn(x, tree_level=0)
+    assert out.shape[3] == expected_out ** 2
