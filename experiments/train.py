@@ -285,14 +285,12 @@ def run_training(args, callbacks=None):
 
     # Weight decay should not be applied to parameters whose *magnitude* directly
     # encodes the represented function (decaying them toward 0 collapses the
-    # representation), e.g. LearnableBinarization's threshold offsets or
-    # BinaryEmbedding's lookup table (decaying it washes every entry toward the
+    # representation), e.g. LearnableBinarization's threshold offsets
+    # decaying it washes every entry toward the
     # uninformative sigmoid(0)=0.5).
     no_decay_ids = set()
     if isinstance(model[0], torchlogix.layers.LearnableBinarization):
         no_decay_ids.add(id(model[0].raw_diffs))
-    if isinstance(model[0], torchlogix.layers.BinaryEmbedding):
-        no_decay_ids.add(id(model[0].embedding.weight))
 
     def split_decay(params):
         decay = [p for p in params if id(p) not in no_decay_ids]
