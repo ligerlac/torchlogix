@@ -125,7 +125,7 @@ def get_parser():
         help="Sampling method in forward pass during training"
     )
     parser.add_argument(
-        "--weight-init", type=str, default="residual", choices=["residual", "random", "residual-catalog", "residual-noisy"],
+        "--weight-init", type=str, default="residual", choices=["residual", "random", "residual-catalog"],
         help="Initialization method for model weights"
     )
     parser.add_argument(
