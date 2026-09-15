@@ -87,9 +87,13 @@ The full training- and evaluation of the model above is demonstrated in the exam
 
 Various experiments can be run using the script `experiments/train.py`. For example, the medium-sized convolutional model on CIFAR-10 from the paper  "Convolutional Differentiable Logic Gate Networks" (Paper @ [ArXiv](https://arxiv.org/pdf/2411.04732)), can be trained like so:
 ```
-python train.py --dataset cifar-10 -a ClgnCifar10Medium --connections-init-method random-unique -lr 0.02 -wd 0.002 --device cuda --compile-model
+python train.py --dataset cifar-10 -a ClgnCifar10Medium --connections-init-method random-unique -lr 0.02 --device cuda --compile-model -ni 14000
 ```
-This achieves 70% discrete test accurcay within 30 minutes on an `A100`, which can be increased further with data augmentation, and knowledge distillation but details of the training procedure are beyond the scope of this package.
+This converges to ~68% discrete test accuracy in ~30 minutes on an `A100`. It can be improved to beyond 70% with standard data augmentation and longer training:
+```
+python train.py --dataset cifar-10 -a ClgnCifar10Medium --connections-init-method random-unique -lr 0.02 --augment --device cuda --compile-model -ni 50000
+```
+More advanced data augmentation and knowledge distillation can increase accurcay further, but details of the training procedure are beyond the scope of this package.
 
 ## Citation
 

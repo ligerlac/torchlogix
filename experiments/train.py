@@ -50,6 +50,11 @@ def get_parser():
         "--valid-set-size", "-vss", type=float, default=0.1,
         help="Fraction of train set for validation"
     )
+    parser.add_argument(
+        "--augment", action="store_true",
+        help="Apply standard data augmentation (random crop + horizontal flip) to the "
+             "CIFAR-10 training set. Not used by default (matches the README quickstart)."
+    )
 
     # Learning rate parameters
     parser.add_argument("--learning-rate", "-lr", type=float, default=0.01, help="Learning rate")
@@ -139,7 +144,7 @@ def get_parser():
         help="Binarization method for input data"
     )
     parser.add_argument(
-        "--binarization-init", type=str, default="uniform", choices=["uniform", "distributive"],
+        "--binarization-init", type=str, default="distributive", choices=["uniform", "distributive"],
         help="Method to find initial thresholds for binarization"
     )
     parser.add_argument(
@@ -268,42 +273,41 @@ def run_training(args, callbacks=None):
     }
 
     # Set up optimizer with optional separate learning rate for binarization parameters
-    params_list = []
     binarization_params = []
     if args.binarization_learning_rate and isinstance(model[0], torchlogix.layers.LearnableBinarization):
         binarization_params += list(model[0].parameters())
-        params_list += [{'params': binarization_params, 'lr': args.binarization_learning_rate * args.learning_rate}]
+        binarization_lr = args.binarization_learning_rate * args.learning_rate
     else:
         if args.binarization_learning_rate:
             print("Warning: binarization_learning_rate specified but the model does not use LearnableBinarization. Ignoring this parameter.")
+        binarization_lr = args.learning_rate
     other_params = [p for p in model.parameters() if p not in set(binarization_params)]
-    params_list += [{'params': other_params, 'lr': args.learning_rate}]
 
-    if args.weight_decay is not None:
-        # weight decay should not be applied to learnable binarization parameters
-        # Would be nicer to implement this in the binarization layer itself (not sure if possible)
-        decay_params = []
-        no_decay_params = []
-        for name, param in model.named_parameters():
+    # Weight decay should not be applied to parameters whose *magnitude* directly
+    # encodes the represented function (decaying them toward 0 collapses the
+    # representation), e.g. LearnableBinarization's threshold offsets
+    # decaying it washes every entry toward the
+    # uninformative sigmoid(0)=0.5).
+    no_decay_ids = set()
+    if isinstance(model[0], torchlogix.layers.LearnableBinarization):
+        no_decay_ids.add(id(model[0].raw_diffs))
 
-            if not param.requires_grad:
-                continue
+    def split_decay(params):
+        decay = [p for p in params if id(p) not in no_decay_ids]
+        no_decay = [p for p in params if id(p) in no_decay_ids]
+        return decay, no_decay
 
-            if "raw_diffs" in name:
-                no_decay_params.append(param)
-            else:
-                decay_params.append(param)
+    wd = args.weight_decay if args.weight_decay is not None else 0.0
+    params_list = []
+    for params, lr in [(binarization_params, binarization_lr), (other_params, args.learning_rate)]:
+        decay, no_decay = split_decay(params)
+        if decay:
+            params_list.append({'params': decay, 'lr': lr, 'weight_decay': wd})
+        if no_decay:
+            params_list.append({'params': no_decay, 'lr': lr, 'weight_decay': 0.0})
 
-        optimizer = torch.optim.AdamW(
-            [
-                {"params": decay_params, "weight_decay": args.weight_decay},
-                {"params": no_decay_params, "weight_decay": 0.0},
-            ]
-        )
-        optimizer = torch.optim.AdamW(params_list, weight_decay=args.weight_decay)
-    else:
-        optimizer = torch.optim.Adam(params_list)
-
+    optimizer = torch.optim.AdamW(params_list)
+    
     # Training tracking
     metrics = defaultdict(dict)
     best_val_acc = 0.0
@@ -403,8 +407,9 @@ def main():
     call_backs = [
         lambda ctx: save_best_model(ctx, args.output),
         lambda ctx: save_metrics_csv(ctx.step, ctx.metrics, args.output),
-        lambda ctx: save_thresholds_csv(ctx.step, thresholds=ctx.model[0].get_thresholds().detach(), 
-                                        output_path=args.output) if hasattr(ctx.model[0], "get_thresholds") else None
+        lambda ctx: save_thresholds_csv(ctx.step, thresholds=ctx.model[0].get_thresholds().detach(),
+                                        output_path=args.output)
+                    if getattr(ctx.model[0], "get_thresholds", lambda: None)() is not None else None
     ]
 
     # Pretty print args

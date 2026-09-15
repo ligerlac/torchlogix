@@ -248,17 +248,19 @@ class ClgnCifar10(torch.nn.Sequential):
 
 
 class ClgnCifar10Small(ClgnCifar10):
-    n_input_bits = 2
+    n_input_bits = 3
     k_num = 32
     tau = 20
     group_size = 2
+    group_size_input = 1
 
 
 class ClgnCifar10Medium(ClgnCifar10):
-    n_input_bits = 2
+    n_input_bits = 3
     k_num = 256
     tau = 40
     group_size = 2
+    group_size_input = 1
 
 
 class ClgnCifar10Large(ClgnCifar10):
@@ -267,18 +269,3 @@ class ClgnCifar10Large(ClgnCifar10):
     tau = 280
     group_size = 2
 
-
-class ClgnCifar10Small2(ClgnCifar10):
-    n_input_bits = 2
-    k_num = 32
-    tau = 20
-    group_size = 2
-    group_size_input = 1
-
-
-class ClgnCifar10Medium2(ClgnCifar10):
-    n_input_bits = 2
-    k_num = 256
-    tau = 40
-    group_size = 2
-    group_size_input = 1

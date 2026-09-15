@@ -26,19 +26,35 @@ def load_dataset(args):
             f"{data_path}/data-mnist", train=False, transform=transform
         )
     elif args.dataset == "cifar-10":
+        augment = getattr(args, "augment", False)
+        if augment:
+            train_transform = torchvision.transforms.Compose([
+                torchvision.transforms.RandomCrop(32, padding=4),
+                torchvision.transforms.RandomHorizontalFlip(),
+                torchvision.transforms.ToTensor(),
+            ])
+        else:
+            train_transform = transform
         train_set = torchvision.datasets.CIFAR10(
-            f"{data_path}/data-cifar", train=True, download=True, transform=transform
+            f"{data_path}/data-cifar", train=True, download=True, transform=train_transform
         )
         test_set = torchvision.datasets.CIFAR10(
             f"{data_path}/data-cifar", train=False, transform=transform
         )
-    
+
     if args.valid_set_size > 0:
         train_set_size = math.ceil((1 - args.valid_set_size) * len(train_set))
         valid_set_size = len(train_set) - train_set_size
         train_set, validation_set = torch.utils.data.random_split(
             train_set, [train_set_size, valid_set_size]
         )
+        if args.dataset == "cifar-10" and getattr(args, "augment", False):
+            # validation split must not see the augmented transform: rebuild it as a
+            # plain-ToTensor view of the same underlying images (same split indices).
+            plain_train_set = torchvision.datasets.CIFAR10(
+                f"{data_path}/data-cifar", train=True, download=True, transform=transform
+            )
+            validation_set = torch.utils.data.Subset(plain_train_set, validation_set.indices)
     else:
         print(f"Training on entire training set. Using test set as validation set.")
         validation_set = test_set
@@ -106,7 +122,7 @@ def get_model(thresholds, args):
             "one_per": args.binarization_per,
             "temperature_sampling": args.binarization_temperature,
             "temperature_softplus": args.binarization_temperature_softplus,
-            "forward_sampling": args.binarization_forward_sampling
+            "forward_sampling": args.binarization_forward_sampling,
             }
     }
     model_cls = torchlogix.models.__dict__[args.architecture]
