@@ -144,7 +144,7 @@ def get_parser():
         help="Binarization method for input data"
     )
     parser.add_argument(
-        "--binarization-init", type=str, default="uniform", choices=["uniform", "distributive"],
+        "--binarization-init", type=str, default="distributive", choices=["uniform", "distributive"],
         help="Method to find initial thresholds for binarization"
     )
     parser.add_argument(
