@@ -44,6 +44,7 @@ dev = [
     "isort>=5.13.2",
     "pre-commit>=3.6.0",
     "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
     "autopep8>=2.0.4",
     "onnx",
     "onnxscript"
@@ -66,6 +67,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: pays a one-off torch.compile cost; deselect with -m 'not slow'",
+]
 
 [tool.black]
 line-length = 88
