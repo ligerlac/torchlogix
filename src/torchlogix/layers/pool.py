@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+from ..modes import ExportableModule
+
 
 def _to_tuple(v, n):
     if isinstance(v, tuple):
@@ -8,7 +10,7 @@ def _to_tuple(v, n):
     return (v,) * n
 
 
-class OrPooling2d(torch.nn.Module):
+class OrPooling2d(ExportableModule):
     """Logic gate based pooling layer."""
 
     def __init__(self, kernel_size, stride, padding=0, export_mode=False):
@@ -43,16 +45,10 @@ class OrPooling2d(torch.nn.Module):
         result = x[..., 0]
         for i in range(1, x.shape[-1]):
             result = result | x[..., i]
-        return result 
+        return result
 
 
-    def set_export_mode(self, export_mode: bool = True):
-        """Set export mode for the layer."""
-        self.eval()
-        self.export_mode = export_mode
-
-
-class OrPooling3d(torch.nn.Module):
+class OrPooling3d(ExportableModule):
     """Logic gate based pooling layer."""
 
     def __init__(self, kernel_size, stride, padding=0, export_mode=False):
@@ -66,7 +62,7 @@ class OrPooling3d(torch.nn.Module):
 
         if self.export_mode:
             return self._torch_or_pool(x)
-            
+
         assert x.dim() == 5, "Input tensor must be 5d"
 
         return F.max_pool3d(
@@ -89,7 +85,3 @@ class OrPooling3d(torch.nn.Module):
             result = result | x[..., i]
         return result
 
-    def set_export_mode(self, export_mode: bool = True):
-        """Set export mode for the layer."""
-        self.eval()
-        self.export_mode = export_mode

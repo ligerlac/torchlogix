@@ -17,6 +17,8 @@ from torchlogix.utils import set_export_mode
     "model_fixture, input_fixture",
     [
         ("logic_dense_model", "sample_input_1d"),
+        ("logic_dense_learnable_model", "sample_input_1d"),
+        ("logic_dense_learnable_gumbel_model", "sample_input_1d"),
         ("conv2d_model_wo_group_sum", "sample_input_2d"),
         ("conv3d_model_wo_group_sum", "sample_input_3d"),
         ("conv2d_model", "sample_input_2d"),
@@ -126,6 +128,8 @@ class TestFXGraphPurity:
 
     @pytest.mark.parametrize("model_fixture, input_fixture, allowed_targets", [
         ("logic_dense_model", "sample_input_1d", ALLOWED_FX_TARGETS),
+        ("logic_dense_learnable_model", "sample_input_1d", ALLOWED_FX_TARGETS),
+        ("logic_dense_learnable_gumbel_model", "sample_input_1d", ALLOWED_FX_TARGETS),
         ("conv2d_model_wo_group_sum", "sample_input_2d", ALLOWED_FX_TARGETS),
         ("conv3d_model_wo_group_sum", "sample_input_3d", ALLOWED_FX_TARGETS),
         ("conv2d_model", "sample_input_2d", ALLOWED_FX_TARGETS | ALLOWED_FX_TARGETS_GROUP_SUM),

@@ -6,6 +6,7 @@ from torch import Tensor
 import torch.nn.functional as F
 
 from ..functional import sigmoid, gumbel_sigmoid
+from ..modes import ExportableModule
 
 
 def setup_binarization(thresholds, binarization: str, **binarization_kwargs):
@@ -24,7 +25,7 @@ def setup_binarization(thresholds, binarization: str, **binarization_kwargs):
     return bin_cls(thresholds=thresholds, **binarization_kwargs)
 
 
-class Binarization(torch.nn.Module, ABC):
+class Binarization(ExportableModule, ABC):
     """Abstract base class for binarization modules."""
     def __init__(
             self,

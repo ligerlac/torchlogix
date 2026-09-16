@@ -1,7 +1,9 @@
 import torch
 
+from ..modes import ExportableModule
 
-class GroupSum(torch.nn.Module):
+
+class GroupSum(ExportableModule):
     """
     The GroupSum module.
     """
@@ -33,6 +35,3 @@ class GroupSum(torch.nn.Module):
     def extra_repr(self):
         return "k={}, tau={}".format(self.k, self.tau)
 
-    def set_export_mode(self, export_mode: bool):
-        self.eval()
-        self.export_mode = export_mode

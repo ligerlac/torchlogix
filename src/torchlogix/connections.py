@@ -6,7 +6,8 @@ import torch
 from torch.nn.common_types import _size_2_t, _size_3_t
 from torch.nn.modules.utils import _pair, _triple
 
-from .functional import softmax, take_tuples, get_combination_indices
+from .modes import ExportableModule
+from .functional import softmax, take_tuples
     
 
 def setup_connections(
@@ -45,8 +46,15 @@ def setup_connections(
         raise ValueError(f"Unknown structure method: {structure}")
     
 
-class Connections(torch.nn.Module, ABC):
-    """Abstract base class for connection strategies."""
+class Connections(ExportableModule, ABC):
+    """Abstract base class for connection strategies.
+
+    Connections are the wiring of a logic layer: they gather ``lut_rank`` input
+    features per neuron and own no gates of their own. They are not logic
+    layers, but they do sit on the export path (a layer's export forward calls
+    its connections unchanged), so they share the train/eval/export protocol
+    via :class:`~torchlogix.modes.ExportableModule`.
+    """
     def __init__(
             self,
             lut_rank=2,
@@ -65,9 +73,6 @@ class Connections(torch.nn.Module, ABC):
 
     @abstractmethod
     def _init_connections(self):
-        pass
-
-    def update_temperature(self, temperature: float):
         pass
 
 
@@ -105,18 +110,18 @@ class FixedDenseConnections(Connections):
         self.register_buffer('indices', self._init_connections())
 
     def _init_connections(self):
-        """Constructs possible input–neuron connection indices.
+        """Constructs input–neuron connection indices.
 
-        Each neuron takes ``lut_rank`` input features chosen out of ``lut_rank * num_candidates``
-        possibilities. This function returns a tensor encoding which input indices are connected 
-        to which neuron.
+        Each neuron takes ``lut_rank`` input features chosen out of ``in_dim``
+        possibilities. This function returns a tensor encoding which input indices are
+        connected to which neuron.
 
         Returns:
-            A tensor of shape ``(num_candidates, lut_rank, out_dim)`` with integer indices into
+            A tensor of shape ``(lut_rank, out_dim)`` with integer indices into
             the last dimension of the input.
         """
         assert self.in_dim >= self.lut_rank, (
-            f"Cannot have num_candidates * lut_rank > in_dim "
+            f"Cannot have lut_rank > in_dim "
             f"({self.lut_rank} > {self.in_dim})"
         )
         assert self.out_dim * self.lut_rank >= self.in_dim, (
@@ -231,13 +236,48 @@ class LearnableDenseConnections(Connections):
             self.register_buffer('indices', self._init_connections())
         self.weights = torch.nn.Parameter(torch.rand(
             num_candidates, lut_rank, out_dim, dtype=torch.float32), requires_grad=True)
-        
-    def update_temperature(self, temperature: float):
-        self.temperature = temperature
-        
+
+    def resolve_connections(self):
+        """Resolves the learned weights into concrete input indices.
+
+        Picks the highest-scoring candidate per ``(lut_rank, out_dim)`` slot and
+        maps it through ``indices`` to an index into the input feature dimension.
+        This is the discrete wiring the layer converges to, and the one the
+        exported circuit is built from.
+
+        Returns:
+            An integer tensor of shape ``(lut_rank, out_dim)``, i.e. the same
+            shape and meaning as ``FixedDenseConnections.indices``.
+        """
+        with torch.no_grad():
+            chosen = self.weights.argmax(dim=0)
+            l = torch.arange(self.lut_rank, device=self.weights.device).unsqueeze(1)
+            o = torch.arange(self.out_dim, device=self.weights.device).unsqueeze(0)
+            return self.indices[chosen, l, o].contiguous().to(torch.int64)
+
+    def _on_export_mode(self, enabled: bool):
+        """Freezes the learned wiring into a buffer.
+
+        In export mode the forward must be a plain gather, so that tracing sees
+        the same ``aten.index.Tensor`` with a constant index tensor that fixed
+        connections produce. Without this the argmax (and, with Gumbel, the
+        sampling) leaks into the traced graph.
+        """
+        if enabled:
+            self.register_buffer('_export_indices', self.resolve_connections(),
+                                 persistent=True)
+        else:
+            if hasattr(self, '_export_indices'):
+                delattr(self, '_export_indices')
+
     def forward(self, x):
-        return LearnableConnectionFunction.apply(x, self.weights, torch.tensor(self.temperature), 
-                                                 self.gumbel, self.indices)
+        if self.export_mode:
+            return x[:, self._export_indices]
+        # Gumbel noise is a training-time exploration device - sampling it in
+        # eval would make inference non-deterministic.
+        gumbel = self.gumbel and self.training
+        return LearnableConnectionFunction.apply(x, self.weights, torch.tensor(self.temperature),
+                                                 gumbel, self.indices)
     
     def _init_connections(self):
         """Constructs possible input–neuron connection indices.
@@ -272,7 +312,7 @@ class LearnableDenseConnections(Connections):
             )
             c = c.reshape(self.num_candidates, self.lut_rank, self.out_dim)
         else:
-            raise ValueError(self.connections)
+            raise ValueError(self.init_method)
         c = c.contiguous().to(torch.int64).to(self.device)
         return c
     

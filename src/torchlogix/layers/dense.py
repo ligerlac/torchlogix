@@ -168,15 +168,10 @@ class LogicDense(LogicBase):
     def rescale_weights(self, method):
         rescale_weights(self.weight, method)
 
-    def set_export_mode(self, enabled: bool = True):
-        """Enable or disable export mode for circuit/ONNX tracing.
-
-        When enabled, pre-computes and caches LUT IDs as a buffer to avoid
-        recomputing argmax in the exported model.
+    def _on_export_mode(self, enabled: bool):
+        """Pre-compute and cache LUT IDs as a buffer, so that the exported
+        model does not have to recompute the argmax.
         """
-        self.eval()
-        self.export_mode = enabled
-
         if enabled:
             _, ids = self.get_luts_and_ids()
             self.register_buffer('_export_lut_ids', ids, persistent=True)

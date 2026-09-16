@@ -37,6 +37,39 @@ def logic_dense_model():
 
 
 @pytest.fixture
+def logic_dense_learnable_model():
+    """Dense model wired with learnable connections.
+
+    Learnable connections resolve their wiring with an argmax (and, with
+    gumbel, a random sample). Both must be frozen out in export mode, so this
+    fixture goes through the same eval/export/circuit checks as the fixed one.
+    """
+    torch.manual_seed(0)
+    model = nn.Sequential(
+        LogicDense(16, 32, parametrization="raw", connections="learnable",
+                   connections_kwargs={"num_candidates": 2}),
+        LogicDense(32, 16, parametrization="raw", connections="learnable",
+                   connections_kwargs={"num_candidates": 2}),
+    )
+    model.eval()
+    return model
+
+
+@pytest.fixture
+def logic_dense_learnable_gumbel_model():
+    """Same, but with Gumbel sampling enabled - the non-deterministic case."""
+    torch.manual_seed(0)
+    model = nn.Sequential(
+        LogicDense(16, 32, parametrization="raw", connections="learnable",
+                   connections_kwargs={"num_candidates": 2, "gumbel": True}),
+        LogicDense(32, 16, parametrization="raw", connections="learnable",
+                   connections_kwargs={"num_candidates": 2, "gumbel": True}),
+    )
+    model.eval()
+    return model
+
+
+@pytest.fixture
 def conv2d_model_wo_group_sum():
     model = nn.Sequential(
         LogicConv2d(in_dim=8, channels=3, num_kernels=7, receptive_field_size=3, tree_depth=2),

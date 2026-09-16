@@ -154,9 +154,6 @@ class LUTParametrization(torch.nn.Module, ABC):
         """
         pass
 
-    def update_temperature(self, temperature: float):
-        self.temperature = temperature
-    
 
 class RawLUTParametrization(LUTParametrization):
     """Raw LUT parametrization using direct truth table logits.
