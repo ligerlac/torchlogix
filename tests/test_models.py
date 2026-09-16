@@ -16,15 +16,15 @@ from torchlogix.utils import set_export_mode
 from helpers import (
     assert_compiled_gradients_match_eager,
     assert_finite_difference_matches_autograd,
+    model_input,
+    random_bool_input,
 )
 from models import (
     BINARIZED_MODELS,
     MODELS,
     TORCHLOGIX_MODELS,
-    branch_model,
-    conv_model,
-    model_input,
-    random_bool_input,
+    BranchModel,
+    ConvModel,
 )
 
 
@@ -57,10 +57,10 @@ def _force_discrete(model):
                     layer_weights.scatter_(2, indices, 100)
 
 
-@pytest.mark.parametrize("model_fn", BINARIZED_MODELS)
-def test_train_and_eval_agree_when_forced_discrete(model_fn):
+@pytest.mark.parametrize("model_cls", BINARIZED_MODELS)
+def test_train_and_eval_agree_when_forced_discrete(model_cls):
     """Relaxed and discrete forwards must agree once nothing is stochastic."""
-    model = model_fn()
+    model = model_cls()
     x = model_input(model, seed=0)
 
     _force_discrete(model)
@@ -73,15 +73,15 @@ def test_train_and_eval_agree_when_forced_discrete(model_fn):
         "Eval-mode output diverges from train-mode output"
 
 
-@pytest.mark.parametrize("model_fn", MODELS)
-def test_state_dict_round_trip(model_fn):
+@pytest.mark.parametrize("model_cls", MODELS)
+def test_state_dict_round_trip(model_cls):
     """A model reloaded from its own state_dict must produce identical output."""
-    model = model_fn()
+    model = model_cls()
     model.eval()
     x = model_input(model, seed=0)
     out_original = model(x)
 
-    reloaded = model_fn()
+    reloaded = model_cls()
     reloaded.eval()
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         torch.save(model.state_dict(), tmp.name)
@@ -95,9 +95,9 @@ def test_state_dict_round_trip(model_fn):
 # Gradient correctness
 # ---------------------------------------------------------------------------
 
-def _train_mode_batch(model_fn, seed=0):
+def _train_mode_batch(model_cls, seed=0):
     torch.manual_seed(seed)
-    model = model_fn()
+    model = model_cls()
     model.train()
     x = model_input(model, batch_size=2, seed=seed)
     torch.manual_seed(seed + 1)
@@ -105,23 +105,23 @@ def _train_mode_batch(model_fn, seed=0):
     return model, x, weights
 
 
-@pytest.mark.parametrize("model_fn", TORCHLOGIX_MODELS)
-def test_model_gradients_match_finite_differences(model_fn):
+@pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS)
+def test_model_gradients_match_finite_differences(model_cls):
     """Autograd must agree with central finite differences through a whole model."""
-    model, x, weights = _train_mode_batch(model_fn)
+    model, x, weights = _train_mode_batch(model_cls)
     assert_finite_difference_matches_autograd(model, x, weights)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("model_fn", [conv_model, branch_model])
-def test_model_gradients_survive_torch_compile(model_fn):
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+def test_model_gradients_survive_torch_compile(model_cls):
     """Compiling a model must not change its gradients.
 
     Marked slow: torch.compile costs a few seconds per model. Two
     representative models rather than all of them, since the per-layer version
     in test_layers.py already covers every layer family.
     """
-    model, x, weights = _train_mode_batch(model_fn)
+    model, x, weights = _train_mode_batch(model_cls)
     assert_compiled_gradients_match_eager(model, x, weights)
 
 
@@ -129,10 +129,10 @@ def test_model_gradients_survive_torch_compile(model_fn):
 # Eval mode vs export mode
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("model_fn", MODELS)
-def test_eval_and_export_agree(model_fn):
+@pytest.mark.parametrize("model_cls", MODELS)
+def test_eval_and_export_agree(model_cls):
     """Eval mode and export mode must agree on binary inputs."""
-    model = model_fn()
+    model = model_cls()
     model.eval()
     x = random_bool_input(model, batch_size=8, seed=0)
 
@@ -142,7 +142,7 @@ def test_eval_and_export_agree(model_fn):
     result_export = model(x)
 
     assert torch.allclose(result_eval.float(), result_export.float(), atol=1e-6), \
-        f"[{model_fn.__name__}] eval and export results diverge"
+        f"[{model_cls.__name__}] eval and export results diverge"
 
 
 # ---------------------------------------------------------------------------
@@ -233,9 +233,9 @@ ALLOWED_FX_TARGETS_GROUP_SUM = {
 }
 
 
-@pytest.mark.parametrize("model_fn", TORCHLOGIX_MODELS)
-def test_exported_graph_is_pure_logic(model_fn):
-    model = model_fn()
+@pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS)
+def test_exported_graph_is_pure_logic(model_cls):
+    model = model_cls()
     model.eval()
 
     # Allow the reduction ops only for models that actually reduce, so the
@@ -265,7 +265,7 @@ def test_exported_graph_without_group_sum_contains_no_reductions():
     The parametrized test above widens the allow-list for models that reduce.
     This is the strict case: no reduction ops are permitted at all.
     """
-    model = conv_model()
+    model = ConvModel()
     del model[-1]           # drop the trailing GroupSum
     model.eval()
 

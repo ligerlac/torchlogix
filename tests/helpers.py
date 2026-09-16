@@ -1,8 +1,32 @@
-"""Shared assertions for the test suite.
+"""Shared input builders and assertions for the test suite.
+
+The models themselves live in tests/models.py; everything here works on a
+model instance rather than defining one.
 
 Imported, not collected - pytest only collects ``test_*.py``.
 """
 import torch
+
+
+def random_bool_input(model, batch_size=1, seed=None):
+    """Random boolean input matching `model.input_shape`.
+
+    Export-mode and circuit tests always want bool, whatever the model's
+    eval-mode dtype is.
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+    return torch.randint(0, 2, (batch_size, *model.input_shape), dtype=torch.bool)
+
+
+def model_input(model, batch_size=1, seed=None):
+    """Random input in the dtype `model`'s eval-mode forward expects.
+
+    Logic layers do float arithmetic when not in export mode, while the
+    pure-bitwise models need an integral dtype - hence `input_dtype`.
+    """
+    x = random_bool_input(model, batch_size=batch_size, seed=seed)
+    return x if model.input_dtype == torch.bool else x.to(model.input_dtype)
 
 
 def weighted_loss(module, x, weights):
