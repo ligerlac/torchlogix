@@ -13,17 +13,14 @@ from torchlogix.circuit import AIGGraph, Gate, GateOp, SumReduction
 from torchlogix.utils import set_export_mode
 from models import (
     MODELS,
-    AnyLogicModel,
-    BranchModel,
-    ConvModel,
-    ConvTransposeAE3dModel,
-    DenseModel,
-    InPlaceConstMutationModel,
+    branch_model,
+    conv_model,
+    in_place_const_mutation_model,
 )
 
-@pytest.mark.parametrize("model_cls", MODELS)
-def test_functional_equivalence(model_cls):
-    model = model_cls()
+@pytest.mark.parametrize("model_fn", MODELS)
+def test_functional_equivalence(model_fn):
+    model = model_fn()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     set_export_mode(model)
@@ -177,13 +174,13 @@ def test_aiger_serializer_accepts_valid_and_gate():
         assert _parse_aiger_file(tmp_file.name).and_gates == [(6, 4, 2)]
 
 
-@pytest.mark.parametrize("model_cls", MODELS)
-def test_aig_functional_equivalence(model_cls):
+@pytest.mark.parametrize("model_fn", MODELS)
+def test_aig_functional_equivalence(model_fn):
     """Round-trips a trained model's Circuit through the AIGER file format and
     checks -- via the independent Python AIG evaluator above, not a third-party
     tool -- that decoding the file reproduces circuit()'s output exactly.
     """
-    model = model_cls()
+    model = model_fn()
     set_export_mode(model)
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
 
@@ -209,8 +206,8 @@ ABC_PATH = shutil.which("abc")
 
 
 @pytest.mark.skipif(ABC_PATH is None, reason="abc binary not found on PATH")
-@pytest.mark.parametrize("model_cls", MODELS)
-def test_abc_reads_and_rewrites_aiger(model_cls):
+@pytest.mark.parametrize("model_fn", MODELS)
+def test_abc_reads_and_rewrites_aiger(model_fn):
     """Parser/compatibility check: ABC can read a TorchLogix .aig file and
     write out a functionally equivalent one.
 
@@ -220,7 +217,7 @@ def test_abc_reads_and_rewrites_aiger(model_cls):
     function, i.e. that our AIGER encoding is something a real third-party
     tool can consume without corrupting it.
     """
-    model = model_cls()
+    model = model_fn()
     set_export_mode(model)
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
 
@@ -247,11 +244,11 @@ def test_abc_reads_and_rewrites_aiger(model_cls):
             "ABC's read/write round trip changed the AIG's function"
 
 
-@pytest.mark.parametrize("model_cls", MODELS)
+@pytest.mark.parametrize("model_fn", MODELS)
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
 @pytest.mark.parametrize("relative_batch_size", [1, 10])
-def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
-    model = model_cls()
+def test_circuit_compilation(model_fn, pack_bits, relative_batch_size):
+    model = model_fn()
 
     batch_size = (1 if pack_bits is None else pack_bits) * relative_batch_size
     x = torch.randint(0, 2, (batch_size, *model.input_shape), dtype=torch.bool)
@@ -271,12 +268,12 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
         "Compiled circuit predictions differ from Eval-mode predictions"
 
 
-@pytest.mark.parametrize("model_cls", MODELS)
+@pytest.mark.parametrize("model_fn", MODELS)
 @pytest.mark.parametrize("simplification", [
     Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup, Circuit.fuse_not_inputs
 ])
-def test_circuit_simplifications(model_cls, simplification):
-    model = model_cls()
+def test_circuit_simplifications(model_fn, simplification):
+    model = model_fn()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
@@ -288,14 +285,14 @@ def test_circuit_simplifications(model_cls, simplification):
 
 
 def test_circuit_rejects_inplace_constant_mutation():
-    model = InPlaceConstMutationModel()
+    model = in_place_const_mutation_model()
     with pytest.raises(NotImplementedError, match="unsupported constant-tensor mutation"):
         Circuit.from_model(model, input_shape=model.input_shape)
 
 
-@pytest.mark.parametrize("model_cls", MODELS)
-def test_json_roundtrip(model_cls):
-    model = model_cls()
+@pytest.mark.parametrize("model_fn", MODELS)
+def test_json_roundtrip(model_fn):
+    model = model_fn()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)
@@ -311,10 +308,10 @@ def test_json_roundtrip(model_cls):
 
 
 
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])  # need a GroupSum head
-def test_c_codegen_group_sum_scores(model_cls):
+@pytest.mark.parametrize("model_fn", [conv_model, branch_model])  # need a GroupSum head
+def test_c_codegen_group_sum_scores(model_fn):
     """GroupSum reduction is inlined into circuit and compiles cleanly."""
-    model = model_cls()
+    model = model_fn()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
 
     circuit = Circuit.from_model(model, input_shape=model.input_shape)

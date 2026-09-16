@@ -1,20 +1,20 @@
 """Shared model definitions for the test suite.
 
-Every model exposes ``input_shape`` (spatial/feature shape, no batch dim), so a
-test can build an input for any model without a hand-maintained lookup table.
+Each model is a plain factory function that builds and returns it. Every model
+carries two attributes:
 
-``MODELS`` is the canonical set that the model-level and circuit-level tests
-sweep. **Adding a model there is the only edit needed for it to inherit every
-model-level property test.**
+    input_shape   shape of one sample, without the batch dimension
+    input_dtype   dtype its eval-mode forward expects
+
+``MODELS`` is the canonical set the model-level and circuit-level tests sweep.
+**Adding your function to MODELS is the only edit needed for it to inherit
+every model-level property test.**
 
 All logic layers use ``weight_init="random"``: residual init only improves
 training dynamics, so random is the harder case to get right.
 
 This module is imported, not collected - pytest only collects ``test_*.py``.
 """
-import math
-
-import pytest
 import torch
 import torch.nn as nn
 
@@ -33,119 +33,125 @@ from torchlogix.layers import (
 RANDOM_INIT = {"weight_init": "random"}
 
 
-def _pooled_flat_size(conv, pool_kernel=2, pool_stride=2):
-    """Flattened feature count after `conv` followed by an Or-pooling layer.
+def dense_model():
+    """Plain stack of dense logic layers."""
+    model = nn.Sequential(
+        LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+        LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+    )
+    model.input_shape = (1000,)
+    model.input_dtype = torch.float32
+    return model
 
-    Derived from conv.kernel_positions rather than by running a forward pass:
-    a probe forward through a logic layer would consume RNG and change the
-    initialization of every layer built afterwards.
+
+def conv_model():
+    """conv -> pool -> flatten -> dense -> dense -> GroupSum.
+
+    8x8 input, receptive field 3 -> 6x6; pooling by 2 -> 3x3; 8 kernels, so
+    8 * 3 * 3 = 72 features into the dense head.
     """
-    pooled = [(p - pool_kernel) // pool_stride + 1 for p in conv.kernel_positions]
-    return conv.num_kernels * math.prod(pooled)
+    model = nn.Sequential(
+        LogicConv2d(in_dim=8, channels=3, num_kernels=8, receptive_field_size=3,
+                    tree_depth=2, parametrization_kwargs=RANDOM_INIT),
+        OrPooling2d(kernel_size=2, stride=2),
+        nn.Flatten(),
+        LogicDense(72, 64, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+        LogicDense(64, 50, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+        GroupSum(10),
+    )
+    model.input_shape = (3, 8, 8)
+    model.input_dtype = torch.float32
+    return model
 
 
-class DenseModel(nn.Sequential):
-    """Plain sequential stack of dense logic layers.
+def conv_transpose_ae_model():
+    """3D autoencoder: conv halves 6^3 to 3^3, transposed conv restores it.
 
-    With ``binarize=True`` a LearnableBinarization front-end is prepended; its
-    two thresholds double the feature count, so the input is half as wide.
+    Both layers pad, and the decoder also uses output_padding, so this one
+    model covers the whole transposed-conv export path: strided input
+    dilation, padding applied inside the connections rather than by the layer,
+    and kernel_positions describing the enlarged output.
+
+    The trailing OrPooling3d is this suite's only 3D pooling in export mode -
+    without it the boolean unfold-and-OR kernel in OrPooling3d goes untested.
+    Flattened last because Circuit outputs are flat; the spatial round trip
+    itself is asserted in test_layers.py.
     """
+    model = nn.Sequential(
+        LogicConv3d(in_dim=6, channels=2, num_kernels=3, receptive_field_size=3,
+                    tree_depth=2, stride=2, padding=1,
+                    parametrization_kwargs=RANDOM_INIT),                     # -> 3 x 3^3
+        LogicConvTranspose3d(in_dim=3, channels=3, num_kernels=2, receptive_field_size=3,
+                             tree_depth=2, stride=2, padding=1, output_padding=1,
+                             parametrization_kwargs=RANDOM_INIT),            # -> 2 x 6^3
+        OrPooling3d(kernel_size=2, stride=2),                                # -> 2 x 3^3
+        nn.Flatten(),
+    )
+    model.input_shape = (2, 6, 6, 6)
+    model.input_dtype = torch.float32
+    return model
 
-    input_dtype = torch.float32
 
-    def __init__(self, binarize=False):
-        width = 1000
-        layers = []
-        if binarize:
-            layers.append(LearnableBinarization(thresholds=[0.33, 0.66]))
-        layers += [
-            LogicDense(width, width, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
-            LogicDense(width, width, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
-        ]
-        super().__init__(*layers)
-        self.input_shape = (width // 2,) if binarize else (width,)
+def binarized_dense_model():
+    """dense_model behind a LearnableBinarization front-end.
 
-
-class ConvModel(nn.Sequential):
-    """Sequential conv stack: conv -> pool -> flatten -> dense -> dense [-> GroupSum].
-
-    ``ndim`` picks the 2D or 3D layer family, so the 2D and 3D variants stay
-    one definition instead of two that drift apart. ``group_sum=False`` gives
-    the bare-logic-output variant. With ``binarize=True`` a per-channel
-    LearnableBinarization front-end doubles the channel count.
+    Its two thresholds double the feature count, so the input is half as wide.
     """
+    model = nn.Sequential(
+        LearnableBinarization(thresholds=[0.33, 0.66]),
+        LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+        LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+    )
+    model.input_shape = (500,)
+    model.input_dtype = torch.float32
+    return model
 
-    input_dtype = torch.float32
 
-    # (hidden, out, groups) per dimension. FixedDenseConnections requires
-    # out_dim * lut_rank >= in_dim to cover all inputs, and the 3D stack
-    # flattens to 216 features against the 2D stack's 72, so the two need
-    # different widths. Values match the models these replaced.
-    _DENSE_SHAPE = {2: (64, 50, 10), 3: (128, 64, 8)}
+def binarized_conv_model():
+    """conv_model behind a per-channel LearnableBinarization front-end.
 
-    def __init__(self, ndim=2, group_sum=True, binarize=False):
-        assert ndim in (2, 3)
-        in_dim, channels, num_kernels = 8, 3, 8
-        hidden, out_features, groups = self._DENSE_SHAPE[ndim]
-        conv_cls = LogicConv2d if ndim == 2 else LogicConv3d
-        pool_cls = OrPooling2d if ndim == 2 else OrPooling3d
-
-        conv = conv_cls(
-            in_dim=in_dim,
-            channels=channels * 2 if binarize else channels,
-            num_kernels=num_kernels,
-            receptive_field_size=3,
-            tree_depth=2,
-            parametrization_kwargs=RANDOM_INIT,
-        )
-        n_flat = _pooled_flat_size(conv)
-
-        layers = []
-        if binarize:
-            layers.append(
-                LearnableBinarization(thresholds=[0.33, 0.66], one_per="channel", feature_dim=1)
-            )
-        layers += [
-            conv,
-            pool_cls(kernel_size=2, stride=2),
-            nn.Flatten(),
-            LogicDense(n_flat, hidden, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
-            LogicDense(hidden, out_features, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
-        ]
-        if group_sum:
-            layers.append(GroupSum(groups))
-        super().__init__(*layers)
-        self.input_shape = (channels, *([in_dim] * ndim))
+    Its two thresholds double the 3 input channels to 6, which the conv layer
+    has to expect.
+    """
+    model = nn.Sequential(
+        LearnableBinarization(thresholds=[0.33, 0.66], one_per="channel", feature_dim=1),
+        LogicConv2d(in_dim=8, channels=6, num_kernels=8, receptive_field_size=3,
+                    tree_depth=2, parametrization_kwargs=RANDOM_INIT),
+        OrPooling2d(kernel_size=2, stride=2),
+        nn.Flatten(),
+        LogicDense(72, 64, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+        LogicDense(64, 50, parametrization="raw", parametrization_kwargs=RANDOM_INIT),
+        GroupSum(10),
+    )
+    model.input_shape = (3, 8, 8)
+    model.input_dtype = torch.float32
+    return model
 
 
 class BranchModel(nn.Module):
     """Custom forward: an image path and a scalar-feature path, recombined.
 
-    The flat input carries the image and one extra feature, so the model has to
-    split, reshape, and concatenate - which a plain Sequential cannot express.
+    The flat input carries a 3x32x32 image plus one extra feature, so the
+    model has to split, reshape and concatenate - which a plain Sequential
+    cannot express. The conv gives 30x30, pooling by 2 gives 15x15, and with
+    8 kernels that is 1800 features, plus the extra one.
     """
 
+    input_shape = (3 * 32 * 32 + 1,)
     input_dtype = torch.float32
 
     def __init__(self):
         super().__init__()
-        self.img_shape = (3, 32, 32)
-        n_img = math.prod(self.img_shape)
-        self.conv = LogicConv2d(
-            in_dim=32, channels=3, num_kernels=8, receptive_field_size=3,
-            tree_depth=2, parametrization_kwargs=RANDOM_INIT,
-        )
+        self.conv = LogicConv2d(in_dim=32, channels=3, num_kernels=8,
+                                receptive_field_size=3, tree_depth=2,
+                                parametrization_kwargs=RANDOM_INIT)
         self.pool = OrPooling2d(kernel_size=2, stride=2)
-        n_flat = _pooled_flat_size(self.conv)
-        self.dense = LogicDense(
-            n_flat + 1, 1000, parametrization="raw", parametrization_kwargs=RANDOM_INIT
-        )
+        self.dense = LogicDense(1801, 1000, parametrization="raw",
+                                parametrization_kwargs=RANDOM_INIT)
         self.group_sum = GroupSum(10)
-        self.input_shape = (n_img + 1,)
 
     def forward(self, x):
-        assert x.shape[1:] == self.input_shape
-        img, feat = x[:, :-1].reshape(-1, *self.img_shape), x[:, -1:]
+        img, feat = x[:, :-1].reshape(-1, 3, 32, 32), x[:, -1:]
         x = self.conv(img)
         x = self.pool(x)
         x = x.flatten(1)
@@ -155,50 +161,19 @@ class BranchModel(nn.Module):
         return x
 
 
-class ConvTransposeAE3dModel(nn.Sequential):
-    """3D autoencoder: LogicConv3d halves 6^3 to 3^3, LogicConvTranspose3d restores it.
-
-    Both layers use nonzero padding, and the decoder a nonzero output_padding,
-    so this one model covers the whole transposed-conv export path:
-
-    * input dilation (stride > 1) expressed functionally - building a zero
-      tensor and writing into it makes constant_fold_views reject the graph
-    * padding applied inside FixedConvTransposeConnections rather than by the
-      layer, which would otherwise double-pad
-    * kernel_positions describing the larger transposed output
-    """
-
-    input_dtype = torch.float32
-
-    def __init__(self):
-        super().__init__(
-            LogicConv3d(in_dim=6, channels=2, num_kernels=3, receptive_field_size=3,
-                        tree_depth=2, stride=2, padding=1,
-                        parametrization_kwargs=RANDOM_INIT),                    # -> 3 x 3^3
-            LogicConvTranspose3d(in_dim=3, channels=3, num_kernels=2, receptive_field_size=3,
-                                 tree_depth=2, stride=2, padding=1, output_padding=1,
-                                 parametrization_kwargs=RANDOM_INIT),           # -> 2 x 6^3
-            nn.Flatten(),   # Circuit outputs are flat; the spatial round-trip
-                            # itself is asserted in test_layers.py
-        )
-        self.input_shape = (2, 6, 6, 6)
-
-
 class AnyLogicModel(nn.Module):
     """Assorted non-torchlogix logic and reshaping ops, to test from_model's reach.
 
-    Deliberately contains no torchlogix layer at all, and mixes boolean outputs
-    with summed (reduction) outputs. Recovered from 5b40074, with the constant
-    mask rebuilt via torch.cat instead of `mask[4:, :] = 0`: mutating a freshly
-    created constant in place is untraceable, and InPlaceConstMutationModel
-    below is the test that such a model is *rejected*.
+    Deliberately contains no torchlogix layer at all, and mixes boolean
+    outputs with summed (reduction) outputs.
+
+    The constant mask is built with torch.cat rather than `mask[4:, :] = 0`:
+    mutating a freshly created constant in place is untraceable, which is
+    exactly what InPlaceConstMutationModel below exists to demonstrate.
     """
 
+    input_shape = (4, 8, 8)
     input_dtype = torch.bool
-
-    def __init__(self):
-        super().__init__()
-        self.input_shape = (4, 8, 8)
 
     def forward(self, x):
         x1, x2, x3, x4 = x[:, 0], x[:, 1], x[:, 2], x[:, 3]
@@ -208,42 +183,35 @@ class AnyLogicModel(nn.Module):
 
         # Zero the bottom half of x3. Built in one expression, not mutated.
         ones = torch.ones(4, 8, dtype=x.dtype, device=x.device)
-        mask = torch.cat([ones, torch.zeros(4, 8, dtype=x.dtype, device=x.device)], dim=0)
-        x3 = x3 & mask
+        zeros = torch.zeros(4, 8, dtype=x.dtype, device=x.device)
+        x3 = x3 & torch.cat([ones, zeros], dim=0)
 
         # Keep only the upper triangle of x4.
-        tri = torch.triu(torch.ones(8, 8, dtype=x.dtype, device=x.device))
-        x4 = x4 & tri
+        x4 = x4 & torch.triu(torch.ones(8, 8, dtype=x.dtype, device=x.device))
 
-        out = x1 | ((x2 & x3) ^ x4)
-        out = out.flatten(1)                # (B, 64)
+        out = (x1 | ((x2 & x3) ^ x4)).flatten(1)        # (B, 64)
 
         # Mixed output kinds: two reductions plus a boolean slice. Do NOT cast
-        # out3 to match - an explicit .to(dtype) here stops from_model
+        # the slice to match - an explicit .to(dtype) here stops from_model
         # recognising the outputs at all and yields a zero-output circuit.
         out1 = out[:, :8].sum(dim=1, keepdim=True)
         out2 = out[:, 8:16].sum(dim=1, keepdim=True)
-        out3 = out[:, 16:]
-        return torch.cat([out1, out2, out3], dim=1)
+        return torch.cat([out1, out2, out[:, 16:]], dim=1)
 
 
 class InPlaceConstMutationModel(nn.Module):
     """Mutates a constant tensor in place after creation.
 
     `mask = torch.ones(8, 8); mask[4:, :] = 0` cannot be constant-folded or
-    safely traced by torch.fx, so both Circuit.from_model (see
-    constant_fold_views / _reject_orphaned_impure_ops in circuit.py) and the
-    alkaid plugin (_fold_constant_views in _alkaid_plugin.py) must reject it
-    clearly rather than silently building a wrong circuit.
+    safely traced by torch.fx, so both Circuit.from_model and the alkaid
+    plugin must reject it clearly rather than silently building a wrong
+    circuit.
 
     Deliberately NOT in MODELS - it exists to be rejected.
     """
 
+    input_shape = (8, 8)
     input_dtype = torch.bool
-
-    def __init__(self):
-        super().__init__()
-        self.input_shape = (8, 8)
 
     def forward(self, x):
         mask = torch.ones(8, 8, dtype=x.dtype, device=x.device)
@@ -251,30 +219,37 @@ class InPlaceConstMutationModel(nn.Module):
         return x & mask
 
 
+def branch_model():
+    return BranchModel()
+
+
+def any_logic_model():
+    return AnyLogicModel()
+
+
+def in_place_const_mutation_model():
+    return InPlaceConstMutationModel()
+
+
 # The canonical set swept by model-level and circuit-level property tests.
-# Add a model here and it inherits every one of them.
+# Add your model function here and it inherits every one of them.
 MODELS = [
-    DenseModel,
-    ConvModel,
-    BranchModel,
-    ConvTransposeAE3dModel,
-    AnyLogicModel,
+    dense_model,
+    conv_model,
+    conv_transpose_ae_model,
+    branch_model,
+    any_logic_model,
 ]
 
-# Models actually built out of torchlogix layers. AnyLogicModel is not: it has
-# no trainable parameters, and it constructs constants (ones/zeros/triu), so it
-# is excluded both from gradient properties and from the "lowers to pure logic"
-# FX-purity property, which only our layers are expected to satisfy.
-TORCHLOGIX_MODELS = [m for m in MODELS if m is not AnyLogicModel]
+# Models actually built out of torchlogix layers. any_logic_model is not: it
+# has no trainable parameters, and it constructs constants (ones/zeros/triu),
+# so it is excluded both from gradient properties and from the "lowers to pure
+# logic" property, which only our layers are expected to satisfy.
+TORCHLOGIX_MODELS = [m for m in MODELS if m is not any_logic_model]
 
-# Extra ConvModel configurations worth exporting, beyond the canonical set:
-# the 3D layer family, and the variant whose output is raw logic rather than
-# GroupSum scores. These are configurations, not separate definitions.
-EXPORT_VARIANTS = [
-    pytest.param(lambda: ConvModel(ndim=3), id="ConvModel-3d"),
-    pytest.param(lambda: ConvModel(group_sum=False), id="ConvModel-no-groupsum"),
-    pytest.param(lambda: ConvModel(ndim=3, group_sum=False), id="ConvModel-3d-no-groupsum"),
-]
+# Models with a binarization front-end, used where a stochastic component has
+# to collapse onto its discrete counterpart.
+BINARIZED_MODELS = [binarized_dense_model, binarized_conv_model, branch_model]
 
 
 def random_bool_input(model, batch_size=1, seed=None):

@@ -26,9 +26,9 @@ touches. That is the one rule worth remembering: it is why there is no
 
 | File | Holds |
 |---|---|
-| `models.py` | The shared models. Not a test file. |
+| `models.py` | The shared models, as plain factory functions. Not a test file. |
 | `helpers.py` | Shared assertions (gradient checks). Not a test file. |
-| `conftest.py` | Fixtures wrapping the shared models. |
+| `conftest.py` | Just the OpenMP workaround; the models live in `models.py`. |
 | `test_functional.py` | Primitives in `functional.py`, each against an independent reference. |
 | `test_parametrization.py` | Weight parametrizations. |
 | `test_connections.py` | Connection index generation, dense and convolutional. |
@@ -41,12 +41,26 @@ touches. That is the one rule worth remembering: it is why there is no
 
 ## Adding a test
 
-**A new model.** Add the class to `models.py` and append it to `MODELS`. That
-is the whole job — it now inherits every model-level property test: gradient
-correctness, state-dict round-trip, eval-vs-export agreement, exported-graph
-purity, circuit equivalence, compilation, AIG conversion. Give it an
-`input_shape` and an `input_dtype`. If it is not built from torchlogix layers,
-leave it out of `TORCHLOGIX_MODELS`.
+**A new model.** Write a function in `models.py` that builds and returns it,
+and append that function to `MODELS`:
+
+```python
+def my_model():
+    model = nn.Sequential(LogicDense(64, 32), LogicDense(32, 16))
+    model.input_shape = (64,)
+    model.input_dtype = torch.float32
+    return model
+```
+
+That is the whole job — it now inherits every model-level property test:
+gradient correctness, state-dict round-trip, eval-vs-export agreement,
+exported-graph purity, circuit equivalence, compilation, AIG conversion. Use a
+class only if the model needs a custom `forward` (see `BranchModel`). If it is
+not built from torchlogix layers, `TORCHLOGIX_MODELS` excludes it.
+
+**A variant of an existing model.** Build it in the test rather than adding a
+flag to the model. A `nn.Sequential` supports `del model[-1]`, so dropping the
+`GroupSum` head is one line where it is needed.
 
 **A new layer configuration to sweep.** Add one `pytest.param(...)` line to
 `CONV_CONFIGS` in `test_connections.py`, or to `TRANSPOSE_FAMILIES` /

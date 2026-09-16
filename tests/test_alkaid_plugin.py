@@ -17,16 +17,15 @@ from alkaid.trace import FVArrayInput, trace
 from torchlogix.utils import set_export_mode
 
 from models import (
-    EXPORT_VARIANTS,
     TORCHLOGIX_MODELS,
-    InPlaceConstMutationModel,
+    in_place_const_mutation_model,
     random_bool_input,
 )
 
 
-@pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS + EXPORT_VARIANTS)
-def test_plugin_matches_eval_mode(model_cls):
-    model = model_cls()
+@pytest.mark.parametrize("model_fn", TORCHLOGIX_MODELS)
+def test_plugin_matches_eval_mode(model_fn):
+    model = model_fn()
     model.eval()
     x = random_bool_input(model, batch_size=4, seed=0)
 
@@ -46,7 +45,7 @@ def test_plugin_matches_eval_mode(model_cls):
 
 
 def test_alkaid_rejects_inplace_constant_mutation():
-    model = InPlaceConstMutationModel()
+    model = in_place_const_mutation_model()
     x = random_bool_input(model, batch_size=4, seed=0)
     inp = FVArrayInput((1, *x.shape[1:])).quantize(0, 1, 0)
     with pytest.raises(NotImplementedError, match="unsupported constant-tensor mutation"):

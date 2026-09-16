@@ -18,24 +18,14 @@ from helpers import (
     assert_finite_difference_matches_autograd,
 )
 from models import (
-    EXPORT_VARIANTS,
+    BINARIZED_MODELS,
     MODELS,
     TORCHLOGIX_MODELS,
-    BranchModel,
-    ConvModel,
-    DenseModel,
+    branch_model,
+    conv_model,
     model_input,
     random_bool_input,
 )
-
-# Variants with a LearnableBinarization front-end. Train/eval equivalence is
-# only meaningful where there is something stochastic to collapse, so the
-# binarized variants carry this test rather than the plain ones.
-BINARIZED_MODELS = [
-    pytest.param(lambda: DenseModel(binarize=True), id="dense-binarized"),
-    pytest.param(lambda: ConvModel(binarize=True), id="conv-binarized"),
-    pytest.param(BranchModel, id="branch"),
-]
 
 
 def _force_discrete(model):
@@ -67,10 +57,10 @@ def _force_discrete(model):
                     layer_weights.scatter_(2, indices, 100)
 
 
-@pytest.mark.parametrize("make_model", BINARIZED_MODELS)
-def test_train_and_eval_agree_when_forced_discrete(make_model):
+@pytest.mark.parametrize("model_fn", BINARIZED_MODELS)
+def test_train_and_eval_agree_when_forced_discrete(model_fn):
     """Relaxed and discrete forwards must agree once nothing is stochastic."""
-    model = make_model()
+    model = model_fn()
     x = model_input(model, seed=0)
 
     _force_discrete(model)
@@ -83,15 +73,15 @@ def test_train_and_eval_agree_when_forced_discrete(make_model):
         "Eval-mode output diverges from train-mode output"
 
 
-@pytest.mark.parametrize("model_cls", MODELS)
-def test_state_dict_round_trip(model_cls):
+@pytest.mark.parametrize("model_fn", MODELS)
+def test_state_dict_round_trip(model_fn):
     """A model reloaded from its own state_dict must produce identical output."""
-    model = model_cls()
+    model = model_fn()
     model.eval()
     x = model_input(model, seed=0)
     out_original = model(x)
 
-    reloaded = model_cls()
+    reloaded = model_fn()
     reloaded.eval()
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         torch.save(model.state_dict(), tmp.name)
@@ -105,9 +95,9 @@ def test_state_dict_round_trip(model_cls):
 # Gradient correctness
 # ---------------------------------------------------------------------------
 
-def _train_mode_batch(model_cls, seed=0):
+def _train_mode_batch(model_fn, seed=0):
     torch.manual_seed(seed)
-    model = model_cls()
+    model = model_fn()
     model.train()
     x = model_input(model, batch_size=2, seed=seed)
     torch.manual_seed(seed + 1)
@@ -115,23 +105,23 @@ def _train_mode_batch(model_cls, seed=0):
     return model, x, weights
 
 
-@pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS)
-def test_model_gradients_match_finite_differences(model_cls):
+@pytest.mark.parametrize("model_fn", TORCHLOGIX_MODELS)
+def test_model_gradients_match_finite_differences(model_fn):
     """Autograd must agree with central finite differences through a whole model."""
-    model, x, weights = _train_mode_batch(model_cls)
+    model, x, weights = _train_mode_batch(model_fn)
     assert_finite_difference_matches_autograd(model, x, weights)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
-def test_model_gradients_survive_torch_compile(model_cls):
+@pytest.mark.parametrize("model_fn", [conv_model, branch_model])
+def test_model_gradients_survive_torch_compile(model_fn):
     """Compiling a model must not change its gradients.
 
     Marked slow: torch.compile costs a few seconds per model. Two
     representative models rather than all of them, since the per-layer version
     in test_layers.py already covers every layer family.
     """
-    model, x, weights = _train_mode_batch(model_cls)
+    model, x, weights = _train_mode_batch(model_fn)
     assert_compiled_gradients_match_eager(model, x, weights)
 
 
@@ -139,10 +129,10 @@ def test_model_gradients_survive_torch_compile(model_cls):
 # Eval mode vs export mode
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("model_cls", MODELS + EXPORT_VARIANTS)
-def test_eval_and_export_agree(model_cls):
+@pytest.mark.parametrize("model_fn", MODELS)
+def test_eval_and_export_agree(model_fn):
     """Eval mode and export mode must agree on binary inputs."""
-    model = model_cls()
+    model = model_fn()
     model.eval()
     x = random_bool_input(model, batch_size=8, seed=0)
 
@@ -152,8 +142,7 @@ def test_eval_and_export_agree(model_cls):
     result_export = model(x)
 
     assert torch.allclose(result_eval.float(), result_export.float(), atol=1e-6), \
-        f"[{model_cls.__name__ if hasattr(model_cls, '__name__') else model_cls}] " \
-        "eval and export results diverge"
+        f"[{model_fn.__name__}] eval and export results diverge"
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +233,9 @@ ALLOWED_FX_TARGETS_GROUP_SUM = {
 }
 
 
-@pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS + EXPORT_VARIANTS)
-def test_exported_graph_is_pure_logic(model_cls):
-    model = model_cls()
+@pytest.mark.parametrize("model_fn", TORCHLOGIX_MODELS)
+def test_exported_graph_is_pure_logic(model_fn):
+    model = model_fn()
     model.eval()
 
     # Allow the reduction ops only for models that actually reduce, so the
@@ -267,4 +256,28 @@ def test_exported_graph_is_pure_logic(model_cls):
     ]
     assert not disallowed, (
         "exported graph contains non-logic ops:\n" + "\n".join(disallowed)
+    )
+
+
+def test_exported_graph_without_group_sum_contains_no_reductions():
+    """With the GroupSum head removed, nothing but logic and view ops may remain.
+
+    The parametrized test above widens the allow-list for models that reduce.
+    This is the strict case: no reduction ops are permitted at all.
+    """
+    model = conv_model()
+    del model[-1]           # drop the trailing GroupSum
+    model.eval()
+
+    x = random_bool_input(model, batch_size=8, seed=0)
+    set_export_mode(model)
+    gm = torch.export.export(model, (x,), strict=False).module()
+
+    disallowed = [
+        f"{node.name}: {node.target}"
+        for node in gm.graph.nodes
+        if node.op == "call_function" and node.target not in ALLOWED_FX_TARGETS
+    ]
+    assert not disallowed, (
+        "graph without GroupSum still contains non-logic ops:\n" + "\n".join(disallowed)
     )

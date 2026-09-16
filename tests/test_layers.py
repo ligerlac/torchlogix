@@ -45,19 +45,22 @@ def _dense_warp_layer():
                       parametrization="warp", connections_kwargs=CONNECTIONS_KWARGS)
 
 
-def _conv_warp_layer(ndim):
-    cls = LogicConv2d if ndim == 2 else LogicConv3d
-    in_dim = (3, 4) if ndim == 2 else (3, 4, 4)
-    return cls(in_dim=in_dim, parametrization="warp", device="cpu", channels=1,
-               num_kernels=1, tree_depth=1, receptive_field_size=3 if ndim == 2 else 2,
-               connections_kwargs=CONNECTIONS_KWARGS, stride=1, padding=0, lut_rank=2)
+def _conv2d_warp_layer():
+    return LogicConv2d(in_dim=(3, 4), parametrization="warp", device="cpu", channels=1,
+                       num_kernels=1, tree_depth=1, receptive_field_size=3,
+                       connections_kwargs=CONNECTIONS_KWARGS, stride=1, padding=0,
+                       lut_rank=2)
 
 
-WARP_LAYERS = [
-    pytest.param(_dense_warp_layer, id="dense"),
-    pytest.param(lambda: _conv_warp_layer(2), id="conv2d"),
-    pytest.param(lambda: _conv_warp_layer(3), id="conv3d"),
-]
+def _conv3d_warp_layer():
+    return LogicConv3d(in_dim=(3, 4, 4), parametrization="warp", device="cpu", channels=1,
+                       num_kernels=1, tree_depth=1, receptive_field_size=2,
+                       connections_kwargs=CONNECTIONS_KWARGS, stride=1, padding=0,
+                       lut_rank=2)
+
+
+# pytest names each case after the function, so no explicit ids are needed.
+WARP_LAYERS = [_dense_warp_layer, _conv2d_warp_layer, _conv3d_warp_layer]
 
 
 def _set_all_weights(layer, values):
