@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 import torch
 
+from ..modes import ExportableModule
 from ..parametrization import RawLUTParametrization, WarpLUTParametrization, LightLUTParametrization, setup_parametrization
 
 
-class LogicBase(torch.nn.Module, ABC):
+class LogicBase(ExportableModule, ABC):
     """
     Abstract base class for logic layers.
     Provides common functionality and enforces implementation of certain methods.
@@ -102,13 +103,3 @@ class LogicBase(torch.nn.Module, ABC):
             method (str): Rescaling method. Options are 'clip', 'abs_sum', 'L2'.
         """
         pass
-
-    def set_export_mode(self, enabled: bool = True):
-        """Enable or disable export mode for circuit/ONNX tracing.
-
-        When enabled, pre-computes and caches LUT IDs as a buffer to avoid
-        recomputing argmax in the exported model. All shapes must be static;
-        circuit tracing always operates on a single sample (no batch dim).
-        """
-        self.eval()
-        self.export_mode = enabled

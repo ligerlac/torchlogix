@@ -4,6 +4,12 @@ import torch
 from torchlogix.layers import LogicDense
 from torchlogix.connections import LearnableDenseConnections, FixedConvConnections, FixedConvTransposeConnections
 from torch.nn.functional import softmax as softmax_torch
+from torch.fx.experimental.proxy_tensor import make_fx
+
+from torchlogix.utils import set_export_mode
+
+from helpers import assert_finite_difference_matches_autograd, model_input
+from models import LearnableConnectionsModel
 
 
 @pytest.mark.parametrize("parametrization", ["raw", "warp", "light"])
@@ -137,23 +143,6 @@ def test_fixed_conv_transpose_connections_output_shape(stride, output_padding):
     assert out.shape[3] == expected_out ** 2
 
 
-# ---------------------------------------------------------------------------
-# Convolutional connection indices
-#
-# A layer's indices are [level_0, level_1, ..., level_N-1]. Level 0 selects
-# entries within the receptive field and has shape
-# (lut_rank, num_kernels, num_positions, 2**(tree_depth-1), ndim + 1), where the
-# last axis is (w, h, c) in 2D and (w, h, d, c) in 3D. Every later level picks
-# among the previous level's gates and has shape (lut_rank, 2**(depth-level-1)).
-#
-# These assertions used to live in a TestIndeces / TestIndices class in
-# test_clgn.py and test_clgn_3d.py as a nine-axis cartesian product: ~5,900
-# cases, half of which skipped because the product generated combinations that
-# are invalid by construction. The table below instead lists valid
-# configurations explicitly.
-#
-# To cover a new case, add one pytest.param line.
-# ---------------------------------------------------------------------------
 
 CONV_CONFIGS = [
     # --- 2D ---
@@ -304,13 +293,6 @@ def test_random_unique_first_level_pairs_are_unique(ndim, config):
             )
 
 
-# ---------------------------------------------------------------------------
-# Invalid configurations
-#
-# These used to be asserted invisibly inside a fixture, via pytest.skip and a
-# pytest.raises that only ran for combinations the cartesian product happened
-# to generate. Stating them directly is both clearer and cheaper.
-# ---------------------------------------------------------------------------
 
 def test_rejects_receptive_field_larger_than_input():
     with pytest.raises(AssertionError, match="must fit within input dimensions"):
@@ -363,3 +345,90 @@ def test_dense_unique_connections_cover_all_inputs_evenly(lut_rank):
     unique, counts = torch.unique(indices, return_counts=True)
     assert counts.float().std().item() < 1, "input usage is not balanced"
     assert len(unique) == layer.in_dim, "not every input is used"
+
+
+@pytest.mark.parametrize("gumbel", [False, True])
+def test_learnable_connections_export_matches_eval(gumbel):
+    layer = LogicDense(16, 8, connections="learnable", connections_kwargs={"gumbel": gumbel})
+    layer.eval()
+    x = (torch.rand(4, 16) > 0.5)
+
+    expected = layer(x.float())
+    layer.set_export_mode(True)
+    assert torch.equal(layer(x).bool(), expected.bool())
+
+
+def test_resolved_connections_match_argmax():
+    """The frozen export wiring is the argmax over the candidate axis."""
+    torch.manual_seed(0)
+    conns = LearnableDenseConnections(in_dim=16, out_dim=8, num_candidates=3)
+
+    resolved = conns.resolve_connections()
+    chosen = conns.weights.argmax(dim=0)
+    for lut_input in range(conns.lut_rank):
+        for neuron in range(conns.out_dim):
+            assert resolved[lut_input, neuron] == \
+                conns.indices[chosen[lut_input, neuron], lut_input, neuron]
+
+
+@pytest.mark.parametrize("gumbel", [False, True])
+def test_learnable_export_graph_is_as_clean_as_fixed(gumbel):
+    """Export-mode learnable wiring must trace to the same ops as fixed wiring.
+
+    Compares op sets rather than checking an allow-list, so fixed connections
+    define the target: whatever they lower to, learnable must lower to as well.
+    """
+    def traced_ops(connections, connections_kwargs):
+        torch.manual_seed(0)
+        layer = LogicDense(16, 8, connections=connections,
+                           connections_kwargs=connections_kwargs)
+        set_export_mode(layer, True)
+        gm = make_fx(layer)((torch.rand(1, 16) > 0.5))
+        return {str(n.target) for n in gm.graph.nodes if n.op == "call_function"}
+
+    learnable = traced_ops("learnable", {"num_candidates": 2, "gumbel": gumbel})
+    fixed = traced_ops("fixed", {})
+
+    assert learnable == fixed, f"extra ops in learnable graph: {sorted(learnable - fixed)}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("connections, kwargs", [
+    ("fixed", {}),
+    ("learnable", {"num_candidates": 2}),
+])
+def test_export_mode_is_compilable(connections, kwargs):
+    """The export forward must survive torch.compile for either wiring.
+
+    This is what caught the non-recursive set_export_mode: calling it on a
+    layer left the connections arg-maxing, which torch.compile rejects.
+    """
+    torch.manual_seed(0)
+    layer = LogicDense(16, 8, connections=connections, connections_kwargs=kwargs)
+    layer.set_export_mode(True)
+    x = (torch.rand(4, 16) > 0.5)
+
+    assert torch.equal(torch.compile(layer)(x), layer(x))
+
+
+def test_gate_weights_keep_exact_gradients_through_learnable_wiring():
+    """Learnable wiring must not spoil the gradients of the gates behind it.
+
+    The connection weights themselves use a surrogate estimator and are
+    excluded from the finite-difference sweep (see EXACT_GRADIENT_MODELS in
+    models.py). The LUT weights downstream of them are ordinary parameters and
+    must still match finite differences exactly, so freeze the connection
+    weights and check the rest.
+    """
+    torch.manual_seed(0)
+    model = LearnableConnectionsModel()
+    model.train()
+    for module in model.modules():
+        if isinstance(module, LearnableDenseConnections):
+            module.weights.requires_grad_(False)
+
+    x = model_input(model, batch_size=2, seed=0)
+    torch.manual_seed(1)
+    weights = torch.rand_like(model(x))
+
+    assert_finite_difference_matches_autograd(model, x, weights)

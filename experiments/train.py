@@ -103,7 +103,7 @@ def get_parser():
         help="Temperature for softmax in learnable connections"
     )
     parser.add_argument(
-        "--connections-gumbel", action="store_false", 
+        "--connections-gumbel", action="store_true",
         help="Flag for using Gumbel sampling for softmax. "
     )
 

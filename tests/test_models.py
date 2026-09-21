@@ -21,6 +21,7 @@ from helpers import (
 )
 from models import (
     BINARIZED_MODELS,
+    EXACT_GRADIENT_MODELS,
     MODELS,
     TORCHLOGIX_MODELS,
     BranchModel,
@@ -105,9 +106,15 @@ def _train_mode_batch(model_cls, seed=0):
     return model, x, weights
 
 
-@pytest.mark.parametrize("model_cls", TORCHLOGIX_MODELS)
+@pytest.mark.parametrize("model_cls", EXACT_GRADIENT_MODELS)
 def test_model_gradients_match_finite_differences(model_cls):
-    """Autograd must agree with central finite differences through a whole model."""
+    """Autograd must agree with central finite differences through a whole model.
+
+    Sweeps EXACT_GRADIENT_MODELS rather than TORCHLOGIX_MODELS: models with
+    learnable connections train through a discrete argmax with a surrogate
+    estimator, where finite differences are expected to disagree. See the note
+    on EXACT_GRADIENT_MODELS in models.py.
+    """
     model, x, weights = _train_mode_batch(model_cls)
     assert_finite_difference_matches_autograd(model, x, weights)
 

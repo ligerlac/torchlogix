@@ -260,10 +260,10 @@ class _LogicConvNd(LogicBase):
         for w in self.tree_weights:
             rescale_weights(w, method)
 
-    def set_export_mode(self, enabled: bool = True):
-        self.eval()
-        self.export_mode = enabled
-
+    def _on_export_mode(self, enabled: bool):
+        """Cache one LUT-ID buffer per tree level, pre-broadcast to the static
+        spatial shape the export path expects.
+        """
         if enabled:
             _, tree_ids = self.get_luts_and_ids()
 
