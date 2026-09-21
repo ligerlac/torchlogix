@@ -89,6 +89,8 @@
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">..modes</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExportableModule</span>
+
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_to_tuple</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
@@ -98,7 +100,7 @@
 
 <div class="viewcode-block" id="OrPooling2d">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling2d">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">OrPooling2d</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrPooling2d</span><span class="p">(</span><span class="n">ExportableModule</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Logic gate based pooling layer."""</span>
 
 <div class="viewcode-block" id="OrPooling2d.__init__">
@@ -139,22 +141,13 @@
         <span class="n">result</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">|</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">result</span> 
-
-
-<div class="viewcode-block" id="OrPooling2d.set_export_mode">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling2d.set_export_mode">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">set_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">export_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""Set export mode for the layer."""</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span> <span class="o">=</span> <span class="n">export_mode</span></div>
-</div>
+        <span class="k">return</span> <span class="n">result</span></div>
 
 
 
 <div class="viewcode-block" id="OrPooling3d">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling3d">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">OrPooling3d</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrPooling3d</span><span class="p">(</span><span class="n">ExportableModule</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Logic gate based pooling layer."""</span>
 
 <div class="viewcode-block" id="OrPooling3d.__init__">
@@ -173,7 +166,7 @@
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_torch_or_pool</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-            
+
         <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">"Input tensor must be 5d"</span>
 
         <span class="k">return</span> <span class="n">F</span><span class="o">.</span><span class="n">max_pool3d</span><span class="p">(</span>
@@ -195,15 +188,8 @@
         <span class="n">result</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">result</span> <span class="o">|</span> <span class="n">x</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span>
-        <span class="k">return</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">result</span></div>
 
-<div class="viewcode-block" id="OrPooling3d.set_export_mode">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.OrPooling3d.set_export_mode">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">set_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">export_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""Set export mode for the layer."""</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span> <span class="o">=</span> <span class="n">export_mode</span></div>
-</div>
 
 </pre></div>
 

@@ -279,24 +279,16 @@
         <span class="n">rescale_weights</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="LogicDense.set_export_mode">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.LogicDense.set_export_mode">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">set_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""Enable or disable export mode for circuit/ONNX tracing.</span>
-
-<span class="sd">        When enabled, pre-computes and caches LUT IDs as a buffer to avoid</span>
-<span class="sd">        recomputing argmax in the exported model.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_on_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Pre-compute and cache LUT IDs as a buffer, so that the exported</span>
+<span class="sd">        model does not have to recompute the argmax.</span>
 <span class="sd">        """</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span> <span class="o">=</span> <span class="n">enabled</span>
-
         <span class="k">if</span> <span class="n">enabled</span><span class="p">:</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">register_buffer</span><span class="p">(</span><span class="s1">'_export_lut_ids'</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">persistent</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_export_lut_ids'</span><span class="p">):</span>
                 <span class="nb">delattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">'_export_lut_ids'</span><span class="p">)</span></div>
-</div>
 
 </pre></div>
 

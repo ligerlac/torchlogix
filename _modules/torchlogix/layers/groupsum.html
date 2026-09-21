@@ -88,10 +88,12 @@
   <h1>Source code for torchlogix.layers.groupsum</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">..modes</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExportableModule</span>
+
 
 <div class="viewcode-block" id="GroupSum">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.GroupSum">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">GroupSum</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">GroupSum</span><span class="p">(</span><span class="n">ExportableModule</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    The GroupSum module.</span>
 <span class="sd">    """</span>
@@ -130,14 +132,8 @@
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.GroupSum.extra_repr">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">extra_repr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="s2">"k=</span><span class="si">{}</span><span class="s2">, tau=</span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">k</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tau</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="GroupSum.set_export_mode">
-<a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.GroupSum.set_export_mode">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">set_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">export_mode</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span> <span class="o">=</span> <span class="n">export_mode</span></div>
 </div>
+
 
 </pre></div>
 

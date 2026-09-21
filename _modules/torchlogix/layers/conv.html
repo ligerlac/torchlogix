@@ -348,10 +348,10 @@
         <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tree_weights</span><span class="p">:</span>
             <span class="n">rescale_weights</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">method</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">set_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">export_mode</span> <span class="o">=</span> <span class="n">enabled</span>
-
+    <span class="k">def</span><span class="w"> </span><span class="nf">_on_export_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Cache one LUT-ID buffer per tree level, pre-broadcast to the static</span>
+<span class="sd">        spatial shape the export path expects.</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">enabled</span><span class="p">:</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">tree_ids</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_luts_and_ids</span><span class="p">()</span>
 

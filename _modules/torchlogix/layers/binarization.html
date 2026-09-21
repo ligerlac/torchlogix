@@ -94,6 +94,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">..functional</span><span class="w"> </span><span class="kn">import</span> <span class="n">sigmoid</span><span class="p">,</span> <span class="n">gumbel_sigmoid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..modes</span><span class="w"> </span><span class="kn">import</span> <span class="n">ExportableModule</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">setup_binarization</span><span class="p">(</span><span class="n">thresholds</span><span class="p">,</span> <span class="n">binarization</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">binarization_kwargs</span><span class="p">):</span>
@@ -114,7 +115,7 @@
 
 <div class="viewcode-block" id="Binarization">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">Binarization</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">ABC</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Binarization</span><span class="p">(</span><span class="n">ExportableModule</span><span class="p">,</span> <span class="n">ABC</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Abstract base class for binarization modules."""</span>
 <div class="viewcode-block" id="Binarization.__init__">
 <a class="viewcode-back" href="../../../api/layers.html#torchlogix.layers.Binarization.__init__">[docs]</a>
