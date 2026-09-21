@@ -51,6 +51,20 @@ class DenseModel(nn.Sequential):
         )
 
 
+class LearnableConnectionsModel(nn.Sequential):
+
+    input_shape = (200,)
+    input_dtype = torch.float32
+
+    def __init__(self):
+        super().__init__(
+            LogicDense(200, 200, connections="learnable",
+                       connections_kwargs={"num_candidates": 4}, **LAYER_KWARGS),
+            LogicDense(200, 200, connections="learnable",
+                       connections_kwargs={"num_candidates": 4}, **LAYER_KWARGS),
+        )
+
+
 class ConvModel(nn.Sequential):
     """conv -> pool -> flatten -> dense -> dense -> GroupSum.
 
@@ -237,6 +251,7 @@ class InPlaceConstMutationModel(nn.Module):
 # Add your model class here and it inherits every one of them.
 MODELS = [
     DenseModel,
+    LearnableConnectionsModel,
     ConvModel,
     ConvTransposeAE3dModel,
     BranchModel,
@@ -248,6 +263,19 @@ MODELS = [
 # is excluded both from gradient properties and from the "lowers to pure logic"
 # property, which only our layers are expected to satisfy.
 TORCHLOGIX_MODELS = [m for m in MODELS if m is not AnyLogicModel]
+
+# Models whose parameters all carry an exact gradient, so central finite
+# differences must reproduce autograd everywhere.
+#
+# LearnableConnectionsModel is excluded on purpose. Its connection weights are
+# trained through a discrete argmax with the DWN surrogate estimator, so a
+# small perturbation of one weight usually does not move the argmax at all:
+# the true numerical derivative is 0 while the surrogate is not, and finite
+# differences are expected to disagree. The surrogate is checked against its
+# reference formula in test_connections.py, which also asserts that the gate
+# weights downstream of learnable wiring still match finite differences.
+EXACT_GRADIENT_MODELS = [m for m in TORCHLOGIX_MODELS
+                         if m is not LearnableConnectionsModel]
 
 # Models with a binarization front-end, used where a stochastic component has
 # to collapse onto its discrete counterpart.
