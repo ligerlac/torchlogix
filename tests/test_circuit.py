@@ -11,81 +11,14 @@ import torch.nn as nn
 from torchlogix import Circuit
 from torchlogix.circuit import AIGGraph, Gate, GateOp, SumReduction
 from torchlogix.utils import set_export_mode
-from torchlogix.layers import (
-    GroupSum,
-    LogicConv2d,
-    LogicConv3d,
-    LogicDense,
-    OrPooling2d,
-    OrPooling3d,
+from models import (
+    MODELS,
+    BranchModel,
+    ConvModel,
+    InPlaceConstMutationModel,
 )
 
-
-class DenseModel(nn.Sequential):
-    def __init__(self):
-        super().__init__(
-            LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-            LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-        )
-        self.input_shape = (1000,)
-
-
-# inherit from sequential
-class ConvModel(nn.Sequential):
-    def __init__(self):
-        super().__init__(
-            LogicConv2d(in_dim=32, channels=3, num_kernels=8, receptive_field_size=3, tree_depth=2, parametrization_kwargs={"weight_init": "random"}),
-            OrPooling2d(kernel_size=2, stride=2),
-            nn.Flatten(),  # 8 × 15 x 15 = 1800
-            LogicDense(1800, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-            LogicDense(1000, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"}),
-            GroupSum(10)# , tau=2.0),
-        )
-        self.input_shape = (3, 32, 32)
-
-
-# w/ custom forward pass
-class BranchModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv = LogicConv2d(in_dim=32, channels=3, num_kernels=8,
-                    receptive_field_size=3, tree_depth=2,
-                    parametrization_kwargs={"weight_init": "random"}) # 8 x 30 x 30 = 7200
-        self.pool = OrPooling2d(kernel_size=2, stride=2) # 8 x 15 x 15 = 1800
-        self.dense = LogicDense(1801, 1000, parametrization="raw", parametrization_kwargs={"weight_init": "random"})
-        self.group_sum = GroupSum(10)
-        self.input_shape = (32*32*3 + 1,)
-
-    def forward(self, x):
-        assert x.shape[1:] == (32*32*3 + 1,)
-        img, feat = x[:, :-1].reshape(-1, 3, 32, 32), x[:, -1:]
-        x = self.conv(img)
-        x = self.pool(x)
-        x = x.flatten(1)
-        x = torch.cat([x, feat], dim=1)
-        x = self.dense(x)
-        x = self.group_sum(x)
-        return x
-
-
-class InPlaceConstMutationModel(nn.Module):
-    """Mutates a constant tensor in place after creation
-    (`mask = torch.ones(8, 8); mask[4:, :] = 0`) - torch.fx's constant
-    folding can't fold this (see constant_fold_views/_reject_orphaned_impure_ops
-    in circuit.py), so from_model must reject it clearly rather than
-    silently building a wrong circuit.
-    """
-    def __init__(self):
-        super().__init__()
-        self.input_shape = (8, 8)
-
-    def forward(self, x):
-        mask = torch.ones(8, 8, dtype=x.dtype, device=x.device)
-        mask[4:, :] = 0
-        return x & mask
-
-
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", MODELS)
 def test_functional_equivalence(model_cls):
     model = model_cls()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
@@ -241,7 +174,7 @@ def test_aiger_serializer_accepts_valid_and_gate():
         assert _parse_aiger_file(tmp_file.name).and_gates == [(6, 4, 2)]
 
 
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", MODELS)
 def test_aig_functional_equivalence(model_cls):
     """Round-trips a trained model's Circuit through the AIGER file format and
     checks -- via the independent Python AIG evaluator above, not a third-party
@@ -273,7 +206,7 @@ ABC_PATH = shutil.which("abc")
 
 
 @pytest.mark.skipif(ABC_PATH is None, reason="abc binary not found on PATH")
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", MODELS)
 def test_abc_reads_and_rewrites_aiger(model_cls):
     """Parser/compatibility check: ABC can read a TorchLogix .aig file and
     write out a functionally equivalent one.
@@ -311,7 +244,8 @@ def test_abc_reads_and_rewrites_aiger(model_cls):
             "ABC's read/write round trip changed the AIG's function"
 
 
-@pytest.mark.parametrize("model_cls", [DenseModel, ConvModel, BranchModel])
+@pytest.mark.slow
+@pytest.mark.parametrize("model_cls", MODELS)
 @pytest.mark.parametrize("pack_bits", [None, 8, 16, 32])
 @pytest.mark.parametrize("relative_batch_size", [1, 10])
 def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
@@ -335,7 +269,7 @@ def test_circuit_compilation(model_cls, pack_bits, relative_batch_size):
         "Compiled circuit predictions differ from Eval-mode predictions"
 
 
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", MODELS)
 @pytest.mark.parametrize("simplification", [
     Circuit.simplify, Circuit.constant_fold_gates, Circuit.eliminate_dead_gates, Circuit.bypass_wires, Circuit.dedup, Circuit.fuse_not_inputs
 ])
@@ -351,13 +285,13 @@ def test_circuit_simplifications(model_cls, simplification):
     assert torch.equal(preds_before, preds_after), f"Predictions differ after {simplification.__name__}!"
 
 
-def test_rejects_inplace_constant_mutation():
+def test_circuit_rejects_inplace_constant_mutation():
     model = InPlaceConstMutationModel()
     with pytest.raises(NotImplementedError, match="unsupported constant-tensor mutation"):
         Circuit.from_model(model, input_shape=model.input_shape)
 
 
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+@pytest.mark.parametrize("model_cls", MODELS)
 def test_json_roundtrip(model_cls):
     model = model_cls()
     x = torch.randint(0, 2, (1, *model.input_shape), dtype=torch.bool)
@@ -374,8 +308,8 @@ def test_json_roundtrip(model_cls):
     assert torch.equal(preds_before, preds_after), "Predictions differ after export/import roundtrip!"
 
 
-
-@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])
+@pytest.mark.slow
+@pytest.mark.parametrize("model_cls", [ConvModel, BranchModel])  # need a GroupSum head
 def test_c_codegen_group_sum_scores(model_cls):
     """GroupSum reduction is inlined into circuit and compiles cleanly."""
     model = model_cls()

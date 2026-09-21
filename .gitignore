@@ -31,3 +31,9 @@ experiments/data
 
 # env files with concrete paths
 experiments/env.sh
+
+# coverage artifacts (pytest-cov)
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

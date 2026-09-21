@@ -125,6 +125,17 @@ class _LogicConvNd(LogicBase):
         )
         return self.connections
 
+    def _apply_padding(self, x):
+        """Zero-pad the spatial dims by ``self.padding`` on both sides.
+
+        Subclasses whose connections handle padding themselves override this
+        to a no-op (see ``_LogicConvTransposeNd``).
+        """
+        if self.padding > 0:
+            pad = (self.padding, self.padding) * self.conv_dimension
+            x = torch.nn.functional.pad(x, pad, mode="constant", value=0)
+        return x
+
     def forward(self, x):
         """Applies the logic convolution to the input.
 
@@ -154,13 +165,8 @@ class _LogicConvNd(LogicBase):
         if self.export_mode:
             return self._forward_export_mode(x)
         
-        if self.padding > 0:
-            x = torch.nn.functional.pad(
-                x,
-                (self.padding, self.padding, self.padding, self.padding, 0, 0),
-                mode="constant",
-                value=0
-            )
+        x = self._apply_padding(x)
+
         # First level tree indices
         x = self.connections(x, 0)
         # Process first level with einsum contraction
@@ -185,14 +191,7 @@ class _LogicConvNd(LogicBase):
 
     def _forward_export_mode(self, x):
 
-        # Padding
-        if self.padding > 0:
-            x = torch.nn.functional.pad(
-                x,
-                (self.padding, self.padding, self.padding, self.padding, 0, 0),
-                mode="constant",
-                value=0
-            )
+        x = self._apply_padding(x)
 
         # First level
         x = self.connections(x, 0)
@@ -364,6 +363,202 @@ class LogicConv3d(_LogicConvNd):
             receptive_field_size=receptive_field_size,
             stride=stride,
             padding=padding,
+            conv_dimension=3,
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
+            connections=connections,
+            connections_kwargs=connections_kwargs,
+        )
+
+
+class _LogicConvTransposeNd(_LogicConvNd):
+    """Abstract base class for transposed convolutional logic layers.
+
+    Extends ``_LogicConvNd`` with transpose (fractionally-strided) convolution
+    semantics: the spatial output is larger than the input. Each input position contributes
+    to multiple output positions. The output size along each spatial axis is:
+
+    out = (in - 1) * stride - 2 * padding + receptive_field_size + output_padding
+
+    Only ``__init__``, ``_init_connections``, and ``forward`` differ from the
+    base class; weight initialization and all utility methods are inherited.
+
+    Args:                                                                                   
+        output_padding: Additional size added to one side of the output shape
+            Must satisfy ``0 <= output_padding < stride``
+        (all other args): Same as ``_LogicConvNd``.
+    """
+
+    def __init__(
+        self,
+        in_dim: Union[_size_2_t, _size_3_t, int],
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: Union[_size_2_t, _size_3_t, int] = 2,
+        stride: int = 1,
+        padding: int = 0,
+        output_padding: int = 0,
+        conv_dimension: int = 2,
+        device: str = "cuda",
+        grad_factor: float = 1.0,
+        lut_rank: int = 2,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
+    ):
+
+        self._output_padding_raw = output_padding
+        super().__init__(
+            in_dim=in_dim,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            stride=stride,
+            padding=padding,
+            conv_dimension=conv_dimension,
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
+            connections=connections,
+            connections_kwargs=connections_kwargs,
+        )
+
+        # The base class computes kernel_positions with the forward-conv
+        # formula, which is wrong here; the transposed output is larger.
+        self.kernel_positions = list(self._out_dim())
+        self.n_kernel_positions = math.prod(self.kernel_positions)
+
+    def _apply_padding(self, x):
+        """No-op: ``FixedConvTransposeConnections`` dilates and pads internally.
+
+        Padding here as well would double-pad the effective input.
+        """
+        return x
+
+    def _normalize_output_padding(self, output_padding):
+        """Normalise output_padding to a tuple matching conv_dimension."""
+        op = _pair(output_padding) if self.conv_dimension == 2 else _triple(output_padding)
+        assert all(0 <= v < self.stride for v in op), (
+            f"output_padding ({output_padding}) must satisfy "
+            f"0 <= output_padding < stride ({self.stride})"
+        )
+        return op
+
+    def _out_dim(self):
+        """Output spatial dimensions under the transposed-conv formula."""
+        return tuple(
+            (d - 1) * self.stride - 2 * self.padding + rfs + op
+            for d, rfs, op in zip(
+                self.in_dim, self.receptive_field_size, self.output_padding
+            )
+        )
+
+    def _init_connections(self):
+        self.output_padding = self._normalize_output_padding(self._output_padding_raw)
+        self.connections = setup_connections(
+            structure="conv_transpose",
+            connections=self.connections,
+            lut_rank=self.lut_rank,
+            device=self.device,
+            in_dim=self.in_dim,
+            channels=self.channels,
+            num_kernels=self.num_kernels,
+            tree_depth=self.tree_depth,
+            receptive_field_size=self.receptive_field_size,
+            conv_dimension=self.conv_dimension,
+            stride=self.stride,
+            padding=self.padding,
+            output_padding=self.output_padding,
+            **self.connections_kwargs
+        )
+        return self.connections
+
+class LogicConvTranspose2d(_LogicConvTransposeNd):
+    """2D transposed convolutional layer with differentiable logic operations.
+
+    The spatial output is larger than the input — this is the logic-layer
+    analogue of ``torch.nn.ConvTranspose2d``.
+    """
+
+    def __init__(
+        self,
+        in_dim: Union[_size_2_t, int],
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: Union[_size_2_t, int] = 2,
+        stride: int = 1,
+        padding: int = 0,
+        output_padding: int = 0,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        lut_rank: int = 2,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
+    ):
+        super().__init__(
+            in_dim=in_dim,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            stride=stride,
+            padding=padding,
+            output_padding=output_padding,
+            conv_dimension=2,
+            device=device,
+            grad_factor=grad_factor,
+            lut_rank=lut_rank,
+            parametrization=parametrization,
+            parametrization_kwargs=parametrization_kwargs,
+            connections=connections,
+            connections_kwargs=connections_kwargs,
+        )
+
+class LogicConvTranspose3d(_LogicConvTransposeNd):
+    """3D transposed convolutional layer with differentiable logic operations.
+
+    The spatial output is larger than the input — this is the logic-layer
+    analogue of ``torch.nn.ConvTranspose3d``.
+    """
+
+    def __init__(
+        self,
+        in_dim: Union[_size_3_t, int],
+        channels: int = 1,
+        num_kernels: int = 16,
+        tree_depth: int = None,
+        receptive_field_size: Union[_size_3_t, int] = 2,
+        stride: int = 1,
+        padding: int = 0,
+        output_padding: int = 0,
+        device: str = "cpu",
+        grad_factor: float = 1.0,
+        lut_rank: int = 2,
+        parametrization: str = "raw",
+        parametrization_kwargs: dict = None,
+        connections: str = "fixed",
+        connections_kwargs: dict = None,
+    ):
+        super().__init__(
+            in_dim=in_dim,
+            channels=channels,
+            num_kernels=num_kernels,
+            tree_depth=tree_depth,
+            receptive_field_size=receptive_field_size,
+            stride=stride,
+            padding=padding,
+            output_padding=output_padding,
             conv_dimension=3,
             device=device,
             grad_factor=grad_factor,
