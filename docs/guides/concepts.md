@@ -343,10 +343,19 @@ layer = GroupSum(
 **How it works**:
 1. Reshape `(batch, num_classes × neurons_per_class)` → `(batch, num_classes, neurons_per_class)`
 2. Sum over neuron groups
-3. Divide by `tau` to normalize range
-4. Shift by `beta` to desired range
+3. Add `beta` to each sum
+4. Divide by `tau`: output `j` is `(sum_j + beta_j) / tau_j`
 
-**Why `tau`?** Each Boolean neuron outputs [0, 1], so a sum of 100 neurons is [0, 100]. Setting `tau=100` normalizes to [0, 1] range. And setting `beta` to `-42` would result in [-42, -41].
+`tau` and `beta` can each be a scalar shared by all groups or a length-`k`
+sequence with one value per group. Each Boolean neuron outputs [0, 1], so a
+group of 100 neurons sums to [0, 100]. For example, `tau=100` and `beta=-50`
+give an output range of [-0.5, 0.5]. The `beta` value is added **before**
+division; to shift the output by `c`, add `tau * c` to `beta`.
+
+For regression, choose each group's scale from the training-label range and
+the number of neurons in that group. A group with `m` neurons has `m+1`
+possible integer counts and an output step of `1/tau`. Scaling changes the
+range and step size; it does not increase the number of count levels.
 
 ### Binarization Layers
 

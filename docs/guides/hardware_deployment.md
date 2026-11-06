@@ -44,9 +44,29 @@ module circuit (
 );
 ```
 
-`SCORE_BITS` is the narrowest unsigned integer type that fits the maximum
-possible sum (8, 16, 32, or 64 bits, or 32-bit float when `tau ≠ 1`). Score `j`
-occupies `scores_flat[j*SCORE_BITS +: SCORE_BITS]`.
+`SCORE_BITS` is 8, 16, 32, or 64 bits, chosen from the Circuit output type.
+When scaling calls for a float in the C output, the raw Verilog count still
+occupies a 32-bit slot. Score `j` occupies
+`scores_flat[j*SCORE_BITS +: SCORE_BITS]`.
+
+By default, Verilog emits **raw group counts**. This preserves the existing
+hardware interface even when a model uses non-default `tau` or `beta` during
+training. To obtain scaled regression scores in hardware, request the optional
+signed fixed-point output mode:
+
+```python
+verilog = circuit.get_verilog_code(fixed_point_fractional_bits=16)
+# or: circuit.write_verilog_code("circuit.v", fixed_point_fractional_bits=16)
+```
+
+In this mode each score occupies 32 bits. Interpret each slice as a signed
+two's-complement integer and divide by `2**16` to recover its real value.
+The generator uses constant integer multipliers and offsets for each group,
+with rounding to the nearest fixed-point step. It rejects scales whose
+intermediate or output range would overflow. Choose the fractional bit count
+to balance range and precision; 16 bits allow approximately [-32768, 32768)
+with steps of `2**-16`. The fixed-point mode is opt-in, so existing raw-count
+Verilog consumers keep their current layout and values.
 
 ---
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from datetime import datetime
+import math
 import operator
 import json
 import numpy as np
@@ -174,7 +175,7 @@ class SumReduction:
 
     def get_max_value(self) -> int | None:
         """Return the max possible integer output, or None if the output is float (tau≠1 or fractional beta)."""
-        if self.tau != 1.0 or self.beta != round(self.beta):
+        if self.tau != 1.0 or self.beta < 0 or self.beta != round(self.beta):
             return None
         return len(self.input_ids) + int(round(self.beta))
 
@@ -189,6 +190,30 @@ def _c_output_dtype(reductions: list[SumReduction]) -> str:
     if m <= 0xFFFF:      return "uint16_t"
     if m <= 0xFFFFFFFF:  return "uint32_t"
     return "uint64_t"
+
+
+def _fixed_point_coefficients(sr: SumReduction, fractional_bits: int) -> tuple[int, int, int]:
+    """Approximate (sum + beta) / tau as a signed Q value using integer math."""
+    # Enough precision that coefficient rounding contributes under a quarter
+    # of an output LSB across the whole count range.
+    guard_bits = max(2, (len(sr.input_ids) + 1).bit_length() + 1)
+    if not math.isfinite(sr.tau) or sr.tau <= 0 or not math.isfinite(sr.beta):
+        raise ValueError("fixed-point Verilog requires finite beta and positive finite tau")
+    factor = 1 << (fractional_bits + guard_bits)
+    try:
+        scale = round(factor / sr.tau)
+        bias = round(factor * sr.beta / sr.tau)
+    except OverflowError as exc:
+        raise ValueError("fixed-point Verilog coefficients exceed signed 64-bit range") from exc
+    half = 1 << (guard_bits - 1)
+    # s is nonnegative and scale is nonnegative. Check both ends of the range
+    # before emitting a 64-bit intermediate and a signed 32-bit output.
+    low, high = bias + half, len(sr.input_ids) * scale + bias + half
+    if not all(-(1 << 63) <= v < (1 << 63) for v in (scale, bias, low, high)):
+        raise ValueError("fixed-point Verilog intermediate exceeds signed 64-bit range")
+    if low >> guard_bits < -(1 << 31) or high >> guard_bits >= (1 << 31):
+        raise ValueError("fixed-point Verilog output exceeds signed 32-bit range")
+    return scale, bias, guard_bits
 
 
 @dataclass
@@ -1110,6 +1135,7 @@ class Circuit:
                             new_sr_ids.append(next_id)
                             next_id += 1
                         _output_chain[node.name] = new_sr_ids
+                        wire_map[f'__shape_{node.name}'] = list(x_shape[:-1])
                 i += 1
                 continue
 
@@ -1127,8 +1153,9 @@ class Circuit:
                 i += 1
                 continue
 
-            # Scalar add/div/mul following a sum node (tau/beta adjustment).
-            # Only the SumReduction nodes from that specific sum are updated.
+            # Constant scalar or vector add/div/mul following a sum node.
+            # The vector is broadcast against the reduction output shape, so
+            # each SumReduction gets the scale for its output position.
             _SCALAR_OPS = (
                 torch.ops.aten.add.Tensor,  torch.ops.aten.add.Scalar,
                 torch.ops.aten.div.Tensor,  torch.ops.aten.div.Scalar,
@@ -1138,19 +1165,34 @@ class Circuit:
                 x_node = node.args[0]
                 if (isinstance(x_node, torch.fx.Node) and x_node.name in _output_chain):
                     chain_ids = _output_chain[x_node.name]
-                    scalar = node.args[1]
-                    if isinstance(scalar, (int, float)):
-                        for sr_id in chain_ids:
-                            sr = _sum_by_chain_id.get(sr_id)
-                            if sr is None:
-                                continue
-                            if tgt in (torch.ops.aten.add.Tensor, torch.ops.aten.add.Scalar):
-                                sr.beta += float(scalar)
-                            elif tgt in (torch.ops.aten.div.Tensor, torch.ops.aten.div.Scalar):
-                                sr.tau *= float(scalar)
-                            elif tgt in (torch.ops.aten.mul.Tensor, torch.ops.aten.mul.Scalar):
-                                sr.tau /= float(scalar)
+                    scale = node.args[1]
+                    if isinstance(scale, torch.fx.Node) and _is_const_node(scale):
+                        scale = _resolve_const(gm, scale)
+                    if isinstance(scale, (int, float)):
+                        scales = [float(scale)] * len(chain_ids)
+                    elif isinstance(scale, torch.Tensor):
+                        shape = wire_map.get(f'__shape_{x_node.name}', [len(chain_ids)])
+                        try:
+                            scales = torch.broadcast_to(scale, shape).reshape(-1).tolist()
+                        except RuntimeError as exc:
+                            raise ValueError("GroupSum scale cannot broadcast to its outputs") from exc
+                        if len(scales) != len(chain_ids):
+                            raise ValueError("GroupSum scale does not match its outputs")
+                    else:
+                        raise NotImplementedError("Circuit requires constant GroupSum scales")
+                    for sr_id, scale_value in zip(chain_ids, scales):
+                        sr = _sum_by_chain_id.get(sr_id)
+                        if sr is None:
+                            continue
+                        if tgt in (torch.ops.aten.add.Tensor, torch.ops.aten.add.Scalar):
+                            sr.beta += float(scale_value)
+                        elif tgt in (torch.ops.aten.div.Tensor, torch.ops.aten.div.Scalar):
+                            sr.tau *= float(scale_value)
+                        elif tgt in (torch.ops.aten.mul.Tensor, torch.ops.aten.mul.Scalar):
+                            sr.tau /= float(scale_value)
                     _output_chain[node.name] = chain_ids
+                    if f'__shape_{x_node.name}' in wire_map:
+                        wire_map[f'__shape_{node.name}'] = wire_map[f'__shape_{x_node.name}']
                     i += 1
                     continue
 
@@ -1887,34 +1929,7 @@ class Circuit:
 {pack_section}
     }}"""
 
-        return f"""\
-// Auto-generated circuit - do not edit
-// Gate IDs 0..{n_in - 1} are inputs, {n_in}..{n_in + n_g - 1} are gates
-
-#include <stdbool.h>
-#include <stdint.h>
-
-// Input shape:  {self.input_shape}
-// Output shape: {self.output_shape}
-// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_total}{pack_str}
-
-void circuit(
-    const {ctype} in[{n_in}],
-    {out_ctype}   out[{out_n}])
-{{
-{gates_str}{output_section}
-}}
-
-void circuit_bench(
-    const {ctype} in[{n_in}],
-    {out_ctype}   out[{out_n}],
-    int           n_iter)
-{{
-    for (int i = 0; i < n_iter; i++)
-        circuit(in + i * {n_in}, out + i * {out_n});
-}}
-
-{"" if pack_bits is None else f"""
+        packed_wrapper = "" if pack_bits is None else f"""
 // Packs raw bool input, runs packed circuit, unpacks output - no Python packing needed.
 void circuit_bench_bool(
     const bool   *in_bool,  // (batch_size, {n_in}) bool, row-major
@@ -1943,7 +1958,36 @@ void circuit_bench_bool(
                 out[(iter * {pack_bits} + b) * {n_total} + j] =
                     {f'(packed_out[j] >> b) & 1' if not has_reductions else f'packed_out[b * {n_total} + j]'};
     }}
-}}"""}"""
+}}"""
+
+        return f"""\
+// Auto-generated circuit - do not edit
+// Gate IDs 0..{n_in - 1} are inputs, {n_in}..{n_in + n_g - 1} are gates
+
+#include <stdbool.h>
+#include <stdint.h>
+
+// Input shape:  {self.input_shape}
+// Output shape: {self.output_shape}
+// n_inputs={n_in}  n_gates={n_g}  n_outputs={n_total}{pack_str}
+
+void circuit(
+    const {ctype} in[{n_in}],
+    {out_ctype}   out[{out_n}])
+{{
+{gates_str}{output_section}
+}}
+
+void circuit_bench(
+    const {ctype} in[{n_in}],
+    {out_ctype}   out[{out_n}],
+    int           n_iter)
+{{
+    for (int i = 0; i < n_iter; i++)
+        circuit(in + i * {n_in}, out + i * {out_n});
+}}
+
+{packed_wrapper}"""
 
 
     def to_dict(self) -> dict:
@@ -2013,7 +2057,8 @@ void circuit_bench_bool(
         return cls.from_dict(data)
 
 
-    def get_verilog_code(self, inline_single_use: bool = False) -> str:
+    def get_verilog_code(self, inline_single_use: bool = False,
+                         fixed_point_fractional_bits: int | None = None) -> str:
         """
         Generate a Verilog module that implements the circuit.
 
@@ -2024,6 +2069,11 @@ void circuit_bench_bool(
 
         inline_single_use=True: single-use gates are folded into their parent
         expression rather than named wires (same semantics as in emit_c).
+
+        fixed_point_fractional_bits selects an opt-in signed 32-bit Q format
+        for scores_flat. Each score slice is a two's-complement integer; divide
+        it by 2**fixed_point_fractional_bits to recover the real-valued score.
+        The default keeps the existing raw-count Verilog output unchanged.
         """
         n_in      = self.n_inputs
         n_total   = len(self.outputs)
@@ -2043,6 +2093,13 @@ void circuit_bench_bool(
 
         red_outs  = [sum_by_id[oid] for oid in self.outputs if oid in sum_by_id]
         has_red   = bool(red_outs)
+        fixed = fixed_point_fractional_bits is not None
+        if fixed:
+            if not isinstance(fixed_point_fractional_bits, int) or isinstance(fixed_point_fractional_bits, bool) \
+                    or not 0 <= fixed_point_fractional_bits <= 30:
+                raise ValueError("fixed_point_fractional_bits must be an integer from 0 to 30")
+            if not has_red:
+                raise ValueError("fixed-point Verilog requires a sum reduction")
 
         # ---- use-count for optional inlining --------------------------------
         use_count: dict[int, int] = {}
@@ -2097,22 +2154,53 @@ void circuit_bench_bool(
 
         if has_red:
             _dtype_bits = {"float": 32, "uint8_t": 8, "uint16_t": 16, "uint32_t": 32, "uint64_t": 64}
-            score_bits = _dtype_bits[_c_output_dtype(red_outs)]
+            score_bits = 32 if fixed else _dtype_bits[_c_output_dtype(red_outs)]
             reduction_comment = (
                 f"// {n_total} output(s) - scores_flat = {n_total} x {score_bits}-bit values\n"
             )
+            if fixed:
+                reduction_comment += (
+                    f"// Each slice is signed Q{31 - fixed_point_fractional_bits}."
+                    f"{fixed_point_fractional_bits}; divide by 2^{fixed_point_fractional_bits}.\n"
+                )
             module_port = f"    output reg  [{n_total * score_bits - 1}:0] scores_flat"
 
             # Build always block body: one entry per output in order
             sv_lines = []
             sv_vars = set()
+            fixed_params = []
+            fixed_vars = []
+
+            def signed_literal(value: int) -> str:
+                return f"-64'sd{-value}" if value < 0 else f"64'sd{value}"
+
             for j, out_id in enumerate(self.outputs):
                 sr = sum_by_id.get(out_id)
                 slot = f"scores_flat[{j}*{score_bits} +: {score_bits}]"
                 if sr is not None:
                     sv_vars.add(f"s_{j}")
                     start, end = sum_raw_offset_v[out_id]
-                    if start == end:
+                    if fixed:
+                        scale, bias, guard_bits = _fixed_point_coefficients(
+                            sr, fixed_point_fractional_bits
+                        )
+                        fixed_params.extend([
+                            f"    localparam signed [63:0] SCALE_{j} = {signed_literal(scale)};",
+                            f"    localparam signed [63:0] BIAS_{j} = {signed_literal(bias)};",
+                        ])
+                        fixed_vars.append(f"scaled_{j}")
+                        lines = [f"        s_{j} = 0;"]
+                        if start != end:
+                            lines.append(
+                                f"        for (i = {start}; i < {end}; i = i + 1)"
+                                f" s_{j} = s_{j} + raw[i];"
+                            )
+                        lines.extend([
+                            f"        scaled_{j} = (s_{j} * SCALE_{j} + BIAS_{j} + 64'sd{1 << (guard_bits - 1)}) >>> {guard_bits};",
+                            f"        {slot} = scaled_{j}[31:0];",
+                        ])
+                        sv_lines.append("\n".join(lines))
+                    elif start == end:
                         val = int(round(sr.beta)) if sr.tau == 1.0 else sr.beta / sr.tau
                         sv_lines.append(f"        s_{j} = 0;\n        {slot} = {val};")
                     else:
@@ -2123,10 +2211,19 @@ void circuit_bench_bool(
                             f"        {slot} = s_{j};"
                         )
                 else:
-                    sv_lines.append(f"        {slot} = {vexpr(out_id)};")
+                    if fixed:
+                        sv_lines.append(
+                            f"        {slot} = {vexpr(out_id)} ?"
+                            f" 32'd{1 << fixed_point_fractional_bits} : 32'd0;"
+                        )
+                    else:
+                        sv_lines.append(f"        {slot} = {vexpr(out_id)};")
 
             sum_vars_decl = ", ".join(sorted(sv_vars)) + ", i" if sv_vars else "i"
             sum_body = "\n".join(sv_lines)
+            fixed_decls = "\n".join(fixed_params)
+            if fixed_vars:
+                fixed_decls += "\n    reg signed [63:0] " + ", ".join(fixed_vars) + ";"
 
             if n_raw > 0:
                 raw_assigns = "\n".join(
@@ -2140,6 +2237,7 @@ void circuit_bench_bool(
             output_section = f"""
 {raw_section}
     // --- outputs (behavioral - synthesizer maps to carry chain) ---
+{fixed_decls}
     integer {sum_vars_decl};
     always @(*) begin
 {sum_body}
@@ -2179,11 +2277,14 @@ endmodule"""
         with open(path, 'w') as f:
             f.write(c_code)
 
-    def write_verilog_code(self, path: str) -> None:
+    def write_verilog_code(self, path: str,
+                           fixed_point_fractional_bits: int | None = None) -> None:
         """
         Write the generated Verilog code to a file.
         """
-        verilog_code = self.get_verilog_code()
+        verilog_code = self.get_verilog_code(
+            fixed_point_fractional_bits=fixed_point_fractional_bits
+        )
         with open(path, 'w') as f:
             f.write(verilog_code)
 
