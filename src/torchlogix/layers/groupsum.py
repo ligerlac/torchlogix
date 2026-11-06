@@ -11,7 +11,7 @@ class GroupSum(ExportableModule):
     The GroupSum module.
     """
 
-    def __init__(self, k: int, tau: float = 1.0, beta=0.0, device="cpu", export_mode=False):
+    def __init__(self, k: int, tau=1.0, beta=0.0, device="cpu", export_mode=False):
         """
 
         :param k: number of intended real valued outputs, e.g., number of classes
@@ -21,6 +21,7 @@ class GroupSum(ExportableModule):
         """
         super().__init__()
         self.k = k
+        self.register_buffer("_scale_anchor", torch.empty(0), persistent=False)
         self.tau = tau
         self.beta = beta
         self.device = device
@@ -47,8 +48,9 @@ class GroupSum(ExportableModule):
         if isinstance(value, tuple):
             self.register_buffer(
                 f"_{name}_vector",
-                torch.tensor(value, dtype=torch.get_default_dtype()),
-                persistent=False,
+                torch.tensor(
+                    value, dtype=self._scale_anchor.dtype, device=self._scale_anchor.device
+                ),
             )
             object.__setattr__(self, f"_{name}_scalar", None)
         else:

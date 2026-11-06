@@ -351,6 +351,8 @@ sequence with one value per group. Each Boolean neuron outputs [0, 1], so a
 group of 100 neurons sums to [0, 100]. For example, `tau=100` and `beta=-50`
 give an output range of [-0.5, 0.5]. The `beta` value is added **before**
 division; to shift the output by `c`, add `tau * c` to `beta`.
+Vector values are saved in the model's `state_dict`; scalar values retain the
+existing constructor-argument behavior.
 
 For regression, choose each group's scale from the training-label range and
 the number of neurons in that group. A group with `m` neurons has `m+1`
@@ -441,9 +443,9 @@ Export mode pre-caches each layer's discrete LUT IDs as integer buffers so that
 `torch.fx` tracing produces pure integer operations - no floating-point LUT
 lookups. This is required before calling `Circuit.from_model()`.
 
-**Tip - reset `GroupSum` scaling before export.** During training a non-unit
-`tau` (temperature) or non-zero `beta` (offset) can improve loss landscape and
-convergence. Before compiling to a Circuit, consider resetting them:
+**Tip - raw-count export for classification.** If all groups use the same
+positive `tau` and the same `beta`, resetting them before export preserves
+the `argmax` class prediction:
 
 ```python
 for m in model.modules():
@@ -452,13 +454,11 @@ for m in model.modules():
         m.beta = 0.0
 ```
 
-Since argmax is invariant under monotone scaling and constant offsets, the
-predicted class is unchanged. With `tau=1, beta=0` the `SumReduction` nodes in
-the Circuit become pure integer popcounts, letting the compiler select the
-narrowest unsigned integer type that fits the group size (`uint8_t` for up to
-255 neurons per class, `uint16_t` for up to 65535, etc.) rather than falling
-back to `float`. This makes C and Verilog codegen more efficient without
-affecting accuracy.
+With `tau=1, beta=0`, the Circuit outputs integer popcounts. Do not reset
+per-group scales this way for regression, or for classification when groups
+use different scales: it changes the model outputs and can change the winning
+class. Keep the original values in the Circuit and use C or fixed-point Verilog
+for scaled predictions. AIG export only supports raw counts.
 
 ### 3. Circuit: the compiled boolean IR
 

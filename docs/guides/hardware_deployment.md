@@ -44,9 +44,9 @@ module circuit (
 );
 ```
 
-`SCORE_BITS` is 8, 16, 32, or 64 bits, chosen from the Circuit output type.
-When scaling calls for a float in the C output, the raw Verilog count still
-occupies a 32-bit slot. Score `j` occupies
+`SCORE_BITS` is 8, 16, 32, or 64 bits. The default keeps the existing raw
+Verilog layout and ensures each slot can hold its unscaled count; its width is
+independent of the C output type. Score `j` occupies
 `scores_flat[j*SCORE_BITS +: SCORE_BITS]`.
 
 By default, Verilog emits **raw group counts**. This preserves the existing

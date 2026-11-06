@@ -192,6 +192,21 @@ def _c_output_dtype(reductions: list[SumReduction]) -> str:
     return "uint64_t"
 
 
+def _raw_verilog_score_bits(reductions: list[SumReduction]) -> int:
+    """Keep the existing raw bus width while fitting every unscaled count."""
+    widths = ((8, 0xFF), (16, 0xFFFF), (32, 0xFFFFFFFF), (64, float("inf")))
+    raw_max = max((len(sr.input_ids) for sr in reductions), default=0)
+    raw_bits = next(bits for bits, limit in widths if raw_max <= limit)
+    if any(sr.tau != 1.0 or sr.beta != round(sr.beta) for sr in reductions):
+        previous_bits = 32
+    else:
+        previous_max = max(
+            (len(sr.input_ids) + int(round(sr.beta)) for sr in reductions), default=0
+        )
+        previous_bits = next(bits for bits, limit in widths if previous_max <= limit)
+    return max(raw_bits, previous_bits)
+
+
 def _fixed_point_coefficients(sr: SumReduction, fractional_bits: int) -> tuple[int, int, int]:
     """Approximate (sum + beta) / tau as a signed Q value using integer math."""
     # Enough precision that coefficient rounding contributes under a quarter
@@ -1185,7 +1200,7 @@ class Circuit:
                         if sr is None:
                             continue
                         if tgt in (torch.ops.aten.add.Tensor, torch.ops.aten.add.Scalar):
-                            sr.beta += float(scale_value)
+                            sr.beta += float(scale_value) * sr.tau
                         elif tgt in (torch.ops.aten.div.Tensor, torch.ops.aten.div.Scalar):
                             sr.tau *= float(scale_value)
                         elif tgt in (torch.ops.aten.mul.Tensor, torch.ops.aten.mul.Scalar):
@@ -2153,8 +2168,7 @@ void circuit_bench(
         gates_str = "\n".join(gate_lines)
 
         if has_red:
-            _dtype_bits = {"float": 32, "uint8_t": 8, "uint16_t": 16, "uint32_t": 32, "uint64_t": 64}
-            score_bits = 32 if fixed else _dtype_bits[_c_output_dtype(red_outs)]
+            score_bits = 32 if fixed else _raw_verilog_score_bits(red_outs)
             reduction_comment = (
                 f"// {n_total} output(s) - scores_flat = {n_total} x {score_bits}-bit values\n"
             )

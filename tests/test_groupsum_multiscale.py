@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from torchlogix.circuit import Circuit
-from torchlogix.layers import GroupSum
+from torchlogix.layers import GroupSum, LogicDense
 
 
 def test_scalar_groupsum_keeps_existing_behavior():
@@ -40,7 +40,10 @@ def test_groupsum_broadcasts_per_group_scales(tau, beta):
     layer(x).sum().backward()
     expected_grad = (1 / torch.as_tensor(tau)).expand(2, 2).repeat_interleave(3, -1)
     torch.testing.assert_close(x.grad, expected_grad)
-    assert layer.state_dict() == {}
+    assert set(layer.state_dict()) == (
+        ({"_tau_vector"} if isinstance(tau, list) else set())
+        | ({"_beta_vector"} if isinstance(beta, list) else set())
+    )
 
 
 def test_groupsum_rejects_bad_vectors():
@@ -57,11 +60,29 @@ def test_vector_scales_follow_module_dtype_and_can_be_reset():
     x = torch.tensor([[True, False, True, False]], dtype=torch.bool)
     assert layer.tau.dtype == torch.float64
     assert layer(x).dtype == torch.float64
+    layer.tau = [4.0, 8.0]
+    assert layer.tau.dtype == torch.float64
     layer.tau = 1.0
     layer.beta = 0.0
     assert layer.tau == 1.0 and layer.beta == 0.0
     torch.testing.assert_close(layer(x), torch.tensor([[1, 1]]))
     assert layer.state_dict() == {}
+
+
+def test_vector_scales_survive_state_dict_round_trip():
+    original = GroupSum(2, tau=[2.0, 4.0], beta=[-1.0, 1.0])
+    restored = GroupSum(2, tau=[1.0, 1.0], beta=[0.0, 0.0])
+    restored.load_state_dict(original.state_dict())
+    x = torch.tensor([[True, False, True, False]], dtype=torch.bool)
+    torch.testing.assert_close(restored(x), original(x))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+def test_reassigned_vector_stays_on_module_device():
+    layer = GroupSum(2, tau=[2.0, 4.0]).cuda()
+    layer.tau = [4.0, 8.0]
+    assert layer.tau.device.type == "cuda"
+    assert layer(torch.ones(1, 4, dtype=torch.bool, device="cuda")).device.type == "cuda"
 
 
 @pytest.mark.parametrize("tau,beta", [
@@ -86,6 +107,22 @@ def test_circuit_and_c_match_groupsum(tau, beta):
         circuit.compile(pack_bits=pack_bits)
         actual = torch.from_numpy(circuit(x.numpy(), use_compiled=True))
         torch.testing.assert_close(actual.float(), expected.float(), rtol=1e-6, atol=1e-6)
+
+
+def test_circuit_keeps_offset_added_after_groupsum():
+    class ShiftedHead(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.head = GroupSum(2, tau=[2.0, 4.0])
+            self.register_buffer("shift", torch.tensor([1.0, -2.0]))
+
+        def forward(self, x):
+            return self.head(x) + self.shift
+
+    model = ShiftedHead()
+    x = torch.tensor([[True, False, True, False]], dtype=torch.bool)
+    circuit = Circuit.from_model(model, input_shape=(4,))
+    torch.testing.assert_close(circuit(x), model(x))
 
 
 def _simulate_verilog(code, n_inputs, n_outputs, tmp_path, signed=False):
@@ -143,6 +180,37 @@ def test_verilog_default_remains_raw_and_fixed_point_matches_regression(tmp_path
     written = tmp_path / "written.v"
     circuit.write_verilog_code(written, fixed_point_fractional_bits=fractional_bits)
     assert written.read_text() == code
+
+
+@pytest.mark.parametrize("tau,beta,score_bits", [
+    (1.0, 0.0, 8),
+    (1.0, -1.0, 8),
+    (2.0, 0.0, 32),
+])
+def test_default_verilog_keeps_scalar_score_width(tau, beta, score_bits):
+    circuit = Circuit.from_model(GroupSum(1, tau=tau, beta=beta), input_shape=(4,))
+    assert f"output reg  [{score_bits - 1}:0] scores_flat" in circuit.get_verilog_code()
+
+
+def test_fixed_point_verilog_matches_logic_model(tmp_path):
+    torch.manual_seed(1)
+    model = torch.nn.Sequential(
+        LogicDense(8, 12, parametrization="raw",
+                   parametrization_kwargs={"weight_init": "random"}),
+        GroupSum(3, tau=[2.5, 3.0, 4.0], beta=[-2.0, 0.5, 1.0]),
+    )
+    circuit = Circuit.from_model(model, input_shape=(8,))
+    circuit.simplify()
+    x = torch.tensor([[(i >> j) & 1 for j in range(8)] for i in range(256)], dtype=torch.bool)
+    code = circuit.get_verilog_code(fixed_point_fractional_bits=16)
+    actual = _simulate_verilog(code, 8, 3, tmp_path, signed=True) / (1 << 16)
+    np.testing.assert_allclose(actual, model(x).numpy(), rtol=0, atol=1 / (1 << 16))
+
+    if shutil.which("verilator"):
+        subprocess.run(
+            ["verilator", "--lint-only", "-Wno-fatal", str(tmp_path / "circuit.v")],
+            check=True, capture_output=True, text=True,
+        )
 
 
 def test_fixed_point_rejects_unrepresentable_range():
